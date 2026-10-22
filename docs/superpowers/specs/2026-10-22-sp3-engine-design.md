@@ -104,7 +104,7 @@ Effective steps are the workflow's steps, minus steps whose role is off (a `bloc
 | pass, last step, `merge.mode: ask` or `gate: hitl` | `awaiting_merge` |
 | pass, last step, `auto` | merge now when the main working tree is clean and on the base branch, else `awaiting_merge` |
 | pass, last step, `branch` | `done/branch_ready` |
-| fail on `review_plan`, the ticket's rounds now past `plan.review_max` | `stalled` |
+| fail on `review_plan`, the ticket's failing rounds reaching `plan.review_max` | `stalled` |
 | a fingerprint failing `stall_repeat` loops in a row | `stalled` |
 | fail on `review_plan` with `loop_count_rejected_review: false` | target step, same loop (never hits the loop cap) |
 | fail with an `on_fail` edge, `loop < loop_max` | target step, `loop + 1` (`ticket.recirculated`) |
