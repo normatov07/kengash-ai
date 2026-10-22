@@ -317,8 +317,12 @@ def test_new_plan_keeps_the_prompt_verbatim(
     run_git: Callable[..., str],
 ) -> None:
     result = plans.new_plan(
-        PROMPT, title=" Rotatable keys ", mode=PlanMode.grill, project=None,
-        cwd=registered_repo, by="claude",
+        PROMPT,
+        title=" Rotatable keys ",
+        mode=PlanMode.grill,
+        project=None,
+        cwd=registered_repo,
+        by="claude",
     )
     assert (result.project, result.status) == ("payments-api", "grilling")
     shown = plans.show_plan(result.id, project=None)
@@ -351,8 +355,12 @@ def test_new_plan_refuses_bad_input(
 def test_new_plan_needs_a_project(registered_repo: Path) -> None:
     with pytest.raises(UserError, match="no project here"):
         plans.new_plan(
-            PROMPT, title="Keys", mode=PlanMode.direct, project=None,
-            cwd=registered_repo.parent, by="x",
+            PROMPT,
+            title="Keys",
+            mode=PlanMode.direct,
+            project=None,
+            cwd=registered_repo.parent,
+            by="x",
         )
 
 
@@ -945,9 +953,7 @@ def add_tickets(plan_id: str, text: str, *, project: str | None, by: str) -> Bat
     resolved = settings.load(paths, slug)
     for number, item in enumerate(items, 1):
         if item.importance.value not in resolved.workflows:
-            raise UserError(
-                f"ticket {number}: settings have no workflow {item.importance.value!r}"
-            )
+            raise UserError(f"ticket {number}: settings have no workflow {item.importance.value!r}")
     project_paths = paths.project(slug)
     with locked(paths.locks / f"{slug}.lock"):
         plan_doc = records.load_plan(plan_path)
@@ -1293,9 +1299,7 @@ def move_ticket(ticket_id: str, target: str, why: str, *, project: str | None, b
     return Moved(ticket.id, slug, before, after, ready, blocked)
 
 
-def set_fields(
-    ticket_id: str, pairs: Sequence[str], *, project: str | None, by: str
-) -> Updated:
+def set_fields(ticket_id: str, pairs: Sequence[str], *, project: str | None, by: str) -> Updated:
     """Change frontmatter fields from KEY=VALUE pairs; lists take `[a, b]` or `a,b`."""
     changes = _parse_pairs(pairs)
     paths = StorePaths.default()
@@ -1556,7 +1560,9 @@ def test_plan_lifecycle(inside_registered_repo: Path) -> None:
     created = runner.invoke(app, [*NEW, "grill"], input="Rotate keys.\n")
     plan_id = created.stdout.split()[1]
     assert created.stdout == f"plan {plan_id} grilling\n"
-    saved = runner.invoke(app, ["plan", "save", plan_id], input="## Goal\nShip it.\n## Scope\nKeys.\n")
+    saved = runner.invoke(
+        app, ["plan", "save", plan_id], input="## Goal\nShip it.\n## Scope\nKeys.\n"
+    )
     assert saved.stdout == f"plan {plan_id} draft, 2 sections\n"
     shown = runner.invoke(app, ["plan", "show", plan_id]).stdout
     assert "\n## Prompt\nRotate keys.\n\n## Goal\nShip it.\n" in shown
