@@ -21,13 +21,13 @@ UI: harness ui → FastAPI + SSE on 127.0.0.1, through the same `ops` layer as t
 
 | Module | Responsibility | May import | Status |
 |---|---|---|---|
-| `cli` | Typer command surface, output formatting | `ops`, `model` | skeleton: `--version` |
-| `model` | Pydantic schemas: Plan, Ticket, Settings, Event, StepRequest, StepResult, Verdict | — | planned, SP2 |
-| `store` | Paths, frontmatter, atomic writes, locks, status moves, registry, links, store commits | `model` | planned, SP2 |
+| `cli` | Typer command surface, output formatting | `ops`, `model` | `--version`, `init`, `doctor`, `link`, `adopt` |
+| `model` | Pydantic schemas: Plan, Ticket, Settings, Event, StepRequest, StepResult, Verdict | — | Plan, Ticket, Registry, errors (SP2 M1); Settings, Event in M2 |
+| `store` | Paths, frontmatter, atomic writes, locks, status moves, registry, links, store commits | `model` | built (SP2 M1) |
 | `settings` | Seed, load, validate, resolve; comment-preserving edits | `model`, `store` | planned, SP2 |
 | `memory` | MEMORY/DECISIONS/PROCESS writes and caps | `model`, `store` | planned, SP2 |
 | `journal` | Append-only JSONL events, follow, usage aggregates | `model`, `store` | planned, SP2 |
-| `ops` | Use cases shared by CLI and UI | all units above | planned, SP2; grows in SP3 and SP5 |
+| `ops` | Use cases shared by CLI and UI | all units above | `projects` (SP2 M1); grows in M2, M3, SP3, SP5 |
 | `scheduler` | Runnable set: dependencies, `touches` overlap, provider slots, fairness | `model`, `store`, `settings` | planned, SP3 |
 | `workflow` | Step graph per importance, routing, loop and budget caps, stalls | `model`, `settings` | planned, SP3 |
 | `adapters` | One driver per provider CLI behind the `Provider` protocol | `model` | planned, SP3 |
@@ -36,9 +36,9 @@ UI: harness ui → FastAPI + SSE on 127.0.0.1, through the same `ops` layer as t
 | `roles` | Packaged role skill files (data only) | — | planned, SP4 |
 | `ui` | FastAPI app, SSE, static assets | `ops`, `model` | planned, SP5 |
 
-`adapters` and `gitops` never touch the store. Import-linter enforces this table in CI once SP2 adds the modules.
+`adapters` and `gitops` never touch the store. Import-linter (`make lint`) enforces the layers `cli > ops > store > model` and keeps `cli` from importing `store` directly; each new module adds its contract.
 
-## Store (planned, SP2)
+## Store (built in SP2 M1)
 
 ```
 ~/.harness/                      canonical store, a git repo (mode 0700)
@@ -67,7 +67,7 @@ Each registered repo gets one directory symlink, `<repo>/.harness -> ~/.harness/
 | # | Sub-project | Status |
 |---|---|---|
 | 1 | Foundation | done: `docs/superpowers/plans/2026-10-22-foundation.md`; CI runs after the first push |
-| 2 | Store + `harness` CLI | planned |
+| 2 | Store + `harness` CLI | in progress: M1 store core done; M2 settings, memory, journal next |
 | 3 | Engine | planned |
 | 4 | Skills | planned |
 | 5 | Web UI | planned |

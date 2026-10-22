@@ -14,6 +14,7 @@ fmt:
 lint:
 	uv run ruff format --check --quiet .
 	uv run ruff check --quiet .
+	out=$$(uv run lint-imports 2>&1) || { echo "$$out"; exit 1; }
 
 type:
 	uv run mypy --no-error-summary

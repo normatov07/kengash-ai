@@ -55,3 +55,23 @@ files = ["src", "scripts", "tests"]
 addopts = "-q"
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.importlinter]
+root_package = "super_harness"
+
+[[tool.importlinter.contracts]]
+name = "Layers: cli > ops > store > model"
+type = "layers"
+layers = [
+    "super_harness.cli",
+    "super_harness.ops",
+    "super_harness.store",
+    "super_harness.model",
+]
+
+[[tool.importlinter.contracts]]
+name = "cli reaches the store only through ops"
+type = "forbidden"
+source_modules = ["super_harness.cli"]
+forbidden_modules = ["super_harness.store"]
+allow_indirect_imports = true

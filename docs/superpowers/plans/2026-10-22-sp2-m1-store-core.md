@@ -2257,6 +2257,7 @@ name = "cli reaches the store only through ops"
 type = "forbidden"
 source_modules = ["super_harness.cli"]
 forbidden_modules = ["super_harness.store"]
+allow_indirect_imports = true
 ```
 
 - [ ] **Step 2: Run the contracts quietly in `make lint`** — append this recipe line (TAB-indented) to the `lint` target:
