@@ -82,3 +82,16 @@ forbidden_modules = [
     "super_harness.journal",
 ]
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "Engine rules are pure: workflow and scheduler import only model"
+type = "forbidden"
+source_modules = ["super_harness.workflow"]
+forbidden_modules = [
+    "super_harness.cli",
+    "super_harness.ops",
+    "super_harness.memory",
+    "super_harness.journal",
+    "super_harness.settings",
+    "super_harness.store",
+]
