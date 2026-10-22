@@ -7,14 +7,25 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
 authors = [{ name = "normatov13" }]
-dependencies = ["typer>=0.12"]
+dependencies = [
+    "filelock>=3.16",
+    "pydantic>=2.9",
+    "ruamel-yaml>=0.18",
+    "typer>=0.12",
+]
 
 [project.scripts]
 harness = "super_harness.cli:app"
 hrn = "super_harness.cli:app"
 
 [dependency-groups]
-dev = ["mypy>=1.13", "pre-commit>=4", "pytest>=8", "ruff>=0.8"]
+dev = [
+    "import-linter>=2.1",
+    "mypy>=1.13",
+    "pre-commit>=4",
+    "pytest>=8",
+    "ruff>=0.8",
+]
 
 [build-system]
 requires = ["hatchling>=1.27"]
@@ -36,6 +47,7 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.mypy]
 strict = true
+plugins = ["pydantic.mypy"]
 python_version = "3.12"
 files = ["src", "scripts", "tests"]
 
@@ -43,3 +55,30 @@ files = ["src", "scripts", "tests"]
 addopts = "-q"
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.importlinter]
+root_package = "super_harness"
+
+[[tool.importlinter.contracts]]
+name = "Layers: cli > ops > memory > journal | settings > store > model"
+type = "layers"
+layers = [
+    "super_harness.cli",
+    "super_harness.ops",
+    "super_harness.memory",
+    "super_harness.journal | super_harness.settings",
+    "super_harness.store",
+    "super_harness.model",
+]
+
+[[tool.importlinter.contracts]]
+name = "cli reaches the store and its units only through ops"
+type = "forbidden"
+source_modules = ["super_harness.cli"]
+forbidden_modules = [
+    "super_harness.store",
+    "super_harness.settings",
+    "super_harness.memory",
+    "super_harness.journal",
+]
+allow_indirect_imports = true
