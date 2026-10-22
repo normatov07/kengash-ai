@@ -1,5 +1,6 @@
 """Shared fixtures: an isolated store, a real git repo and a ticket factory."""
 
+import json
 import subprocess
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -10,6 +11,7 @@ from uuid import uuid4
 import pytest
 
 from super_harness.model import Doc, Ticket
+from super_harness.ops import projects
 from super_harness.store import StorePaths
 
 NOW = datetime(2026, 10, 22, 9, 41, tzinfo=UTC)
@@ -69,3 +71,30 @@ def make_ticket() -> Callable[..., Doc[Ticket]]:
         return Doc(Ticket.model_validate(meta | fields), {"Scope": "Rotate keys."})
 
     return factory
+
+
+@pytest.fixture
+def registered_repo(store_paths: StorePaths, repo: Path) -> Path:
+    """`repo`, registered in the test store as payments-api."""
+    projects.init_project(repo)
+    return repo
+
+
+@pytest.fixture
+def inside_registered_repo(registered_repo: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.chdir(registered_repo)
+    return registered_repo
+
+
+@pytest.fixture
+def journal_events(store_paths: StorePaths) -> Callable[[], list[dict[str, Any]]]:
+    """Read back every journal event written so far."""
+
+    def read() -> list[dict[str, Any]]:
+        return [
+            json.loads(line)
+            for path in sorted(store_paths.journal.glob("*.jsonl"))
+            for line in path.read_text(encoding="utf-8").splitlines()
+        ]
+
+    return read
