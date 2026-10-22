@@ -24,6 +24,12 @@ def test_tokens_are_redacted(secret: str) -> None:
         ("password = hunter2", f"password = {MARK}"),
         ("API_KEY: abc123def", f"API_KEY: {MARK}"),
         ("db secret=xyz; next", f"db secret={MARK}; next"),
+        ("DB_PASSWORD=hunter2", f"DB_PASSWORD={MARK}"),
+        ("export GITHUB_TOKEN=abc123", f"export GITHUB_TOKEN={MARK}"),
+        ("SECRET_KEY=django-insecure-xyz", f"SECRET_KEY={MARK}"),
+        ("AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG", f"AWS_SECRET_ACCESS_KEY={MARK}"),
+        ('{"api_key": "abc123"}', f'{{"api_key": {MARK}}}'),
+        ('password: "two words"', f"password: {MARK}"),
     ],
 )
 def test_assignments_keep_the_name(text: str, expected: str) -> None:
@@ -35,6 +41,14 @@ def test_private_keys_are_redacted() -> None:
     assert redact(f"key:\n{pem}\nend") == f"key:\n{MARK}\nend"
 
 
-def test_ordinary_text_is_untouched() -> None:
-    text = "token budget is 250000; skip the secret-santa tokens list"
+@pytest.mark.parametrize(
+    "text",
+    [
+        "token budget is 250000; skip the secret-santa tokens list",
+        "max_tokens: 4096",
+        "tokens.per_ticket_max: 250000",
+        "primary_key: id",
+    ],
+)
+def test_ordinary_text_is_untouched(text: str) -> None:
     assert redact(text) == text

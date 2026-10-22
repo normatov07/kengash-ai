@@ -14,11 +14,14 @@ _TOKENS = re.compile(
     r"|AKIA[0-9A-Z]{16}"
     r"|xox[abprs]-[A-Za-z0-9-]{10,}"
 )
-_ASSIGNMENT = re.compile(r"(?i)\b(password|passwd|secret|token|api[_-]?key)(\s*[:=]\s*)[^\s,;]+")
+_ASSIGNMENT = re.compile(
+    r"(?i)((?:password|passwd|secret|token|(?:api|access|secret|private)[_-]?key)"
+    r"""["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)"""
+)
 
 
 def redact(text: str) -> str:
     """Return `text` with private keys, API tokens and secret assignments masked."""
     text = _PRIVATE_KEY.sub(MARK, text)
     text = _TOKENS.sub(MARK, text)
-    return _ASSIGNMENT.sub(rf"\1\2{MARK}", text)
+    return _ASSIGNMENT.sub(rf"\1{MARK}", text)
