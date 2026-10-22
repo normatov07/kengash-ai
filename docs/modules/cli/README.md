@@ -8,6 +8,7 @@ Typer command surface for `harness` (alias `hrn`): parses arguments and formats 
 
 - `harness --version` prints `super-harness <version>` and exits 0. Skills use this line to confirm the right binary is on PATH.
 - `harness --help` lists commands and options.
+- `harness init [PATH]`, `doctor [--fix] [--quiet] [--scan DIR]`, `link SLUG NEW_PATH`, `adopt PATH`, each with `--json` (SP2 spec §3).
 
 ## Invariants
 
@@ -17,4 +18,5 @@ Typer command surface for `harness` (alias `hrn`): parses arguments and formats 
 
 ## Changes
 
+- 2026-10-22: `init`, `doctor`, `link`, `adopt` commands; errors print one stderr line with the spec exit code (SP2 M1).
 - 2026-10-22: skeleton with `--version` and `--help`; console scripts `harness` and `hrn`.
