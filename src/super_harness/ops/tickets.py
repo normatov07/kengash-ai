@@ -35,6 +35,7 @@ from super_harness.store.yamlio import load_yaml
 SETTABLE = ("title", "importance", "workflow", "gate", "loop_max", "touches", "depends_on", "tags")
 LISTS = frozenset({"touches", "depends_on", "tags"})
 QUEUED = ("in_queue/ready", "in_queue/blocked")
+MET = ("done/merged", "done/closed")  # dependents start from merged code (SP3 spec decision 6)
 
 
 @dataclass
@@ -322,8 +323,8 @@ def _cycle(graph: Mapping[str, Sequence[str]]) -> list[str] | None:
 
 
 def _met(depends_on: Iterable[str], tickets: Mapping[str, Doc[Ticket]]) -> bool:
-    """True when every dependency is a ticket of this project in `done/`."""
-    return all(dep in tickets and tickets[dep].meta.folder is Folder.done for dep in depends_on)
+    """True when every dependency is a ticket of this project that is merged or closed."""
+    return all(dep in tickets and tickets[dep].meta.status in MET for dep in depends_on)
 
 
 def _target(
