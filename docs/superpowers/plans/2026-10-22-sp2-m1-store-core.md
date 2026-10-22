@@ -563,7 +563,7 @@ def test_lock_times_out_with_a_clear_error(tmp_path: Path) -> None:
     lock_file = tmp_path / "locks" / "x.lock"
     with (
         locked(lock_file),
-        pytest.raises(HarnessError, match="store busy: x.lock"),
+        pytest.raises(HarnessError, match=r"store busy: x\.lock"),
         locked(lock_file, timeout=0.05),
     ):
         pass
@@ -886,7 +886,8 @@ def atomic_write(path: Path, text: str) -> None:
 from io import StringIO
 from typing import Any
 
-from ruamel.yaml import YAML, YAMLError
+from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
 
 from super_harness.model import UserError
 
