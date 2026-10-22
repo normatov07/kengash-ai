@@ -11,7 +11,7 @@ import typer
 
 from super_harness import __version__
 from super_harness.model import HarnessError
-from super_harness.ops import projects
+from super_harness.ops import projects, workspace
 
 app = typer.Typer(
     name="harness",
@@ -140,3 +140,101 @@ def adopt(
             f"adopted {result.slug}: {result.added} new, {result.conflicts} conflicts; "
             f"original kept in {result.archive}"
         )
+
+
+settings_app = typer.Typer(
+    help="Read resolved settings; agents never parse SETTINGS.md.", no_args_is_help=True
+)
+memory_app = typer.Typer(help="Global memory and decisions.", no_args_is_help=True)
+app.add_typer(settings_app, name="settings")
+app.add_typer(memory_app, name="memory")
+
+Project = Annotated[
+    str | None,
+    typer.Option(
+        "--project", "-p", help="Project slug; default: the project containing this folder."
+    ),
+]
+
+
+@settings_app.command("show")
+def settings_show(project: Project = None) -> None:
+    """Print the resolved settings as YAML."""
+    with _errors():
+        text = workspace.settings_yaml(project, Path.cwd())
+    typer.echo(text, nl=False)
+
+
+@settings_app.command("get")
+def settings_get(
+    key: Annotated[str, typer.Argument(help="Dotted key, e.g. loop_max.critical.")],
+    project: Project = None,
+) -> None:
+    """Print one setting; lists and mappings print as JSON."""
+    with _errors():
+        value = workspace.setting(key, project, Path.cwd())
+    typer.echo(value if isinstance(value, str) else json.dumps(value))
+
+
+@settings_app.command("check")
+def settings_check(project: Project = None) -> None:
+    """Validate settings; prints problems only."""
+    with _errors():
+        problems = workspace.settings_problems(project, Path.cwd())
+    for problem in problems:
+        typer.echo(problem)
+    if problems:
+        raise typer.Exit(1)
+
+
+@memory_app.command("add")
+def memory_add(
+    text: Annotated[str, typer.Argument(help="One fact, one line, about 20 words.")],
+    why: Annotated[str, typer.Option("--why", help="Why this is worth remembering.")],
+    section: Annotated[
+        str, typer.Option(help="Working style, Goals, Preferences or Turned down.")
+    ] = "Preferences",
+    decision: Annotated[bool, typer.Option("--decision", help="Write to DECISIONS.md.")] = False,
+    rejected: Annotated[
+        str | None, typer.Option(help="With --decision: the alternative turned down.")
+    ] = None,
+    by: Annotated[str, typer.Option(envvar="HARNESS_AGENT", help="Who is writing.")] = "unknown",
+    project: Project = None,
+) -> None:
+    """Remember one fact or one decision."""
+    with _errors():
+        result = workspace.remember(
+            text,
+            why,
+            section=section,
+            decision=decision,
+            rejected=rejected,
+            project=project,
+            cwd=Path.cwd(),
+            by=by,
+        )
+    if not result.added:
+        typer.echo(f"{result.file}: already recorded")
+        return
+    typer.echo(f"{result.file} +1 line ({result.lines}/{result.cap})")
+    if result.over_cap:
+        typer.echo(f"warning: {result.file} is over its {result.cap}-line cap; compact it soon")
+
+
+@memory_app.command("show")
+def memory_show(
+    decisions: Annotated[bool, typer.Option("--decisions", help="Show DECISIONS.md.")] = False,
+    project: Project = None,
+) -> None:
+    """Print MEMORY.md, or the decisions of one project plus the global ones."""
+    with _errors():
+        text = workspace.recall(decisions, project, Path.cwd())
+    typer.echo(text, nl=False)
+
+
+@app.command()
+def context(project: Project = None) -> None:
+    """Print the conductor's digest: memory, process headings, open gates."""
+    with _errors():
+        text = workspace.context(project, Path.cwd())
+    typer.echo(text, nl=False)
