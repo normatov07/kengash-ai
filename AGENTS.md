@@ -2,7 +2,7 @@
 
 super-harness lets one developer run many projects at once with the coding-agent subscriptions they already have (Claude Code, Codex, Antigravity `agy`; Gemini CLI optional), driven through the official CLIs, never API keys. Skills installed into the user's agent conduct the work, the deterministic `harness` CLI does every mechanical step, and a local UI monitors it all.
 
-Status: sub-project 2 of 5 (Store + `harness` CLI), M1–M2 done: `harness init|doctor|link|adopt|settings|memory|context` work. `docs/architecture.md` tracks what is built.
+Status: sub-project 2 of 5 (Store + `harness` CLI), M1–M3 built: `harness init|doctor|link|adopt|settings|memory|context|plan|ticket|status` work; SP2 review next. `docs/architecture.md` tracks what is built.
 
 ## Commands
 

@@ -21,13 +21,13 @@ UI: harness ui → FastAPI + SSE on 127.0.0.1, through the same `ops` layer as t
 
 | Module | Responsibility | May import | Status |
 |---|---|---|---|
-| `cli` | Typer command surface, output formatting | `ops`, `model` | `--version`, `init`, `doctor`, `link`, `adopt`, `settings`, `memory`, `context` |
-| `model` | Pydantic schemas: Plan, Ticket, Settings, Event, StepRequest, StepResult, Verdict | — | Plan, Ticket, Registry, Settings, Event, errors (SP2 M1–M2) |
+| `cli` | Typer command surface, output formatting | `ops`, `model` | `--version`, `init`, `doctor`, `link`, `adopt`, `settings`, `memory`, `context`, `plan`, `ticket`, `status` |
+| `model` | Pydantic schemas: Plan, Ticket, Settings, Event, StepRequest, StepResult, Verdict | — | Plan, Ticket, TicketInput, Registry, Settings, Event, errors (SP2 M1–M3) |
 | `store` | Paths, frontmatter, atomic writes, locks, status moves, registry, links, store commits | `model` | built (SP2 M1) |
 | `settings` | Seed, load, validate, resolve; comment-preserving edits | `model`, `store` | built (SP2 M2); comment-preserving edits in SP5 |
 | `memory` | MEMORY/DECISIONS/PROCESS writes and caps | `model`, `store`, `journal`, `settings` | built (SP2 M2): MEMORY and DECISIONS writes; compaction in SP3 |
 | `journal` | Append-only JSONL events, follow, usage aggregates | `model`, `store` | built (SP2 M2): append, read; follow and usage later |
-| `ops` | Use cases shared by CLI and UI | all units above | `projects`, `workspace` (SP2 M1–M2); grows in M3, SP3, SP5 |
+| `ops` | Use cases shared by CLI and UI | all units above | `projects`, `workspace`, `records`, `plans`, `tickets`, `status` (SP2 M1–M3); grows in SP3, SP5 |
 | `scheduler` | Runnable set: dependencies, `touches` overlap, provider slots, fairness | `model`, `store`, `settings` | planned, SP3 |
 | `workflow` | Step graph per importance, routing, loop and budget caps, stalls | `model`, `settings` | planned, SP3 |
 | `adapters` | One driver per provider CLI behind the `Provider` protocol | `model` | planned, SP3 |
@@ -67,7 +67,7 @@ Each registered repo gets one directory symlink, `<repo>/.harness -> ~/.harness/
 | # | Sub-project | Status |
 |---|---|---|
 | 1 | Foundation | done: `docs/superpowers/plans/2026-10-22-foundation.md`; CI runs after the first push |
-| 2 | Store + `harness` CLI | in progress: M1 store core and M2 settings, memory, journal done; M3 plans and tickets next |
+| 2 | Store + `harness` CLI | built: M1 store core, M2 settings, memory, journal, M3 plans and tickets; SP2 review next |
 | 3 | Engine | planned |
 | 4 | Skills | planned |
 | 5 | Web UI | planned |
