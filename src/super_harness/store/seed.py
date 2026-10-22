@@ -10,10 +10,15 @@ from super_harness.store.paths import ProjectPaths, StorePaths
 _PACKAGE_DEFAULTS = resources.files("super_harness.store") / "defaults"
 
 
+def package_default(name: str) -> str:
+    """Text of a default file shipped inside the package."""
+    return (_PACKAGE_DEFAULTS / name).read_text(encoding="utf-8")
+
+
 def _seed(name: str, target: Path) -> None:
     if not target.exists():
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text((_PACKAGE_DEFAULTS / name).read_text(encoding="utf-8"), encoding="utf-8")
+        target.write_text(package_default(name), encoding="utf-8")
 
 
 def ensure_store(paths: StorePaths) -> None:
