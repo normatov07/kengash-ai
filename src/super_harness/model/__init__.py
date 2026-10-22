@@ -13,12 +13,17 @@ from super_harness.model.documents import (
     Ticket,
 )
 from super_harness.model.errors import HarnessError, NeedsSetup, NeedsUser, UserError
+from super_harness.model.events import Event
 from super_harness.model.registry import ProjectEntry, Registry
+from super_harness.model.settings import STEP_ROLES, Agent, Settings, Workflow
 
 __all__ = [
     "PLAN_SECTIONS",
+    "STEP_ROLES",
     "TICKET_SECTIONS",
+    "Agent",
     "Doc",
+    "Event",
     "Folder",
     "Gate",
     "HarnessError",
@@ -32,8 +37,10 @@ __all__ = [
     "Registry",
     "Review",
     "SessionRef",
+    "Settings",
     "ShortId",
     "Ticket",
     "UserError",
+    "Workflow",
     "utc_now",
 ]
