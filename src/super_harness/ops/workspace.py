@@ -1,5 +1,6 @@
 """Settings, memory and context for the current project (SP2 spec §3)."""
 
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,21 @@ from super_harness.store.registry import load_registry
 from super_harness.store.yamlio import dump_yaml
 
 GATES = ("needs_approval", "stalled", "failed", "awaiting_merge")
+
+
+@dataclass
+class OpenGate:
+    id: str
+    sub_status: str
+    title: str
+
+
+@dataclass
+class Context:
+    memory: str
+    project: str | None = None
+    process: list[str] = field(default_factory=list)
+    gates: list[OpenGate] = field(default_factory=list)
 
 
 def resolve_slug(project: str | None, cwd: Path, paths: StorePaths | None = None) -> str | None:
@@ -72,9 +88,9 @@ def recall(decisions: bool, project: str | None, cwd: Path) -> str:
     return memory.show(paths, decisions=decisions, project=resolve_slug(project, cwd, paths))
 
 
-def open_gates(paths: StorePaths, slug: str) -> list[str]:
+def open_gates(paths: StorePaths, slug: str) -> list[OpenGate]:
     """In-process tickets waiting for the conductor or the user."""
-    gates: list[str] = []
+    gates: list[OpenGate] = []
     for path in sorted(paths.project(slug).folder(Folder.in_process).glob("*.md")):
         try:
             ticket = documents.load_ticket(path).meta
@@ -82,19 +98,19 @@ def open_gates(paths: StorePaths, slug: str) -> list[str]:
             continue
         sub_status = ticket.status.split("/", 1)[1]
         if sub_status in GATES:
-            gates.append(f"- {ticket.id} {sub_status}: {ticket.title}")
+            gates.append(OpenGate(ticket.id, sub_status, ticket.title))
     return gates
 
 
-def context(project: str | None, cwd: Path) -> str:
-    """MEMORY.md, the project's PROCESS.md headings and its open gates."""
+def context(project: str | None, cwd: Path) -> Context:
+    """MEMORY.md, plus the project's PROCESS.md headings and open gates when there is one."""
     paths = StorePaths.default()
-    parts = [memory.show(paths).rstrip()]
+    digest = Context(memory.show(paths))
     slug = resolve_slug(project, cwd, paths)
     if slug is not None:
         process = paths.project(slug).process
         lines = process.read_text(encoding="utf-8").splitlines() if process.exists() else []
-        headings = "\n".join(line for line in lines if line.startswith("#")) or "(empty)"
-        parts.append(f"# PROCESS.md ({slug})\n{headings}")
-        parts.append("# Open gates\n" + ("\n".join(open_gates(paths, slug)) or "none"))
-    return "\n\n".join(parts) + "\n"
+        digest.project = slug
+        digest.process = [line for line in lines if line.startswith("#")]
+        digest.gates = open_gates(paths, slug)
+    return digest

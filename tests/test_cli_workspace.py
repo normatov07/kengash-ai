@@ -1,10 +1,14 @@
+import json
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 from typer.testing import CliRunner
 
 from super_harness.cli import app
-from super_harness.store import StorePaths
+from super_harness.model import Doc, Ticket
+from super_harness.store import StorePaths, documents
 
 runner = CliRunner()
 
@@ -64,3 +68,41 @@ def test_context_without_a_store_exits_4(
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["context"])
     assert (result.exit_code, result.stderr) == (4, "no store yet; run: harness init\n")
+
+
+def test_context_lists_open_gates(
+    store_paths: StorePaths, inside_repo: Path, make_ticket: Callable[..., Doc[Ticket]]
+) -> None:
+    documents.save_ticket(
+        store_paths.project("payments-api"), make_ticket(status="in_process/needs_approval")
+    )
+    text = runner.invoke(app, ["context"]).stdout
+    assert "\n\n# PROCESS.md (payments-api)\n# PROCESS.md\n## Process notes\n\n" in text
+    assert text.endswith("# Open gates\n- 7b55e0c1 needs_approval: Rotate keys\n")
+
+
+def test_every_command_speaks_json(store_paths: StorePaths, inside_repo: Path) -> None:
+    def call(*args: str) -> Any:
+        return json.loads(runner.invoke(app, [*args, "--json"]).stdout)
+
+    assert call("settings", "get", "merge.mode") == "ask"
+    assert call("settings", "show")["loop_max"]["critical"] == 6
+    assert call("settings", "check") == {"problems": []}
+    assert call("memory", "add", "prefers runbooks", "--why", "said so") == {
+        "file": "MEMORY.md",
+        "line": "- prefers runbooks",
+        "lines": 13,
+        "cap": 200,
+        "added": True,
+        "over_cap": False,
+    }
+    assert call("memory", "show") == {
+        "file": "MEMORY.md",
+        "text": (store_paths.memory / "MEMORY.md").read_text(encoding="utf-8"),
+    }
+    assert call("context") == {
+        "memory": (store_paths.memory / "MEMORY.md").read_text(encoding="utf-8"),
+        "project": "payments-api",
+        "process": ["# PROCESS.md", "## Process notes"],
+        "gates": [],
+    }

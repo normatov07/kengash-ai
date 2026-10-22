@@ -33,10 +33,19 @@ def test_context_shows_memory_process_and_gates(
     project = store_paths.project("payments-api")
     documents.save_ticket(project, make_ticket(status="in_process/needs_approval"))
     documents.save_ticket(project, make_ticket("a91b3d07", status="in_process/under_review"))
-    text = workspace.context(None, repo)
-    assert text.startswith("# MEMORY.md")
-    assert "# PROCESS.md (payments-api)\n# PROCESS.md\n## Process notes" in text
-    assert text.endswith("# Open gates\n- 7b55e0c1 needs_approval: Rotate keys\n")
+    digest = workspace.context(None, repo)
+    assert digest.memory.startswith("# MEMORY.md")
+    assert (digest.project, digest.process) == (
+        "payments-api",
+        ["# PROCESS.md", "## Process notes"],
+    )
+    assert digest.gates == [workspace.OpenGate("7b55e0c1", "needs_approval", "Rotate keys")]
+
+
+def test_context_outside_a_project_has_memory_only(store_paths: StorePaths, repo: Path) -> None:
+    projects.init_project(repo)
+    digest = workspace.context(None, repo.parent)
+    assert (digest.project, digest.process, digest.gates) == (None, [], [])
 
 
 def test_context_needs_a_store(store_paths: StorePaths, repo: Path) -> None:

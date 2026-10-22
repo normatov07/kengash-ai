@@ -9,7 +9,7 @@ Typer command surface for `harness` (alias `hrn`): parses arguments and formats 
 - `harness --version` prints `super-harness <version>` and exits 0. Skills use this line to confirm the right binary is on PATH.
 - `harness --help` lists commands and options.
 - `harness init [PATH]`, `doctor [--fix] [--quiet] [--scan DIR]`, `link SLUG NEW_PATH`, `adopt PATH`, each with `--json` (SP2 spec §3).
-- `harness settings show|get KEY|check`, `memory add TEXT --why WHY [--section S|--decision [--rejected R]] [--by NAME]`, `memory show [--decisions]`, `context`; all take `--project/-p` (default: the project containing the current folder). `settings get` prints strings plain and other values as JSON; `settings check` prints problems only.
+- `harness settings show|get KEY|check`, `memory add TEXT --why WHY [--section S|--decision [--rejected R]] [--by NAME]`, `memory show [--decisions]`, `context`; all take `--project/-p` (default: the project containing the current folder) and `--json`. `settings get` prints strings plain and other values as JSON; `settings check` prints problems only.
 
 ## Invariants
 
@@ -19,6 +19,7 @@ Typer command surface for `harness` (alias `hrn`): parses arguments and formats 
 
 ## Changes
 
+- 2026-10-22: `--json` for `settings`, `memory` and `context`; `context` text is formatted here (SP2 M2 review).
 - 2026-10-22: `settings`, `memory` and `context` commands (SP2 M2).
 - 2026-10-22: `init`, `doctor`, `link`, `adopt` commands; errors print one stderr line with the spec exit code (SP2 M1).
 - 2026-10-22: skeleton with `--version` and `--help`; console scripts `harness` and `hrn`.
