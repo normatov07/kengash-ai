@@ -170,7 +170,7 @@ title: Rotate payment webhook signing keys
 importance: critical            # simple | standard | critical
 workflow: critical              # key into SETTINGS workflows
 status: in_process/under_security_review
-step: security                  # step running or next; empty in in_queue and done
+step: security                  # step running or next; empty before the first claim and once done
 gate: afk                       # afk | hitl
 loop: 6
 loop_max: 6

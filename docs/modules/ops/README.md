@@ -25,13 +25,13 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - Every state change ends with a store commit (`harness: <command> <slug>`).
 - Adopt deletes nothing: the original folder and every losing copy end up in `projects/<slug>/archive/adopted-<stamp>/`.
 - `ticket add` validates the whole batch (schema, keys, references, cycles, workflows) before writing any ticket; a ticket is `ready` only when every dependency is merged or closed (`done/branch_ready` keeps dependents blocked).
-- Queued tickets stay consistent: after any move or `depends_on` change each `ready`/`blocked` ticket is re-derived from its dependencies; `parked` is left alone; `in_process` needs every dependency merged or closed.
+- Queued tickets stay consistent: after any move or `depends_on` change each `ready`/`blocked` ticket is re-derived from its dependencies; `parked` is left alone; `in_process` needs every dependency merged or closed; a move to `done` clears the ticket's `step`, while parked or requeued tickets keep it and resume there.
 - `ops` never imports `cli` or `ui`.
 
 ## Changes
 
 - 2026-10-22: `queue.next_tickets` (SP3 M1).
-- 2026-10-22: dependencies are met only by `done/merged` and `done/closed` (SP3 M1).
+- 2026-10-22: dependencies are met only by `done/merged` and `done/closed`; a move to `done` clears `step` (SP3 M1).
 - 2026-10-22: `describe` hints at quoting YAML text that contains `: ` (SP2 review).
 - 2026-10-22: board status (SP2 M3).
 - 2026-10-22: ticket move and set (SP2 M3).

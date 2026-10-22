@@ -196,6 +196,8 @@ def move_ticket(ticket_id: str, target: str, why: str, *, project: str | None, b
         if after == before:
             return Moved(ticket.id, slug, before, after)
         ticket.status = after
+        if ticket.folder is Folder.done:
+            ticket.step = None  # a done ticket runs no step; parked or requeued ones resume
         ticket.updated = utc_now()
         documents.save_ticket(project_paths, doc)
         ready, blocked = _refresh_queue(project_paths, tickets)

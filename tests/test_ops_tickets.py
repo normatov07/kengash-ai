@@ -221,3 +221,15 @@ def test_a_branch_ready_dependency_keeps_dependents_blocked(
     assert follow_up.status == "in_queue/blocked"
     moved = tickets.move_ticket("7b55e0c1", "done/merged", "merged", project=None, by="x")
     assert moved.ready == [follow_up.id]
+
+
+def test_closing_a_ticket_clears_its_step(
+    store_paths: StorePaths, registered_repo: Path, make_ticket: Callable[..., Doc[Ticket]]
+) -> None:
+    parked = make_ticket(status="in_queue/parked", step="implement")
+    documents.save_ticket(store_paths.project("payments-api"), parked)
+    requeued = tickets.move_ticket("7b55e0c1", "in_queue", "retry", project=None, by="x")
+    assert requeued.after == "in_queue/ready"
+    assert tickets.show_ticket("7b55e0c1", project=None).meta["step"] == "implement"
+    tickets.move_ticket("7b55e0c1", "done", "dropped", project=None, by="x")
+    assert "step" not in tickets.show_ticket("7b55e0c1", project=None).meta

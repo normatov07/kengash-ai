@@ -1710,3 +1710,12 @@ git commit -m "feat(cli): harness next lists the tickets that can start now" -m 
 - Unit tests cover every row of SP3 spec §6 (`tests/test_workflow.py`) and every `next` rule of §7 (`tests/test_scheduler.py`, `tests/test_ops_queue.py`).
 - `harness next` filters and orders tickets (`tests/test_cli_queue.py`, plus the scratch-store walk).
 - Review every change against the spec before M2 starts (AGENTS.md hard rule 9).
+
+## Review (2026-10-22)
+
+Every M1 change was checked against SP3 spec §2 (decisions 6, 17), §4, §6, §7 and §10.
+
+- Fixed: the spec said `step` is empty in `in_queue`, but a parked or requeued ticket must keep it to resume where it stopped; the specs now say so, and `ticket move … done` clears it.
+- Fixed: the spec's `next` empty-queue line now matches the output (non-zero counts, held back and paused included).
+- Carried into M2: `next` picks the first step's provider before fallback; once `adapters` can detect providers, an unavailable provider falls back as SP3 decision 7 says.
+- Carried into M3: stale slot entries (dead pid) must be dropped when slots are taken; `next` and `wait` write conductor pings (SP3 spec §10).

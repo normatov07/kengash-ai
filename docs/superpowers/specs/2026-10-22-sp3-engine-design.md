@@ -58,7 +58,7 @@ Import-linter layers become `cli | worker > ops > memory > journal | settings > 
 
 Ticket and plan fields (system spec §4.4):
 
-- `step`: the step running or next to run; set at claim, empty in `in_queue` and `done`.
+- `step`: the step running or next to run; set at claim, kept while a ticket is parked or requeued so it resumes there, cleared once it is done.
 - `tokens_max`: empty means `tokens.per_ticket_max`.
 - Plan `review.session`: `{provider, model, id}` of the reviewer session, empty before the first review.
 - Sub-status `in_process/paused`.
@@ -172,7 +172,7 @@ A resumed session gets only `Loop <n>, step <step>: <step instruction>` plus the
 
 | Command | Output (default) | Exit codes |
 |---|---|---|
-| `harness next [--project P]` | `<id> <project> <importance> <step>→<provider> <title>` per ticket, at most 5, then `+N more`; or `nothing runnable: B blocked, R running, G at gates` | 0 |
+| `harness next [--project P]` | `<id> <project> <importance> <step>→<provider> <title>` per ticket, at most 5, then `+N more`; or `nothing runnable: ` with the non-zero counts of held-back, blocked, running, gated and paused tickets (`the queue is empty` when all are zero) | 0 |
 | `harness run ID… [--steps N]` | `started <id> <step>→<provider>` or `skipped <id>: <reason>` per ticket | 0 · 1 none started · 4 provider missing or signed out, sandboxed conductor |
 | `harness wait [--project P] [--timeout 540]` | `<id> <status> loop n/max: <detail>` per event, or `idle` | 0 · 3 timeout |
 | `harness approve ID [--loops N] [--tokens N]` | `ticket <id> approved; running` | 0 · 1 not waiting for approval |
