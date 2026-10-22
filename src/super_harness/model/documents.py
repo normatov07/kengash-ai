@@ -37,6 +37,7 @@ SUB_STATUSES: dict[Folder, tuple[str, ...]] = {
         "needs_approval",
         "stalled",
         "failed",
+        "paused",
         "awaiting_merge",
     ),
     Folder.done: ("merged", "branch_ready", "closed"),
@@ -62,12 +63,19 @@ class _Schema(BaseModel):
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
 
 
+class SessionRef(_Schema):
+    provider: str
+    model: str = "default"
+    id: str
+
+
 class Review(_Schema):
     round: int = 0
     max: int = 2
     verdict: Literal["pass", "fail"] | None = None
     reviewer: str | None = None
     skipped: bool = False
+    session: SessionRef | None = None
 
 
 class Plan(_Schema):
@@ -84,12 +92,6 @@ class Plan(_Schema):
     updated: datetime
 
 
-class SessionRef(_Schema):
-    provider: str
-    model: str = "default"
-    id: str
-
-
 class Ticket(_Schema):
     id: ShortId
     uuid: UUID
@@ -99,10 +101,12 @@ class Ticket(_Schema):
     importance: Importance
     workflow: str
     status: str
+    step: str | None = None
     gate: Gate = Gate.afk
     loop: int = 1
     loop_max: int
     tokens: int = 0
+    tokens_max: int | None = Field(None, ge=1)
     depends_on: list[ShortId] = Field(default_factory=list)
     touches: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)

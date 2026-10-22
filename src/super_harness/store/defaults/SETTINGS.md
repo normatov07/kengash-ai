@@ -31,9 +31,18 @@ fallback_on_rate_limit: true
 skill.max_lines: 80
 skill.max_words: 400
 memory.compact_at_lines: 200
+memory.compactor: claude/haiku   # provider/model that compacts MEMORY.md
 review.diff_only: true
 
-# agents: role → CLI; an omitted model means the CLI's default model
+# providers: allow_api_key keeps API-key variables in worker environments;
+# user_config lets workers load your own hooks, plugins and MCP servers
+providers:
+  claude:      {allow_api_key: false, user_config: false}
+  codex:       {allow_api_key: false, user_config: false}
+  antigravity: {allow_api_key: false, user_config: false}
+
+# agents: role → CLI; an omitted model means the CLI's default model;
+# bypass_permissions: true adds the CLI's permission-bypass flag (off by default)
 agents:
   planner:           {on: true,  cli: claude/opus,   skill: plan}
   plan-reviewer:     {on: true,  cli: codex,         skill: review-plan}

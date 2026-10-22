@@ -12,6 +12,8 @@ from super_harness.model import (
     Plan,
     PlanMode,
     PlanStatus,
+    Review,
+    SessionRef,
     Ticket,
     TicketInput,
 )
@@ -93,3 +95,17 @@ def test_ticket_input_defaults_and_unknown_fields() -> None:
     assert (item.key, item.gate, item.depends_on, item.scope) == (None, Gate.afk, [], "")
     with pytest.raises(ValidationError, match="scop"):
         TicketInput.model_validate({"title": "Keyring", "importance": "critical", "scop": "x"})
+
+
+def test_tickets_record_their_step_and_token_budget() -> None:
+    paused = ticket(status="in_process/paused", step="implement", tokens_max=300_000)
+    assert (paused.sub_status, paused.step, paused.tokens_max) == ("paused", "implement", 300_000)
+    assert "paused" in SUB_STATUSES[Folder.in_process]
+    assert (ticket().step, ticket().tokens_max) == (None, None)
+    with pytest.raises(ValidationError, match="greater than or equal to 1"):
+        ticket(tokens_max=0)
+
+
+def test_plan_reviews_keep_their_reviewer_session() -> None:
+    review = Review(round=1, verdict="fail", session=SessionRef(provider="codex", id="019a"))
+    assert review.session == SessionRef(provider="codex", model="default", id="019a")

@@ -2,7 +2,7 @@
 
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, model_validator
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, field_validator, model_validator
 
 STEP_ROLES: dict[str, str | None] = {
     "plan": "planner",
@@ -14,6 +14,22 @@ STEP_ROLES: dict[str, str | None] = {
     "docs": "doc-writer",
     "approve": None,
 }
+PROVIDERS = ("claude", "codex", "antigravity", "gemini")
+SHELL = "shell"
+
+
+def split_cli(cli: str) -> tuple[str, str | None]:
+    """`claude/opus` → ("claude", "opus"); `codex` → ("codex", None): the CLI's default."""
+    provider, _, model = cli.partition("/")
+    return provider, model or None
+
+
+def _known(cli: str, *, shell: bool = False) -> str:
+    provider, _ = split_cli(cli)
+    known = (*PROVIDERS, SHELL) if shell else PROVIDERS
+    if provider not in known:
+        raise ValueError(f"unknown provider {provider!r}; known: {', '.join(known)}")
+    return cli
 
 
 class _Section(BaseModel):
@@ -61,6 +77,12 @@ class SkillCaps(_Section):
 
 class MemoryCaps(_Section):
     compact_at_lines: int = Field(200, ge=10)
+    compactor: str = "claude/haiku"
+
+    @field_validator("compactor")
+    @classmethod
+    def _model_provider(cls, value: str) -> str:
+        return _known(value)
 
 
 class ReviewPolicy(_Section):
@@ -73,6 +95,24 @@ class Agent(_Section):
     skill: str
     blocking: bool = False
     fallback: list[str] = Field(default_factory=list)
+    bypass_permissions: bool = False
+
+    @field_validator("cli")
+    @classmethod
+    def _cli_provider(cls, value: str) -> str:
+        return _known(value, shell=True)
+
+    @field_validator("fallback")
+    @classmethod
+    def _fallback_providers(cls, value: list[str]) -> list[str]:
+        for cli in value:
+            _known(cli)
+        return value
+
+
+class ProviderOptions(_Section):
+    allow_api_key: bool = False
+    user_config: bool = False
 
 
 class Workflow(_Section):
@@ -119,6 +159,7 @@ class Settings(_Section):
     skill: SkillCaps = Field(default_factory=SkillCaps)
     memory: MemoryCaps = Field(default_factory=MemoryCaps)
     review: ReviewPolicy = Field(default_factory=ReviewPolicy)
+    providers: dict[str, ProviderOptions] = Field(default_factory=dict)
     agents: dict[str, Agent] = Field(default_factory=dict)
     workflows: dict[str, Workflow] = Field(default_factory=dict)
     status: StatusNames = Field(default_factory=StatusNames)
@@ -137,3 +178,15 @@ class Settings(_Section):
         if missing:
             raise ValueError(f"workflow steps need agents: {', '.join(missing)}")
         return self
+
+    @field_validator("providers")
+    @classmethod
+    def _provider_names(cls, value: dict[str, ProviderOptions]) -> dict[str, ProviderOptions]:
+        unknown = sorted(set(value) - set(PROVIDERS))
+        if unknown:
+            raise ValueError(f"unknown providers {unknown}; known: {', '.join(PROVIDERS)}")
+        return value
+
+    def provider(self, name: str) -> ProviderOptions:
+        """A provider's worker options; providers left out of SETTINGS get the defaults."""
+        return self.providers.get(name, ProviderOptions())

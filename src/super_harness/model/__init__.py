@@ -17,10 +17,19 @@ from super_harness.model.documents import (
 from super_harness.model.errors import HarnessError, NeedsSetup, NeedsUser, UserError
 from super_harness.model.events import Event
 from super_harness.model.registry import ProjectEntry, Registry
-from super_harness.model.settings import STEP_ROLES, Agent, Settings, Workflow
+from super_harness.model.settings import (
+    PROVIDERS,
+    STEP_ROLES,
+    Agent,
+    ProviderOptions,
+    Settings,
+    Workflow,
+    split_cli,
+)
 
 __all__ = [
     "PLAN_SECTIONS",
+    "PROVIDERS",
     "STEP_ROLES",
     "SUB_STATUSES",
     "TICKET_SECTIONS",
@@ -37,6 +46,7 @@ __all__ = [
     "PlanMode",
     "PlanStatus",
     "ProjectEntry",
+    "ProviderOptions",
     "Registry",
     "Review",
     "SessionRef",
@@ -47,5 +57,6 @@ __all__ = [
     "Title",
     "UserError",
     "Workflow",
+    "split_cli",
     "utc_now",
 ]

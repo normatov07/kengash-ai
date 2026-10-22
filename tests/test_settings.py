@@ -78,3 +78,11 @@ def test_get_reads_dotted_keys(store_paths: StorePaths) -> None:
     assert settings.get(resolved, "agents.planner.cli") == "claude/opus"
     with pytest.raises(UserError, match="did you mean loop_grant"):
         settings.get(resolved, "loop_grnt")
+
+
+def test_package_defaults_name_providers_and_the_compactor(store_paths: StorePaths) -> None:
+    resolved = settings.load(store_paths)
+    assert resolved.memory.compactor == "claude/haiku"
+    assert set(resolved.providers) == {"claude", "codex", "antigravity"}
+    assert not resolved.provider("claude").user_config
+    assert not resolved.agents["implementer"].bypass_permissions

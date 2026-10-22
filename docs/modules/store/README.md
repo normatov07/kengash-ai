@@ -27,6 +27,7 @@ Everything under `~/.harness`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
+- 2026-10-22: default SETTINGS.md adds `memory.compactor`, `providers` and the `bypass_permissions` note (SP3 M1).
 - 2026-10-22: `read_sections`; ids never read as numbers (SP2 M3).
 - 2026-10-22: redaction also catches prefixed names, JSON keys and quoted values, in linear time (SP2 M2 review).
 - 2026-10-22: redaction and `package_default` (SP2 M2).
