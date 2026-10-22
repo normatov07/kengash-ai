@@ -167,17 +167,18 @@ In `Settings`, add the field between `review` and `agents`, and the validator an
 ```
 
 ```python
-    @field_validator("providers")
-    @classmethod
-    def _provider_names(cls, value: dict[str, ProviderOptions]) -> dict[str, ProviderOptions]:
-        unknown = sorted(set(value) - set(PROVIDERS))
-        if unknown:
-            raise ValueError(f"unknown providers {unknown}; known: {', '.join(PROVIDERS)}")
-        return value
+@field_validator("providers")
+@classmethod
+def _provider_names(cls, value: dict[str, ProviderOptions]) -> dict[str, ProviderOptions]:
+    unknown = sorted(set(value) - set(PROVIDERS))
+    if unknown:
+        raise ValueError(f"unknown providers {unknown}; known: {', '.join(PROVIDERS)}")
+    return value
 
-    def provider(self, name: str) -> ProviderOptions:
-        """A provider's worker options; providers left out of SETTINGS get the defaults."""
-        return self.providers.get(name, ProviderOptions())
+
+def provider(self, name: str) -> ProviderOptions:
+    """A provider's worker options; providers left out of SETTINGS get the defaults."""
+    return self.providers.get(name, ProviderOptions())
 ```
 
 In `src/super_harness/model/documents.py`: add `"paused",` before `"awaiting_merge",` in `SUB_STATUSES[Folder.in_process]`; move `class SessionRef` above `class Review`; then add to `Review` after `skipped: bool = False`:
@@ -411,17 +412,19 @@ Export `Claims`, `SlotEntry`, `SlotTable` from `src/super_harness/model/__init__
 Add to `StorePaths` in `src/super_harness/store/paths.py`, after `locks`:
 
 ```python
-    @property
-    def slots(self) -> Path:
-        return self.runtime / "slots.json"
+@property
+def slots(self) -> Path:
+    return self.runtime / "slots.json"
 
-    @property
-    def claims(self) -> Path:
-        return self.runtime / "claims.json"
 
-    @property
-    def flags(self) -> Path:
-        return self.runtime / "flags"
+@property
+def claims(self) -> Path:
+    return self.runtime / "claims.json"
+
+
+@property
+def flags(self) -> Path:
+    return self.runtime / "flags"
 ```
 
 Create `src/super_harness/store/runtime.py`:
@@ -1218,8 +1221,7 @@ def select(
             (
                 other.id
                 for other in taken
-                if other.project == candidate.project
-                and overlaps(other.touches, candidate.touches)
+                if other.project == candidate.project and overlaps(other.touches, candidate.touches)
             ),
             None,
         )
