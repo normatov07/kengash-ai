@@ -367,9 +367,12 @@ Merges are fast-forward, so the trailers survive and `git log --grep "Harness-Ti
 ```python
 class Provider(Protocol):
     name: str
-    def detect(self) -> ProviderStatus: ...          # installed, version, signed-in state
+
+    def detect(self) -> ProviderStatus: ...  # installed, version, signed-in state
     def run(self, req: StepRequest) -> StepResult: ...
-    def attach_command(self, session_id: str, cwd: Path) -> list[str]: ...   # "Attach to live CLI session"
+    def attach_command(
+        self, session_id: str, cwd: Path
+    ) -> list[str]: ...  # "Attach to live CLI session"
 ```
 
 - `StepRequest`: cwd, prompt, role skill path, model, session id (`None` = new session), JSON schema, permission profile (`read_only` | `edit_worktree`), timeout.
