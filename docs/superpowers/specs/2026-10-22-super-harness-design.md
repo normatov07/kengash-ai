@@ -65,12 +65,12 @@ UI: harness ui → FastAPI + SSE on 127.0.0.1 → same use-case layer as the CLI
 | `settings` | Seed, load, validate and resolve settings; comment-preserving edits | model, store |
 | `memory` | MEMORY/DECISIONS/PROCESS writes and caps; journals every write | model, store, journal, settings |
 | `journal` | Append-only JSONL events, follow, usage aggregates | model, store |
-| `scheduler` | Runnable set: dependencies, `touches` overlap, provider slots, fairness | model, store, settings |
-| `workflow` | Step graph per importance, routing, loop and budget caps, stall detection | model, settings |
+| `scheduler` | Runnable set: dependencies, `touches` overlap, provider slots, fairness | model |
+| `workflow` | Step graph per importance, routing, loop and budget caps, stall detection | model |
 | `adapters` | One driver per provider CLI behind the `Provider` protocol | model |
 | `gitops` | Worktrees, commits with trailers, diffs, rebase, merge | model |
-| `ops` | Use cases shared by CLI and UI: plan and ticket actions, run, approve, park, stop, pause, move, merge, settings edits, memory compaction | all units above |
-| `worker` | Runs one job; heartbeats; emits events | all units above except `ops` |
+| `ops` | Use cases shared by CLI, UI and workers: plan and ticket actions, run, step execution, approve, park, stop, pause, move, merge, settings edits, memory compaction | all units above; starts workers as processes, never imports them |
+| `worker` | Runs one job through `ops`; heartbeats; handles signals | `ops`, `model` |
 | `cli` | Typer command surface and output formatting | `ops`, `model` |
 | `ui` | FastAPI app, SSE, static assets | `ops`, `model` |
 | `roles` | Packaged role skill files (data only) | — |
@@ -138,7 +138,7 @@ project: payments-api
 title: Rotatable webhook signing keys
 mode: grill            # grill (/to-plan-with-grill) | direct (/to-plan) | quick (/to-ticket "<prompt>")
 status: approved       # grilling | draft | in_review | approved | ticketed | rejected
-review: {round: 2, max: 2, verdict: pass, reviewer: codex}   # reviewer verdict; approval is the user's act
+review: {round: 2, max: 2, verdict: pass, reviewer: codex, session: {…}}   # reviewer verdict; approval is the user's act
 milestone: 1           # milestone currently ticketed
 tickets: [7b55e0c1, a91b3d07]
 created: 2026-10-22T09:30:00Z
@@ -170,10 +170,12 @@ title: Rotate payment webhook signing keys
 importance: critical            # simple | standard | critical
 workflow: critical              # key into SETTINGS workflows
 status: in_process/under_security_review
+step: security                  # step running or next; empty in in_queue and done
 gate: afk                       # afk | hitl
 loop: 6
 loop_max: 6
-tokens: 148600
+tokens: 148600                  # input + output tokens of every step
+tokens_max:                     # empty = tokens.per_ticket_max; approvals raise it
 depends_on: [a91b3d07]
 touches: [services/webhooks]    # repo path prefixes; empty = whole repo, so always runs alone
 tags: [payments, security]
@@ -195,8 +197,8 @@ Statuses, written `<folder>/<sub_status>`:
 
 | Folder | Sub-statuses |
 |---|---|
-| `in_queue` | `ready`, `blocked` (a dependency is not done), `parked` |
-| `in_process` | one per workflow step (from `status.names`, e.g. `under_implementation`), `waiting_slot`, `waiting_quota`, `needs_approval`, `stalled`, `failed`, `awaiting_merge` |
+| `in_queue` | `ready`, `blocked` (a dependency is not merged or closed), `parked` |
+| `in_process` | one per workflow step (from `status.names`, e.g. `under_implementation`), `waiting_slot`, `waiting_quota`, `needs_approval`, `stalled`, `failed`, `paused`, `awaiting_merge` |
 | `done` | `merged`, `branch_ready`, `closed` (force-moved by the user) |
 
 ### 4.5 Memory and instruction files
@@ -257,9 +259,18 @@ fallback_on_rate_limit: true
 skill.max_lines: 80
 skill.max_words: 400
 memory.compact_at_lines: 200
+memory.compactor: claude/haiku   # provider/model that compacts MEMORY.md
 review.diff_only: true
 
-# agents: role → CLI; an omitted model means the CLI's default model
+# providers: allow_api_key keeps API-key variables in worker environments;
+# user_config lets workers load your own hooks, plugins and MCP servers
+providers:
+  claude:      {allow_api_key: false, user_config: false}
+  codex:       {allow_api_key: false, user_config: false}
+  antigravity: {allow_api_key: false, user_config: false}
+
+# agents: role → CLI; an omitted model means the CLI's default model;
+# bypass_permissions: true adds the CLI's permission-bypass flag (off by default)
 agents:
   planner:           {on: true,  cli: claude/opus,   skill: plan}
   plan-reviewer:     {on: true,  cli: codex,         skill: review-plan}
@@ -292,9 +303,9 @@ Steps map to roles: `plan` → planner, `review_plan` → plan-reviewer, `implem
 
 - `loop` starts at 1. A failing verdict follows the step's `on_fail` edge and adds 1 to `loop`.
 - If a failing verdict arrives when `loop` already equals `loop_max`, the ticket goes to `needs_approval` (or `parked` when `loop_ask_at_cap: false`) instead of recirculating. `harness approve <id> [--loops N]` raises `loop_max` by N (default `loop_grant`), and the recirculation proceeds.
-- Before every step, `tokens ≥ tokens.per_ticket_max` also sends the ticket to `needs_approval`.
+- Before every step, `tokens ≥ tokens_max` (empty: `tokens.per_ticket_max`) also sends the ticket to `needs_approval`. A step adds its input and output tokens; cache reads and writes are journaled only.
 - Review steps return schema-validated JSON: `{verdict: pass|fail, findings: [{severity, file, line, issue, fix}], summary}`. Each finding gets a fingerprint (normalised file plus issue text). The same fingerprint failing `stall_repeat` loops in a row → `stalled`. Planner and plan reviewer disagreeing beyond `plan.review_max` rounds → `stalled`; the same limit applies to plan-level reviews (`harness plan review`) and to tickets' `review_plan` steps.
-- `gate: hitl` tickets add an `approve` step after `plan` and always require approval before merge, whatever `merge.mode` says.
+- `gate: hitl` tickets add an `approve` step after `plan` (first, when the workflow has no `plan` step) and always require approval before merge, whatever `merge.mode` says.
 - After the last step: `merge.mode: ask` → `awaiting_merge`; `auto` → merge at once if the repo's main working tree is clean and on the base branch, otherwise `awaiting_merge`; `branch` → `done/branch_ready`.
 - `harness merge <id>` rebases the ticket branch onto the base branch inside its worktree (a conflict sends the ticket back to `implement` with loop + 1), runs `git merge --ff-only` in the main working tree (refused unless it is clean and on the base branch), removes the worktree, deletes the branch, and moves the ticket to `done/merged`. Harness never pushes.
 
@@ -306,18 +317,18 @@ Status and action commands print at most 5 lines; `context` and `show` print the
 |---|---|
 | `harness context [project]` | Digest for the conductor: MEMORY.md, the project's PROCESS.md headings, open gates |
 | `harness plan new\|save\|show\|review\|approve\|reject` | Plan lifecycle. `review` starts the reviewer job and waits up to `--timeout 540`. `approve` is refused until the review is finished, unless `plan.review_max: 0`. `quick` plans skip review: the user's check of the ticket list is their approval. |
-| `harness ticket add\|show\|list\|find\|set\|move\|changes` | Ticket lifecycle. `add --plan <id>` validates the schema, acyclic `depends_on` and caps, and is refused unless the plan is approved. `changes` lists per-file diffs with the model and loop that wrote them. |
+| `harness ticket add\|show\|list\|find\|set\|move\|changes\|attach` | Ticket lifecycle. `add --plan <id>` validates the schema, acyclic `depends_on` and caps, and is refused unless the plan is approved. `changes` lists per-file diffs with the model and loop that wrote them. `attach` prints the command that opens a role's session. |
 | `harness next [project]` | Runnable tickets |
 | `harness run <id>… [--steps N]` | Claim tickets (→ `in_process`), start detached workers, return at once |
 | `harness wait [project] [--timeout 540]` | Block until a ticket or plan needs the conductor: `done`, `needs_approval`, `stalled`, `failed`, `awaiting_merge`, plan review finished |
-| `harness approve\|park\|stop\|pause\|resume\|merge` | Gates and controls |
+| `harness approve\|park\|stop\|pause\|resume\|merge` | Gates and controls; `pause` and `resume` act on one project or on everything |
 | `harness memory add\|compact\|show` | Memory writes, attributed in the journal |
 | `harness status [project]` | Board summary; how a fresh conductor picks up where another stopped |
 | `harness init\|doctor\|link\|adopt` | Links and repair (§4.2) |
 | `harness skills install\|lint\|eval` | Packaging (§8) |
 | `harness ui [open\|stop]` | Local UI (§9) |
 
-`harness next` orders round-robin across projects, then by importance (critical first), then by age. A ticket is runnable when every `depends_on` ticket is done, its `touches` do not overlap any `in_process` ticket of the same project (two paths overlap when one is a prefix of the other, compared segment by segment, so `services/web` and `services/webhooks` do not; empty `touches` overlaps everything), and its next step's provider has a free slot within `sessions.max` and `sessions.per_provider`. Workers take slots per step, not per ticket.
+`harness next` orders round-robin across projects, then by importance (critical first), then by age. A ticket is runnable when every `depends_on` ticket is merged or closed, its `touches` do not overlap any `in_process` ticket of the same project (two paths overlap when one is a prefix of the other, compared segment by segment, so `services/web` and `services/webhooks` do not; empty `touches` overlaps everything), and its next step's provider has a free slot within `sessions.max` and `sessions.per_provider`. Workers take slots per step, not per ticket.
 
 `next` and `wait` record a conductor ping in `runtime/conductors/` (process id, agent if detectable, project filter); the UI shows these as live conductors.
 
@@ -329,20 +340,20 @@ One JSON object per line in `journal/YYYY-MM-DD.jsonl`:
 {"ts":"2026-10-22T12:04:11Z","type":"step.end","project":"payments-api","ticket":"4f2a1b7c","step":"implement","role":"implementer","provider":"codex","model":"default","session":"019a…","loop":2,"verdict":"pass","tokens":{"in":12000,"out":3400,"cache_read":80000},"duration_s":252,"files":3,"added":128,"removed":14,"commit":"abc1234"}
 ```
 
-Types: `plan.created`, `plan.saved`, `plan.reviewed`, `plan.approved`, `plan.rejected`, `ticket.created`, `ticket.claimed`, `step.start`, `step.end`, `ticket.recirculated`, `ticket.needs_approval`, `ticket.approved`, `ticket.stalled`, `ticket.failed`, `ticket.awaiting_merge`, `ticket.merged`, `ticket.moved`, `ticket.updated`, `memory.write`, `session.created`, `session.resumed`, `worker.started`, `worker.exited`, `settings.changed`, `link.broken`, `link.repaired`, `link.adopted`. Secrets are redacted before writing.
+Types: `plan.created`, `plan.saved`, `plan.reviewed`, `plan.approved`, `plan.rejected`, `ticket.created`, `ticket.claimed`, `step.start`, `step.end`, `ticket.recirculated`, `ticket.needs_approval`, `ticket.approved`, `ticket.stalled`, `ticket.failed`, `ticket.awaiting_merge`, `ticket.merged`, `ticket.moved`, `ticket.updated`, `ticket.paused`, `ticket.resumed`, `ticket.stopped`, `memory.write`, `session.created`, `session.resumed`, `worker.started`, `worker.exited`, `settings.changed`, `link.broken`, `link.repaired`, `link.adopted`. Secrets are redacted before writing.
 
 ## 7. Workers and provider adapters
 
 ### 7.1 Worker lifecycle
 
-A worker runs one job: a ticket's steps, a plan review, or a memory compaction. `harness run` claims a ticket under the project lock, moves it to `in_process`, and starts `python -m super_harness.worker <job>` in a new session (`setsid`), logging to `runtime/logs/<id>.log`. For a ticket job, each step:
+A worker runs one job: a ticket's steps, a plan review, or a memory compaction. `harness run` claims a ticket under the project lock, moves it to `in_process`, creates or reuses its worktree `worktrees/<slug>/hrn-<id8>` on branch `hrn/<id8>` (every step of the ticket runs there), and starts `python -m super_harness.worker <job>` in a new session (`setsid`), logging to `runtime/logs/<id>.log`. For a ticket job, each step:
 
 1. Checks pause and stop flags, then the loop and token caps (§5).
 2. Takes a provider slot, or waits as `waiting_slot`.
-3. For `implement`: creates or reuses the worktree `worktrees/<slug>/hrn-<id8>` on branch `hrn/<id8>` and records the start commit.
-4. Builds the prompt. A new session gets the role skill (Claude: `--append-system-prompt-file`; others: prepended to the prompt), the absolute ticket path, the step instruction and the output schema. A resumed session gets only the delta, e.g. "loop 2: fix the findings in ## Findings".
+3. Before an editing step (`implement`, `docs`): records the start commit.
+4. Builds the prompt. A new session gets the role skill (Claude: `--append-system-prompt`; others: prepended to the prompt), the step instruction, the ticket's Scope, Acceptance, Handoff and open Findings and the plan's Goal inline, and the output schema; agents never read store files. A resumed session gets only the delta, e.g. "loop 2: fix these findings".
 5. Calls the adapter; records session id, usage and verdict; writes `## Handoff`, `## Findings` and `## Log`; emits `step.end`.
-6. For `implement`: if the agent committed, `git reset --soft <start>`; then harness commits all changes with trailers.
+6. After an editing step: if the agent committed, `git reset --soft <start>`; then harness commits all changes with trailers.
 7. Routes (pass → next step; fail → `on_fail` target with loop + 1) and releases the slot.
 8. At a gate or at the end: sets the status, emits the event, exits.
 
@@ -381,10 +392,10 @@ class Provider(Protocol):
 
 | Provider | New session | Resume | Notes |
 |---|---|---|---|
-| claude | `claude -p … --output-format json --json-schema …` | `--resume <id>` | permission profile → `--permission-mode` plus `--allowedTools`; never `--bare` |
-| codex | `codex exec --json …` | `codex exec resume <id> "…"` | never `--ephemeral`; the schema flag and sandbox mapping are confirmed in the SP3 spec |
-| antigravity | `agy -p … --output-format json --json-schema …` | `--conversation <id>` | empty stdout with exit 0 is an `empty` error: recover from the transcript, otherwise fail |
-| gemini | `gemini -p … --output-format json` | confirmed in the SP3 spec | optional; for API-key or enterprise users |
+| claude | `claude -p … --output-format json --json-schema … --session-id <uuid>` | `--resume <id>` | permission profile → `--permission-mode` plus `--allowedTools`; workers skip the user's settings, plugins and MCP (`--setting-sources project,local --strict-mcp-config`); never `--bare` |
+| codex | `codex exec --json --output-schema <file> -s <sandbox> …` | `codex exec resume --json --output-schema <file> -c sandbox_mode=… <id> "…"` | never `--ephemeral`; workers run with `--ignore-user-config`; full mapping in the SP3 spec §8 |
+| antigravity | `agy -p … --output-format json --json-schema … --mode <mode>` | `--conversation <id>` | empty stdout with exit 0 is an `empty` error: recover from the transcript, otherwise fail |
+| gemini | `gemini -p … --output-format json` | — | optional; not built in SP3 (SP3 spec decision 16) |
 | shell | `project.test_cmd` | — | `run_tests` steps; exit 0 = pass |
 
 Errors: `auth` stops the ticket with "sign in to <cli> interactively"; `rate_limit` switches to the role's `fallback` when `fallback_on_rate_limit` is on, otherwise waits as `waiting_quota` until `retry_after`; `timeout` retries once; `schema` retries once with a "return valid JSON" repair prompt; anything else → `failed` with the log path.
@@ -523,6 +534,6 @@ super-harness/
 | Sub-project | Scope | Exit criteria |
 |---|---|---|
 | 2 Store + CLI | `model`, `store`, `settings`, `memory`, `journal`, `ops` (store-only use cases); init, doctor, link, adopt; plan, ticket, memory, status and context commands | plans and tickets fully manageable from the CLI; links survive project moves; adopt merges correctly |
-| 3 Engine | `adapters`, `workflow`, `scheduler`, `gitops`, `worker`; next, run, wait, approve, merge; compaction job | integration lifecycle green with fakes; live smoke green per provider |
+| 3 Engine | `adapters`, `workflow`, `scheduler`, `gitops`, `worker`; next, run, wait, approve, park, stop, pause, resume, merge; plan review and compaction jobs | integration lifecycle green with fakes; live smoke green per installed provider |
 | 4 Skills | six installed skills, seven role skills, installer, plugin manifests, lint, eval | evals pass on claude, codex and agy |
 | 5 UI | FastAPI, SSE, seven screens; `open-ui` | canvas parity checklist complete; live updates; every action goes through `ops` |

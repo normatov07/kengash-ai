@@ -27,12 +27,12 @@ UI: harness ui → FastAPI + SSE on 127.0.0.1, through the same `ops` layer as t
 | `settings` | Seed, load, validate, resolve; comment-preserving edits | `model`, `store` | built (SP2 M2); comment-preserving edits in SP5 |
 | `memory` | MEMORY/DECISIONS/PROCESS writes and caps | `model`, `store`, `journal`, `settings` | built (SP2 M2): MEMORY and DECISIONS writes; compaction in SP3 |
 | `journal` | Append-only JSONL events, follow, usage aggregates | `model`, `store` | built (SP2 M2): append, read; follow and usage later |
-| `ops` | Use cases shared by CLI and UI | all units above | `projects`, `workspace`, `records`, `plans`, `tickets`, `status` (SP2 M1–M3); grows in SP3, SP5 |
-| `scheduler` | Runnable set: dependencies, `touches` overlap, provider slots, fairness | `model`, `store`, `settings` | planned, SP3 |
-| `workflow` | Step graph per importance, routing, loop and budget caps, stalls | `model`, `settings` | planned, SP3 |
+| `ops` | Use cases shared by CLI, UI and workers | all units above; starts workers as processes | `projects`, `workspace`, `records`, `plans`, `tickets`, `status` (SP2 M1–M3); grows in SP3, SP5 |
+| `scheduler` | Runnable set: dependencies, `touches` overlap, provider slots, fairness | `model` | planned, SP3 |
+| `workflow` | Step graph per importance, routing, loop and budget caps, stalls | `model` | planned, SP3 |
 | `adapters` | One driver per provider CLI behind the `Provider` protocol | `model` | planned, SP3 |
 | `gitops` | Worktrees, commits with trailers, diffs, rebase, merge | `model` | planned, SP3 |
-| `worker` | Runs one job; heartbeats; emits events | all except `ops` | planned, SP3 |
+| `worker` | Runs one job through `ops`; heartbeats; handles signals | `ops`, `model` | planned, SP3 |
 | `roles` | Packaged role skill files (data only) | — | planned, SP4 |
 | `ui` | FastAPI app, SSE, static assets | `ops`, `model` | planned, SP5 |
 
@@ -68,7 +68,7 @@ Each registered repo gets one directory symlink, `<repo>/.harness -> ~/.harness/
 |---|---|---|
 | 1 | Foundation | done: `docs/superpowers/plans/2026-10-22-foundation.md`; CI runs after the first push |
 | 2 | Store + `harness` CLI | done: M1 store core, M2 settings, memory, journal, M3 plans and tickets; plans in `docs/superpowers/plans/` |
-| 3 | Engine | next: spec, then plan |
+| 3 | Engine | in progress: spec `docs/superpowers/specs/2026-10-22-sp3-engine-design.md`; M1 engine rules next |
 | 4 | Skills | planned |
 | 5 | Web UI | planned |
 
