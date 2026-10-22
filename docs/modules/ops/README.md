@@ -15,6 +15,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - `plans`: `new_plan`, `save_plan`, `show_plan`, `approve_plan`, `reject_plan` → `PlanResult(id, project, status, sections, review_skipped)`; approval needs a review verdict, a quick plan, `plan.review_max: 0`, or `skip_review`.
 - `tickets`: `add_tickets` → `Batch(plan, project, tickets=[NewTicket(id, key, title, status)])`, `show_ticket` → `Document`, `list_tickets`/`find_tickets` → `TicketLine(id, project, status, importance, title)`; without a project they cover the project here, else every project.
 - `tickets.move_ticket` → `Moved(id, project, before, after, ready, blocked)`; `tickets.set_fields` → `Updated(id, project, fields, status)` for the `SETTABLE` fields.
+- `status.board(project=None)` → `Board([ProjectStatus(project, folders, statuses, gates)])`: every registered project unless one is named.
 - Errors are `model` errors and carry their exit code.
 
 ## Invariants
@@ -28,6 +29,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-22: board status (SP2 M3).
 - 2026-10-22: ticket move and set (SP2 M3).
 - 2026-10-22: `tickets` add, show, list, find (SP2 M3).
 - 2026-10-22: `records` and `plans` (SP2 M3).
