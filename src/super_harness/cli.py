@@ -2,6 +2,7 @@
 
 import dataclasses
 import json
+import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -10,8 +11,8 @@ from typing import Annotated, Any
 import typer
 
 from super_harness import __version__
-from super_harness.model import HarnessError
-from super_harness.ops import projects, workspace
+from super_harness.model import HarnessError, PlanMode, UserError
+from super_harness.ops import plans, projects, workspace
 
 app = typer.Typer(
     name="harness",
@@ -155,6 +156,10 @@ Project = Annotated[
         "--project", "-p", help="Project slug; default: the project containing this folder."
     ),
 ]
+Only = Annotated[str | None, typer.Option("--project", "-p", help="Look only in this project.")]
+By = Annotated[
+    str, typer.Option("--by", envvar="HARNESS_AGENT", help="Who is acting, for the journal.")
+]
 
 
 @settings_app.command("show")
@@ -206,7 +211,7 @@ def memory_add(
     rejected: Annotated[
         str | None, typer.Option(help="With --decision: the alternative turned down.")
     ] = None,
-    by: Annotated[str, typer.Option(envvar="HARNESS_AGENT", help="Who is writing.")] = "unknown",
+    by: By = "unknown",
     project: Project = None,
     as_json: AsJson = False,
 ) -> None:
@@ -265,3 +270,95 @@ def context(project: Project = None, as_json: AsJson = False) -> None:
         gates = [f"- {gate.id} {gate.sub_status}: {gate.title}" for gate in digest.gates]
         parts.append("# Open gates\n" + ("\n".join(gates) or "none"))
     typer.echo("\n\n".join(parts))
+
+
+plan_app = typer.Typer(help="Plans: the user's prompt and the agreed design.", no_args_is_help=True)
+app.add_typer(plan_app, name="plan")
+
+PlanId = Annotated[str, typer.Argument(help="Plan id, 8 hex digits.")]
+
+
+def _stdin(what: str) -> str:
+    """Text piped on stdin; an interactive terminal is refused instead of waited on."""
+    if sys.stdin.isatty():
+        raise UserError(f"pipe the {what} on stdin")
+    return sys.stdin.read()
+
+
+def _emit(result: Any, as_json: bool, line: str) -> None:
+    if as_json:
+        _emit_json(result)
+    else:
+        typer.echo(line)
+
+
+def _plural(count: int, noun: str) -> str:
+    return f"{count} {noun}{'' if count == 1 else 's'}"
+
+
+@plan_app.command("new")
+def plan_new(
+    title: Annotated[str, typer.Option("--title", help="One line naming the plan.")],
+    mode: Annotated[PlanMode, typer.Option("--mode", help="grill, direct or quick.")],
+    project: Project = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Start a plan from the user's prompt on stdin, kept verbatim."""
+    with _errors():
+        result = plans.new_plan(
+            _stdin("prompt"), title=title, mode=mode, project=project, cwd=Path.cwd(), by=by
+        )
+    _emit(result, as_json, f"plan {result.id} {result.status}")
+
+
+@plan_app.command("save")
+def plan_save(
+    plan_id: PlanId, project: Only = None, by: By = "unknown", as_json: AsJson = False
+) -> None:
+    """Replace plan sections with `## Section` Markdown from stdin; the plan becomes a draft."""
+    with _errors():
+        result = plans.save_plan(plan_id, _stdin("plan sections"), project=project, by=by)
+    line = f"plan {result.id} {result.status}, {_plural(len(result.sections), 'section')}"
+    _emit(result, as_json, line)
+
+
+@plan_app.command("show")
+def plan_show(plan_id: PlanId, project: Only = None, as_json: AsJson = False) -> None:
+    """Print the plan file."""
+    with _errors():
+        doc = plans.show_plan(plan_id, project=project)
+    if as_json:
+        _emit_json(doc)
+    else:
+        typer.echo(doc.text, nl=False)
+
+
+@plan_app.command("approve")
+def plan_approve(
+    plan_id: PlanId,
+    skip_review: Annotated[
+        bool, typer.Option("--skip-review", help="Approve without a plan review.")
+    ] = False,
+    project: Only = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Record the user's approval of a draft plan."""
+    with _errors():
+        result = plans.approve_plan(plan_id, skip_review=skip_review, project=project, by=by)
+    _emit(result, as_json, f"plan {result.id} approved")
+
+
+@plan_app.command("reject")
+def plan_reject(
+    plan_id: PlanId,
+    why: Annotated[str, typer.Option("--why", help="One line: why the user rejects it.")],
+    project: Only = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Record the user's rejection of a plan."""
+    with _errors():
+        result = plans.reject_plan(plan_id, why, project=project, by=by)
+    _emit(result, as_json, f"plan {result.id} rejected")
