@@ -12,11 +12,12 @@ The agents' long-term memory: MEMORY.md (who the user is, how they work, what th
 
 ## Invariants
 
-- One line per fact, at most 30 words; empty or multi-line text is refused.
+- One line per fact, at most 30 words; empty text, or text with any line break (`\n`, `\r`, U+2028…), is refused.
 - Text is redacted before it is written; identical lines are not added twice.
 - Every write is journaled (`memory.write` with `file`, `line`, `why`, `by`) and committed to the store's git.
 - Caps: MEMORY.md `memory.compact_at_lines` (200) from the user's defaults, because the file is global; DECISIONS.md 300. Passing a cap is reported, not blocked; compaction arrives with the engine (SP3).
 
 ## Changes
 
+- 2026-10-22: any line break is refused, not only `\n` (SP2 M2 review).
 - 2026-10-22: add and show with caps, redaction, journal and store commits (SP2 M2).

@@ -51,7 +51,13 @@ def test_duplicates_are_not_added_twice(store: StorePaths) -> None:
 
 @pytest.mark.parametrize(
     ("text", "message"),
-    [("two\nlines", "one line"), ("  ", "empty"), ("word " * 31, "under 30 words")],
+    [
+        ("two\nlines", "one line"),
+        ("two\rlines", "one line"),
+        ("two\u2028lines", "one line"),
+        ("  ", "empty"),
+        ("word " * 31, "under 30 words"),
+    ],
 )
 def test_bad_lines_are_refused(store: StorePaths, text: str, message: str) -> None:
     with pytest.raises(UserError, match=message):

@@ -100,7 +100,7 @@ def _one_line(text: str) -> str:
     value = text.strip()
     if not value:
         raise UserError("memory text is empty")
-    if "\n" in value:
+    if len(value.splitlines()) > 1:
         raise UserError("memory text must be one line")
     if len(value.split()) > MAX_WORDS:
         raise UserError(f"keep memory lines under {MAX_WORDS} words (aim for 20)")
