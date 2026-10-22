@@ -33,6 +33,12 @@ Each milestone is planned just before it is built (`docs/superpowers/plans/`), e
 10. **Settings access:** agents never parse SETTINGS.md; `harness settings get <key>` prints one value, `show` prints the resolved file, `check` validates.
 11. **Errors:** every command maps failures to the system spec exit codes (§6) and prints one line to stderr; `--json` prints machine output to stdout.
 12. **Redaction** (M2) replaces common secrets with `[REDACTED]`: `sk-…`/`sk-ant-…` keys, `ghp_`/`github_pat_` tokens, `AKIA…` AWS keys, `xox[abp]-` Slack tokens, PEM private-key blocks, and `password|secret|token|api_key` assignments.
+13. **Ids** are unique across the whole store, plans and tickets alike, and never read as YAML numbers (`12345678`, `1234e567` are re-rolled). Commands that take an id search every project; `--project` narrows the search.
+14. **Quick plans** take tickets without `plan approve`: the user's check of the ticket list is their approval (system spec §8.1, `to-ticket`). Other plans must be `approved` (or already `ticketed`); otherwise `ticket add` exits 5.
+15. **Saving a plan** makes it a draft again and clears its review verdict and skip flag. A `ticketed` plan can no longer be saved or rejected. `plan reject --why` appends a dated line to `## Review log`.
+16. **Moves keep the queue consistent:** `in_queue`, `in_queue/ready` and `in_queue/blocked` resolve to ready or blocked from the dependencies; `done` alone means `done/closed`; `in_process` needs every dependency done. After every move or `depends_on` change, each `ready` or `blocked` ticket of the project is re-derived (`parked` is left alone).
+17. **`ticket set`** changes `title`, `importance`, `workflow`, `gate`, `loop_max`, `touches`, `depends_on` and `tags`; lists take `[a, b]` or `a,b`. Status changes only through `ticket move`.
+18. **Attribution:** commands that change state take `--by NAME` (default `$HARNESS_AGENT`, else `unknown`) and journal it.
 
 ## 3. CLI reference
 
@@ -49,7 +55,7 @@ Each milestone is planned just before it is built (`docs/superpowers/plans/`), e
 | `harness plan new --project SLUG --title T --mode grill\|direct\|quick` (prompt on stdin) | `plan <id> <status>` | 0 · 1 |
 | `harness plan save ID` (Markdown sections on stdin) | `plan <id> draft, N sections` | 0 · 1 unknown section |
 | `harness plan show ID` / `approve ID [--skip-review]` / `reject ID --why W` | plan file / `plan <id> approved` / `plan <id> rejected` | 0 · 1 · 5 review missing |
-| `harness ticket add --plan ID [--file F]` | `N tickets: <ids> (R ready, B blocked)` | 0 · 1 invalid batch |
+| `harness ticket add --plan ID [--file F]` | `N tickets: <ids> (R ready, B blocked)` | 0 · 1 invalid batch · 5 plan not approved |
 | `harness ticket show ID` / `list [--project] [--folder]` / `find TEXT` | file / one line per ticket / matches | 0 · 1 |
 | `harness ticket set ID KEY=VALUE…` / `move ID FOLDER[/SUB] --why W` | `ticket <id> updated` / `ticket <id> → <status>` | 0 · 1 |
 | `harness status [--project SLUG]` | per project: counts per folder, then gates waiting for the user | 0 |
