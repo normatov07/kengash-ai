@@ -1,4 +1,5 @@
 DOCS_BASE ?= main
+MAKEFLAGS += --silent
 
 .PHONY: setup fmt lint type test docs check
 

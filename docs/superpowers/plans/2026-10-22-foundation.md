@@ -57,11 +57,11 @@
 **Interfaces:**
 - Produces: `super_harness.__version__: str`; `super_harness.cli.app: typer.Typer`; executables `harness`, `hrn`.
 
-- [ ] **Step 1: Create the branch**
+- [x] **Step 1: Create the branch**
 
 Run: `git switch -c feat/foundation` (skip if the worktree step already created it).
 
-- [ ] **Step 2: Write `pyproject.toml`**
+- [x] **Step 2: Write `pyproject.toml`**
 
 ```toml
 [project]
@@ -111,9 +111,9 @@ testpaths = ["tests"]
 pythonpath = ["."]
 ```
 
-- [ ] **Step 3: Write `LICENSE`** — the standard MIT License text, first lines `MIT License`, blank line, `Copyright (c) 2026 normatov13`.
+- [x] **Step 3: Write `LICENSE`** — the standard MIT License text, first lines `MIT License`, blank line, `Copyright (c) 2026 normatov13`.
 
-- [ ] **Step 4: Write `README.md`**
+- [x] **Step 4: Write `README.md`**
 
 ```markdown
 # super-harness
@@ -143,7 +143,7 @@ Design: `docs/superpowers/specs/2026-10-22-super-harness-design.md`. Agent instr
 MIT
 ```
 
-- [ ] **Step 5: Extend `.gitignore`** to exactly:
+- [x] **Step 5: Extend `.gitignore`** to exactly:
 
 ```gitignore
 # local Claude Code settings
@@ -161,7 +161,7 @@ dist/
 *.egg-info/
 ```
 
-- [ ] **Step 6: Write `src/super_harness/__init__.py`** (needed before `uv sync` can build the package)
+- [x] **Step 6: Write `src/super_harness/__init__.py`** (needed before `uv sync` can build the package)
 
 ```python
 """super-harness: run many projects at once with subscription coding-agent CLIs."""
@@ -169,7 +169,7 @@ dist/
 __version__ = "0.1.0"
 ```
 
-- [ ] **Step 7: Write the failing test `tests/test_cli.py`**
+- [x] **Step 7: Write the failing test `tests/test_cli.py`**
 
 ```python
 import shutil
@@ -206,12 +206,12 @@ def test_console_scripts_print_version(command: str) -> None:
     assert output.strip() == f"super-harness {__version__}"
 ```
 
-- [ ] **Step 8: Install and watch it fail**
+- [x] **Step 8: Install and watch it fail**
 
 Run: `uv sync && uv run pytest tests/test_cli.py`
 Expected: collection error `ModuleNotFoundError: No module named 'super_harness.cli'`.
 
-- [ ] **Step 9: Write `src/super_harness/cli.py`**
+- [x] **Step 9: Write `src/super_harness/cli.py`**
 
 ```python
 """Command-line entry point for `harness` (alias `hrn`)."""
@@ -251,12 +251,12 @@ def main(
     """Run many projects at once with subscription coding-agent CLIs."""
 ```
 
-- [ ] **Step 10: Run the tests**
+- [x] **Step 10: Run the tests**
 
 Run: `uv run pytest tests/test_cli.py`
 Expected: `4 passed`.
 
-- [ ] **Step 11: Write `docs/modules/cli/README.md`**
+- [x] **Step 11: Write `docs/modules/cli/README.md`**
 
 ```markdown
 # cli
@@ -281,7 +281,7 @@ Typer command surface for `harness` (alias `hrn`): parses arguments and formats 
 - 2026-10-22: skeleton with `--version` and `--help`; console scripts `harness` and `hrn`.
 ```
 
-- [ ] **Step 12: Commit** (lint first: `uv run ruff format . && uv run ruff check . && uv run mypy src tests`; `scripts/` does not exist yet, so name the paths)
+- [x] **Step 12: Commit** (lint first: `uv run ruff format . && uv run ruff check . && uv run mypy src tests`; `scripts/` does not exist yet, so name the paths)
 
 ```bash
 git add .gitignore LICENSE README.md pyproject.toml uv.lock src tests docs/modules
@@ -298,13 +298,13 @@ git commit -m "feat(cli): package skeleton with harness --version" -m "Co-Author
 **Interfaces:**
 - Produces: `scripts.check_md_caps.violations(root: Path) -> list[str]` (lines `"<posix path>: <n> lines > cap <cap>"`); `scripts.check_md_caps.main(argv: list[str] | None = None) -> int` (argv[0] = root, default cwd; returns 1 when any violation, else 0, printing nothing).
 
-- [ ] **Step 1: Write `scripts/__init__.py`**
+- [x] **Step 1: Write `scripts/__init__.py`**
 
 ```python
 """Repository checks run by `make docs`, pre-commit and CI."""
 ```
 
-- [ ] **Step 2: Write the failing test `tests/test_check_md_caps.py`**
+- [x] **Step 2: Write the failing test `tests/test_check_md_caps.py`**
 
 ```python
 from pathlib import Path
@@ -351,12 +351,12 @@ def test_main_prints_each_violation_and_fails(
     assert capsys.readouterr().out == "AGENTS.md: 120 lines > cap 100\n"
 ```
 
-- [ ] **Step 3: Run it to verify it fails**
+- [x] **Step 3: Run it to verify it fails**
 
 Run: `uv run pytest tests/test_check_md_caps.py`
 Expected: collection error `ModuleNotFoundError: No module named 'scripts.check_md_caps'`.
 
-- [ ] **Step 4: Write `scripts/check_md_caps.py`**
+- [x] **Step 4: Write `scripts/check_md_caps.py`**
 
 ```python
 """Fail when agent-facing Markdown files exceed their line caps.
@@ -402,12 +402,12 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 Run: `uv run pytest tests/test_check_md_caps.py`
 Expected: `5 passed`.
 
-- [ ] **Step 6: Commit** (lint first: `uv run ruff format . && uv run ruff check . && uv run mypy`)
+- [x] **Step 6: Commit** (lint first: `uv run ruff format . && uv run ruff check . && uv run mypy`)
 
 ```bash
 git add scripts tests/test_check_md_caps.py
@@ -424,7 +424,7 @@ git commit -m "feat(scripts): enforce Markdown line caps on instruction files" -
 **Interfaces:**
 - Produces: `module_of(path: str) -> str | None`; `problems(changed: list[str]) -> list[str]` (lines `"<module>: changed without docs/modules/<module>/README.md"`); `changed_files(base: str | None, staged: bool) -> list[str]` (raises `SystemExit` whose message contains `pass a valid --base` when git fails); `main(argv: list[str] | None = None) -> int` with exactly one of `--base REF` or `--staged`.
 
-- [ ] **Step 1: Write the failing test `tests/test_check_docs_sync.py`**
+- [x] **Step 1: Write the failing test `tests/test_check_docs_sync.py`**
 
 ```python
 import subprocess
@@ -509,12 +509,12 @@ def test_unknown_base_is_an_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
         main(["--base", "nope"])
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `uv run pytest tests/test_check_docs_sync.py`
 Expected: collection error `ModuleNotFoundError: No module named 'scripts.check_docs_sync'`.
 
-- [ ] **Step 3: Write `scripts/check_docs_sync.py`**
+- [x] **Step 3: Write `scripts/check_docs_sync.py`**
 
 ```python
 """Fail when a package module changes without its docs/modules/<module>/README.md.
@@ -581,12 +581,12 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `uv run pytest tests/test_check_docs_sync.py`
 Expected: `7 passed`.
 
-- [ ] **Step 5: Commit** (lint first: `uv run ruff format . && uv run ruff check . && uv run mypy`)
+- [x] **Step 5: Commit** (lint first: `uv run ruff format . && uv run ruff check . && uv run mypy`)
 
 ```bash
 git add scripts/check_docs_sync.py tests/test_check_docs_sync.py
@@ -604,7 +604,7 @@ git commit -m "feat(scripts): require module docs to change with their modules" 
 - Consumes: `scripts/check_md_caps.py` (no args = cwd), `scripts/check_docs_sync.py --base REF | --staged`.
 - Produces: `make setup|fmt|lint|type|test|docs|check`; variable `DOCS_BASE` (default `main`).
 
-- [ ] **Step 1: Write `Makefile`** (recipe lines start with a TAB)
+- [x] **Step 1: Write `Makefile`** (recipe lines start with a TAB)
 
 ```make
 DOCS_BASE ?= main
@@ -636,12 +636,12 @@ docs:
 check: lint type test docs
 ```
 
-- [ ] **Step 2: Run the full check and fix what it reports**
+- [x] **Step 2: Run the full check and fix what it reports**
 
 Run: `make check`
 Expected: exit 0; output only pytest's `.` progress line and `16 passed`. If ruff reports formatting, run `make fmt`, re-run `make check`.
 
-- [ ] **Step 3: Write `.pre-commit-config.yaml`** (local hooks only: they run the locked tools from `uv.lock` and fetch nothing)
+- [x] **Step 3: Write `.pre-commit-config.yaml`** (local hooks only: they run the locked tools from `uv.lock` and fetch nothing)
 
 ```yaml
 repos:
@@ -671,12 +671,12 @@ repos:
         always_run: true
 ```
 
-- [ ] **Step 4: Install hooks and run them on every file**
+- [x] **Step 4: Install hooks and run them on every file**
 
 Run: `make setup && uv run pre-commit run --all-files`
 Expected: every hook `Passed` (docs-sync and md-caps may show `Passed` or `(no files to check)Skipped`).
 
-- [ ] **Step 5: Write `.github/workflows/ci.yml`** (event values reach the shell only through `env`, never inline `${{ }}`, to block script injection from branch names)
+- [x] **Step 5: Write `.github/workflows/ci.yml`** (event values reach the shell only through `env`, never inline `${{ }}`, to block script injection from branch names)
 
 ```yaml
 name: ci
@@ -722,12 +722,12 @@ jobs:
           make check DOCS_BASE="$base"
 ```
 
-- [ ] **Step 6: Validate the workflow parses**
+- [x] **Step 6: Validate the workflow parses**
 
 Run: `uv run python -c "import yaml,sys; yaml.safe_load(open('.github/workflows/ci.yml')); print('ok')"`
 Expected: `ok` (PyYAML ships with pre-commit).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add Makefile .pre-commit-config.yaml .github/workflows/ci.yml
@@ -745,9 +745,9 @@ git commit -m "ci: make targets, pre-commit hooks and CI matrix" -m "Co-Authored
 **Interfaces:**
 - Consumes: `make docs` (Task 4) to verify caps.
 
-- [ ] **Step 1: Find which context file `agy` reads.** Search the Antigravity CLI docs (antigravity.google/docs/cli) for its context/rules file names. Record the answer for Step 6 and Step 7. If agy does not read `AGENTS.md`, plan to add the smallest pointer it does read (e.g. its rules file containing `@AGENTS.md` or a one-line "Read AGENTS.md first").
+- [x] **Step 1: Find which context file `agy` reads.** Search the Antigravity CLI docs (antigravity.google/docs/cli) for its context/rules file names. Record the answer for Step 6 and Step 7. If agy does not read `AGENTS.md`, plan to add the smallest pointer it does read (e.g. its rules file containing `@AGENTS.md` or a one-line "Read AGENTS.md first").
 
-- [ ] **Step 2: Write `AGENTS.md`**
+- [x] **Step 2: Write `AGENTS.md`**
 
 ```markdown
 # AGENTS.md
@@ -789,7 +789,7 @@ Status: sub-project 1 of 5 (Foundation). Only the CLI skeleton (`harness --versi
 The UI implements the Claude Design canvas https://claude.ai/artifact/JiMGMkbaw8qhafeaNbqU7d. In Claude Code, read it with the Artifact tool (`list_files`, then `read_file` on `project/canvas.json` and `project/*.dc.html`), not WebFetch.
 ```
 
-- [ ] **Step 3: Replace `CLAUDE.md`** with exactly:
+- [x] **Step 3: Replace `CLAUDE.md`** with exactly:
 
 ```markdown
 # CLAUDE.md
@@ -799,9 +799,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 @AGENTS.md
 ```
 
-- [ ] **Step 4: Write `GEMINI.md`** with exactly one line: `@AGENTS.md`
+- [x] **Step 4: Write `GEMINI.md`** with exactly one line: `@AGENTS.md`
 
-- [ ] **Step 5: Write `docs/README.md`**
+- [x] **Step 5: Write `docs/README.md`**
 
 ```markdown
 # Docs index
@@ -819,7 +819,7 @@ One line per doc: what it holds and when to read it.
 | `superpowers/plans/` | step-by-step implementation plans |
 ```
 
-- [ ] **Step 6: Write `docs/architecture.md`** (≤ 150 lines) with these sections and facts:
+- [x] **Step 6: Write `docs/architecture.md`** (≤ 150 lines) with these sections and facts:
   - Intro: the contract is the spec; this page records what exists now; update the Status columns whenever a module or sub-project lands.
   - `## Flow`: the spec §3 diagram (conductor → `harness` CLI → detached workers → `claude -p` / `codex exec` / `agy -p`; store `~/.harness` as Markdown + JSONL in git; UI as FastAPI + SSE on 127.0.0.1 over the same `ops` layer).
   - `## Modules`: table Module · Responsibility · May import · Status for all 14 units of spec §3.1. Status: `cli` = skeleton (`--version`); `model`, `store`, `settings`, `memory`, `journal`, `ops` = planned SP2; `scheduler`, `workflow`, `adapters`, `gitops`, `worker` = planned SP3; `roles` = planned SP4; `ui` = planned SP5. One line: import direction is enforced by import-linter once SP2 adds the modules.
@@ -828,7 +828,7 @@ One line per doc: what it holds and when to read it.
   - `## Sub-projects`: table # · Sub-project · Status — 1 Foundation in progress (this plan); 2 Store + harness CLI, 3 Engine, 4 Skills, 5 Web UI planned.
   - `## Agent context files`: Codex reads `AGENTS.md` natively (Codex CLI is not installed on the dev machine, so this rests on its documentation); Claude Code via `CLAUDE.md` → `@AGENTS.md`; Gemini CLI via `GEMINI.md` → `@AGENTS.md`; agy: the Step 1 result.
 
-- [ ] **Step 7: Write `docs/conventions/instruction-files.md`** (≤ 150 lines) with these sections and rules:
+- [x] **Step 7: Write `docs/conventions/instruction-files.md`** (≤ 150 lines) with these sections and rules:
   - Purpose: how to write files agents read (AGENTS.md, CLAUDE.md, GEMINI.md, everything under `docs/`).
   - Layers: entry file `AGENTS.md` (overview, commands, ≤ 15 hard rules, "Read when" links) → topic docs (one subject each) → code layer (types, docstrings, config comments; never duplicated in docs).
   - Caps, enforced by `scripts/check_md_caps.py` via `make docs` and pre-commit: AGENTS.md ≤ 100 lines; `docs/**/*.md` ≤ 150 lines, aim for 50–150 for topic docs; `docs/superpowers/` exempt.
@@ -838,7 +838,7 @@ One line per doc: what it holds and when to read it.
   - Responsibility table: File · Read by · Written by — AGENTS.md (every agent, every session · humans and agents, reviewed in PRs); `docs/modules/*` (agents changing that module · whoever changes the module); `docs/conventions/*` (anyone writing that kind of file · humans); specs and plans (anyone working on that sub-project · brainstorming and writing-plans).
   - Sources line: walkinglabs learn-harness-engineering lecture 4; HumanLayer "Skill issue"; Matt Pocock `writing-for-agents`.
 
-- [ ] **Step 8: Write `docs/conventions/skills.md`** (≤ 150 lines) with these sections and rules:
+- [x] **Step 8: Write `docs/conventions/skills.md`** (≤ 150 lines) with these sections and rules:
   - Scope: installable skills `skills/<name>/SKILL.md` and role skills `src/super_harness/roles/<role>/SKILL.md` (both arrive in SP4).
   - Format: Agent Skills spec (agentskills.io) — folder name equals `name` (lowercase letters, digits, single hyphens, ≤ 64 chars); `description` ≤ 1024 chars by spec, ≤ 500 here; optional `scripts/`, `references/`, `assets/`.
   - Description: starts with "Use when", lists triggers only and never the steps (agents follow a summarised workflow and skip the body), third person.
@@ -851,7 +851,7 @@ One line per doc: what it holds and when to read it.
   - Enforcement: `harness skills lint` (SP4) checks frontmatter, description prefix and length, caps, and that every mentioned `harness` command exists.
   - Distribution: `npx skills add <owner>/super-harness` (Claude Code → `.claude/skills/`; Codex, Antigravity, Gemini CLI, Cursor, Copilot, OpenCode → `.agents/skills/`), `harness skills install`, Claude and Codex plugin marketplaces.
 
-- [ ] **Step 9: Write `docs/conventions/memory-files.md`** (≤ 150 lines) with these sections and rules:
+- [x] **Step 9: Write `docs/conventions/memory-files.md`** (≤ 150 lines) with these sections and rules:
   - Status line: formats are the contract for SP2, which implements them.
   - The spec §4.5 table: File · Scope · Read by · Written by · Cap for MEMORY.md (global, 200 lines), DECISIONS.md (global, `[project]` tags, 300 lines then archive), PROCESS.md (project, 100 lines), SETTINGS.md (project, schema-validated), ticket `## Handoff` (15 lines).
   - Line formats: MEMORY.md sections `## Working style` · `## Goals` · `## Preferences` · `## Turned down`; DECISIONS.md entry `- YYYY-MM-DD [project] decision. why: … rejected: …`; one fact per line, about 20 words at most.
@@ -860,17 +860,17 @@ One line per doc: what it holds and when to read it.
   - PROCESS.md: per project; how the project builds and tests plus process notes; ≤ 100 lines.
   - Plans and tickets: formats in spec §4.4; one plan file per request holds the verbatim prompt; one file per ticket, moved between `in_queue/`, `in_process/`, `done/`; agents never hand-edit frontmatter; `## Handoff` is replaced every step.
 
-- [ ] **Step 10: Run the checks**
+- [x] **Step 10: Run the checks**
 
 Run: `make check`
 Expected: exit 0, no caps or sync output.
 
-- [ ] **Step 11: Check agy actually loads the instructions** (the user's own `agy` login; one short prompt)
+- [x] **Step 11: Check agy actually loads the instructions** (the user's own `agy` login; one short prompt)
 
 Run from the repo root: `agy -p "Quote hard rule 3 from this project's agent instructions, or reply NONE." --output-format json`
 Expected: the `response` field quotes rule 3 ("Each project links to the store through one directory symlink…"). If stdout is empty with exit 0 (agy's reported pipe bug), re-run under a pseudo-terminal: `script -qec '<same command>' /dev/null`. If it replies NONE, add the pointer found in Step 1, re-run, and record the result in `docs/architecture.md` § Agent context files. If agy is not signed in, record "not verified: agy not signed in" there.
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add AGENTS.md CLAUDE.md GEMINI.md docs/README.md docs/architecture.md docs/conventions
@@ -883,7 +883,7 @@ git commit -m "docs: agent instruction files, conventions and architecture map" 
 
 **Files:** none changed unless a check fails.
 
-- [ ] **Step 1: Fresh clone passes**
+- [x] **Step 1: Fresh clone passes**
 
 Run:
 ```bash
@@ -893,12 +893,12 @@ cd "$SCRATCH/clone" && make setup && make check DOCS_BASE=origin/main
 ```
 Expected: exit 0. Steps 2–3 run inside `$SCRATCH/clone`.
 
-- [ ] **Step 2: Both console scripts work**
+- [x] **Step 2: Both console scripts work**
 
 Run: `uv run harness --version && uv run hrn --version`
 Expected: `super-harness 0.1.0` twice.
 
-- [ ] **Step 3: Deliberate violations fail, then pass** (in the clone only)
+- [x] **Step 3: Deliberate violations fail, then pass** (in the clone only)
 
 ```bash
 printf 'X = 1\n' > src/super_harness/widget.py && git add -A && git commit -qm wip --no-verify
@@ -909,6 +909,6 @@ make docs DOCS_BASE=origin/main          # expect: exit 0
 seq 151 > docs/too-long.md && make docs DOCS_BASE=origin/main   # expect: docs/too-long.md: 151 lines > cap 150
 ```
 
-- [ ] **Step 4: Spec §12.3 checklist** — tick each item against the evidence above; CI green is confirmed after the branch is pushed (the user decides when to push).
+- [x] **Step 4: Spec §12.3 checklist** — tick each item against the evidence above; CI green is confirmed after the branch is pushed (the user decides when to push).
 
-- [ ] **Step 5: Finish the branch** with superpowers:finishing-a-development-branch.
+- [x] **Step 5: Finish the branch** with superpowers:finishing-a-development-branch.

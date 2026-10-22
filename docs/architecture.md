@@ -66,7 +66,7 @@ Each registered repo gets one directory symlink, `<repo>/.harness -> ~/.harness/
 
 | # | Sub-project | Status |
 |---|---|---|
-| 1 | Foundation | in progress: `docs/superpowers/plans/2026-10-22-foundation.md` |
+| 1 | Foundation | done: `docs/superpowers/plans/2026-10-22-foundation.md`; CI runs after the first push |
 | 2 | Store + `harness` CLI | planned |
 | 3 | Engine | planned |
 | 4 | Skills | planned |

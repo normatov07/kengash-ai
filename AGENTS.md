@@ -22,6 +22,7 @@ Status: sub-project 1 of 5 (Foundation). Only the CLI skeleton (`harness --versi
 6. Providers run only through their official binaries under the user's login: never read or reuse OAuth tokens, never use `claude --bare` (it skips subscription login), and strip provider API-key variables from worker environments.
 7. No always-on daemon: workers are short-lived detached processes, one per job.
 8. Instruction files stay within caps: this file ≤ 100 lines, files under `docs/` ≤ 150 lines (specs and plans exempt).
+9. Each sub-project goes spec → plan → build → critical review of every change against the requirements before the next one starts.
 
 ## Read when
 
