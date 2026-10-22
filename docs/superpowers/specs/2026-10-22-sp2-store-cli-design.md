@@ -76,7 +76,7 @@ Harness fills `id`, `uuid`, `project`, `plan`, `workflow` (= importance), `loop:
 
 - Every test gets its own `HARNESS_HOME` under `tmp_path` and real temporary git repos; no network, no global git config needed.
 - CLI tests use Typer's `CliRunner` and assert on exit codes and output lines.
-- Import-linter contracts (layers `cli > ops > memory, journal, settings > store > model`; `cli` may not import `store`) run in `make lint`.
+- Import-linter contracts (layers `cli > ops > memory > journal | settings > store > model`, with `journal` and `settings` independent; `cli` may not import `store`, `settings`, `memory` or `journal`) run in `make lint`.
 
 ## 6. Acceptance (SP2 exit)
 

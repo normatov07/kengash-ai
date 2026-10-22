@@ -63,7 +63,7 @@ UI: harness ui → FastAPI + SSE on 127.0.0.1 → same use-case layer as the CLI
 | `model` | Pydantic schemas: Plan, Ticket, Settings, Event, StepRequest, StepResult, Verdict | — |
 | `store` | Paths, frontmatter, atomic writes, locks, status moves, registry, links, store git commits, runtime files | model |
 | `settings` | Seed, load, validate and resolve settings; comment-preserving edits | model, store |
-| `memory` | MEMORY/DECISIONS/PROCESS writes and caps | model, store |
+| `memory` | MEMORY/DECISIONS/PROCESS writes and caps; journals every write | model, store, journal, settings |
 | `journal` | Append-only JSONL events, follow, usage aggregates | model, store |
 | `scheduler` | Runnable set: dependencies, `touches` overlap, provider slots, fairness | model, store, settings |
 | `workflow` | Step graph per importance, routing, loop and budget caps, stall detection | model, settings |
