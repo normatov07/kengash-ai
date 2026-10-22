@@ -23,4 +23,5 @@ Everything under `~/.harness`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
+- 2026-10-22: `link_state` accepts a link whose target resolves to the project folder through a symlinked path.
 - 2026-10-22: store core: layout, atomic files, frontmatter, documents, ids, locks, registry, links, seeding, store git (SP2 M1).

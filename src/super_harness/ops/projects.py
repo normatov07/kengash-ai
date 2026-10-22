@@ -93,6 +93,9 @@ def relink(slug: str, new_path: Path, paths: StorePaths | None = None) -> InitRe
         entry = registry.projects.get(slug)
         if entry is None:
             raise UserError(f"unknown project: {slug}")
+        owner = slug_for_path(registry, repo)
+        if owner not in (None, slug):
+            raise UserError(f"{repo} is already registered as {owner}")
         entry.path = repo
         save_registry(paths, registry)
     project = ensure_project(paths, slug)

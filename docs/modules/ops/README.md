@@ -21,4 +21,5 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-22: `relink` refuses a path already registered under another slug.
 - 2026-10-22: project use cases: init, relink, doctor, adopt (SP2 M1).

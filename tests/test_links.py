@@ -36,3 +36,14 @@ def test_exclude_entry_is_added_once(repo: Path) -> None:
 def test_plain_folder_has_no_exclude_file(tmp_path: Path) -> None:
     assert links.ensure_excluded(tmp_path) is False
     assert links.is_excluded(tmp_path) is None
+
+
+def test_equivalent_targets_count_as_ok(tmp_path: Path) -> None:
+    real = tmp_path / "store"
+    real.mkdir()
+    alias = tmp_path / "alias"
+    alias.symlink_to(real, target_is_directory=True)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    links.make_link(repo, alias)
+    assert links.link_state(repo, real) is links.LinkState.ok

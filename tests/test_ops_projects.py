@@ -152,3 +152,15 @@ def test_adopting_a_new_project_takes_its_settings(store_paths: StorePaths, repo
 def test_adopt_needs_a_real_folder(store_paths: StorePaths, repo: Path) -> None:
     with pytest.raises(UserError, match="nothing to adopt"):
         projects.adopt(repo)
+
+
+def test_relink_refuses_a_path_registered_under_another_slug(
+    store_paths: StorePaths, repo: Path, tmp_path: Path, run_git: Callable[..., str]
+) -> None:
+    projects.init_project(repo)
+    other = tmp_path / "code" / "web"
+    other.mkdir()
+    run_git(other, "init", "-q", "-b", "main")
+    projects.init_project(other)
+    with pytest.raises(UserError, match="already registered as web"):
+        projects.relink("payments-api", other)

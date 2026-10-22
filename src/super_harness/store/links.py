@@ -28,7 +28,8 @@ def obstruction(repo: Path) -> LinkState | None:
 def link_state(repo: Path, target: Path) -> LinkState:
     link = repo / LINK
     if link.is_symlink():
-        return LinkState.ok if Path(os.readlink(link)) == target else LinkState.wrong
+        same = Path(os.readlink(link)) == target or link.resolve() == target.resolve()
+        return LinkState.ok if same else LinkState.wrong
     return obstruction(repo) or LinkState.missing
 
 
