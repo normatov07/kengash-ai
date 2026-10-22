@@ -4,9 +4,20 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated
 
-from pydantic import StringConstraints
+from pydantic import AfterValidator, StringConstraints
 
 ShortId = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{8}$")]
+
+
+def _one_line(value: str) -> str:
+    if len(value.splitlines()) > 1:
+        raise ValueError("must be one line")
+    return value
+
+
+Title = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1), AfterValidator(_one_line)
+]
 
 
 class Importance(StrEnum):

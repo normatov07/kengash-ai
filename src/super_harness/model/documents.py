@@ -4,12 +4,12 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
-from super_harness.model.core import Folder, Gate, Importance, ShortId
+from super_harness.model.core import Folder, Gate, Importance, ShortId, Title
 
 PLAN_SECTIONS = (
     "Prompt",
@@ -27,6 +27,20 @@ PLAN_SECTIONS = (
 )
 TICKET_SECTIONS = ("Scope", "Acceptance", "Handoff", "Findings", "Log")
 _STATUS = re.compile(r"^(in_queue|in_process|done)/[a-z_]+$")
+
+# in_process also takes the step names of SETTINGS `status.names`.
+SUB_STATUSES: dict[Folder, tuple[str, ...]] = {
+    Folder.in_queue: ("ready", "blocked", "parked"),
+    Folder.in_process: (
+        "waiting_slot",
+        "waiting_quota",
+        "needs_approval",
+        "stalled",
+        "failed",
+        "awaiting_merge",
+    ),
+    Folder.done: ("merged", "branch_ready", "closed"),
+}
 
 
 class PlanMode(StrEnum):
@@ -60,7 +74,7 @@ class Plan(_Schema):
     id: ShortId
     uuid: UUID
     project: str
-    title: str
+    title: Title
     mode: PlanMode
     status: PlanStatus
     review: Review = Field(default_factory=Review)
@@ -81,7 +95,7 @@ class Ticket(_Schema):
     uuid: UUID
     project: str
     plan: ShortId
-    title: str
+    title: Title
     importance: Importance
     workflow: str
     status: str
@@ -107,6 +121,26 @@ class Ticket(_Schema):
     @property
     def folder(self) -> Folder:
         return Folder(self.status.split("/", 1)[0])
+
+    @property
+    def sub_status(self) -> str:
+        return self.status.split("/", 1)[1]
+
+
+class TicketInput(BaseModel):
+    """One item of the list `harness ticket add` reads (SP2 spec §4)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_.-]+$")] | None = None
+    title: Title
+    importance: Importance
+    gate: Gate = Gate.afk
+    touches: list[str] = Field(default_factory=list)
+    depends_on: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    scope: str = ""
+    acceptance: list[str] = Field(default_factory=list)
 
 
 @dataclass

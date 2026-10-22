@@ -5,7 +5,16 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from super_harness.model import Folder, Plan, PlanMode, PlanStatus, Ticket
+from super_harness.model import (
+    SUB_STATUSES,
+    Folder,
+    Gate,
+    Plan,
+    PlanMode,
+    PlanStatus,
+    Ticket,
+    TicketInput,
+)
 
 NOW = datetime(2026, 10, 22, 9, 41, tzinfo=UTC)
 
@@ -65,3 +74,22 @@ def test_plan_defaults() -> None:
         updated=NOW,
     )
     assert (plan.review.round, plan.review.max, plan.tickets, plan.milestone) == (0, 2, [], 1)
+
+
+def test_titles_are_one_trimmed_line() -> None:
+    assert ticket(title="  Rotate keys ").title == "Rotate keys"
+    with pytest.raises(ValidationError, match="must be one line"):
+        ticket(title="Rotate\nkeys")
+
+
+def test_sub_status_is_the_part_after_the_folder() -> None:
+    item = ticket(status="in_process/needs_approval")
+    assert item.sub_status == "needs_approval"
+    assert item.sub_status in SUB_STATUSES[Folder.in_process]
+
+
+def test_ticket_input_defaults_and_unknown_fields() -> None:
+    item = TicketInput.model_validate({"title": "Keyring", "importance": "critical"})
+    assert (item.key, item.gate, item.depends_on, item.scope) == (None, Gate.afk, [], "")
+    with pytest.raises(ValidationError, match="scop"):
+        TicketInput.model_validate({"title": "Keyring", "importance": "critical", "scop": "x"})
