@@ -9,6 +9,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 - `Plan`, `Ticket`, `Review`, `SessionRef`, `PlanMode`, `PlanStatus`: frontmatter schemas (system spec §4.4). Unknown keys are rejected and assignments are validated. `Ticket.step` is the step running or next, `Ticket.tokens_max` the token budget (empty: `tokens.per_ticket_max`), `Review.session` the plan reviewer's session.
 - `Doc[M]`: a frontmatter model plus ordered Markdown sections; `PLAN_SECTIONS` and `TICKET_SECTIONS` name them.
 - `Registry`, `ProjectEntry`: `registry.yaml`.
+- `SlotEntry`, `SlotTable`, `Claims`: `runtime/slots.json` and `runtime/claims.json` (SP3 spec §4).
 - `Importance`, `Gate`, `Folder`, `ShortId`, `Title`, `utc_now()`.
 - `TicketInput`: one item of `harness ticket add` input (SP2 spec §4); unknown fields are rejected.
 - `SUB_STATUSES`: sub-statuses per folder, `in_process/paused` included (`in_process` also takes the step names of `status.names`); `Ticket.sub_status`.
@@ -25,6 +26,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Changes
 
+- 2026-10-22: runtime file schemas (SP3 M1).
 - 2026-10-22: provider names checked, `ProviderOptions`, `memory.compactor`, `bypass_permissions`, ticket `step` and `tokens_max`, `paused`, `Review.session` (SP3 M1).
 - 2026-10-22: `TicketInput`, `SUB_STATUSES`, one-line `Title`, `Ticket.sub_status` (SP2 M3).
 - 2026-10-22: provider slot counts must be ≥ 0; event times are kept in UTC (SP2 M2).

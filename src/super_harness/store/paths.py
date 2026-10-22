@@ -80,5 +80,17 @@ class StorePaths:
     def locks(self) -> Path:
         return self.runtime / "locks"
 
+    @property
+    def slots(self) -> Path:
+        return self.runtime / "slots.json"
+
+    @property
+    def claims(self) -> Path:
+        return self.runtime / "claims.json"
+
+    @property
+    def flags(self) -> Path:
+        return self.runtime / "flags"
+
     def project(self, slug: str) -> ProjectPaths:
         return ProjectPaths(self.projects / slug)
