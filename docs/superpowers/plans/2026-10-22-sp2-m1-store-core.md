@@ -1280,7 +1280,15 @@ def make_link(repo: Path, target: Path) -> None:
 
 def _exclude_file(repo: Path) -> Path | None:
     result = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "--path-format=absolute", "--git-path", "info/exclude"],
+        [
+            "git",
+            "-C",
+            str(repo),
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-path",
+            "info/exclude",
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -1630,7 +1638,9 @@ def test_adopt_merges_by_uuid_and_archives_everything(
     documents.save_ticket(project, make_ticket("a1111111", uuid=shared, title="older"))
     (repo / ".harness").unlink()
     foreign = ProjectPaths(repo / ".harness")
-    documents.save_ticket(foreign, make_ticket("a1111111", uuid=shared, title="newer", updated=NEWER))
+    documents.save_ticket(
+        foreign, make_ticket("a1111111", uuid=shared, title="newer", updated=NEWER)
+    )
     documents.save_ticket(foreign, make_ticket("b2222222"))
     (foreign.root / "PROCESS.md").write_text("# foreign process\n", encoding="utf-8")
 
@@ -1787,7 +1797,9 @@ def doctor(
         known = {entry.path.resolve() for entry in registry.projects.values()}
         for found in _real_folders(scan.resolve(), SCAN_DEPTH):
             if found.parent not in known:
-                problems.append(Problem(f"unmanaged store {found}; run: harness adopt {found.parent}"))
+                problems.append(
+                    Problem(f"unmanaged store {found}; run: harness adopt {found.parent}")
+                )
     return DoctorReport(len(registry.projects), problems)
 
 
@@ -1855,12 +1867,16 @@ def _attach(repo: Path, project: ProjectPaths) -> list[str]:
 
 def _check_project(paths: StorePaths, slug: str, repo: Path, fix: bool) -> list[Problem]:
     if not repo.is_dir():
-        return [Problem(f"repo missing at {repo}; if it moved: harness link {slug} <new-path>", slug)]
+        return [
+            Problem(f"repo missing at {repo}; if it moved: harness link {slug} <new-path>", slug)
+        ]
     project = paths.project(slug)
     problems: list[Problem] = []
     state = links.link_state(repo, project.root)
     if state is links.LinkState.real_dir:
-        problems.append(Problem(f"{repo / links.LINK} is a real folder; run: harness adopt {repo}", slug))
+        problems.append(
+            Problem(f"{repo / links.LINK} is a real folder; run: harness adopt {repo}", slug)
+        )
     elif state is links.LinkState.blocked:
         message = f"{repo / links.LINK} is a file; move it away, then: harness doctor --fix"
         problems.append(Problem(message, slug))
