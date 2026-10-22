@@ -16,6 +16,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - `tickets`: `add_tickets` → `Batch(plan, project, tickets=[NewTicket(id, key, title, status)])`, `show_ticket` → `Document`, `list_tickets`/`find_tickets` → `TicketLine(id, project, status, importance, title)`; without a project they cover the project here, else every project.
 - `tickets.move_ticket` → `Moved(id, project, before, after, ready, blocked)`; `tickets.set_fields` → `Updated(id, project, fields, status)` for the `SETTABLE` fields.
 - `status.board(project=None)` → `Board([ProjectStatus(project, folders, statuses, gates)])`: every registered project unless one is named.
+- `queue.next_tickets(project=None)` → `Queue(runnable, held_back, blocked, running, gates, paused)`: `runnable` holds `NextTicket(id, project, importance, step, provider, title)` in start order (`provider` is `shell` or `user` when the step needs no session); `held_back` maps each waiting ready ticket to its reason. `queue.progress_of(settings, ticket)` → `workflow.Progress`.
 - Errors are `model` errors and carry their exit code.
 
 ## Invariants
@@ -29,6 +30,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-22: `queue.next_tickets` (SP3 M1).
 - 2026-10-22: dependencies are met only by `done/merged` and `done/closed` (SP3 M1).
 - 2026-10-22: `describe` hints at quoting YAML text that contains `: ` (SP2 review).
 - 2026-10-22: board status (SP2 M3).

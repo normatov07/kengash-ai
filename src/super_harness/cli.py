@@ -12,7 +12,7 @@ import typer
 
 from super_harness import __version__
 from super_harness.model import Folder, HarnessError, PlanMode, UserError
-from super_harness.ops import plans, projects, status, tickets, workspace
+from super_harness.ops import plans, projects, queue, status, tickets, workspace
 
 app = typer.Typer(
     name="harness",
@@ -375,6 +375,18 @@ Here = Annotated[
     ),
 ]
 MAX_LINES = 5
+Every = Annotated[
+    str | None,
+    typer.Option("--project", "-p", help="Only this project; default: every project."),
+]
+
+
+def _capped(lines: list[str], command: str) -> list[str]:
+    """At most MAX_LINES lines; the last one says how many more `command` shows."""
+    if len(lines) <= MAX_LINES:
+        return lines
+    more = len(lines) - MAX_LINES + 1
+    return [*lines[: MAX_LINES - 1], f"+{more} more; run: {command}"]
 
 
 def _ticket_lines(lines: list[tickets.TicketLine], as_json: bool) -> None:
@@ -485,13 +497,7 @@ def ticket_move(
 
 
 @app.command("status")
-def show_status(
-    project: Annotated[
-        str | None,
-        typer.Option("--project", "-p", help="Only this project; default: every project."),
-    ] = None,
-    as_json: AsJson = False,
-) -> None:
+def show_status(project: Every = None, as_json: AsJson = False) -> None:
     """Board summary: tickets per folder for each project, then gates waiting on the user."""
     with _errors():
         board = status.board(project)
@@ -510,8 +516,36 @@ def show_status(
     ]
     if not lines:
         lines = ["no projects; run: harness init"]
-    if len(lines) > MAX_LINES:
-        more = len(lines) - MAX_LINES + 1
-        lines = [*lines[: MAX_LINES - 1], f"+{more} more; run: harness status --json"]
-    for line in lines:
+    for line in _capped(lines, "harness status --json"):
         typer.echo(line)
+
+
+@app.command("next")
+def show_next(project: Every = None, as_json: AsJson = False) -> None:
+    """Tickets that can start now, in the order to start them."""
+    with _errors():
+        found = queue.next_tickets(project)
+    if as_json:
+        _emit_json(found)
+        return
+    lines = [
+        f"{item.id} {item.project} {item.importance} {item.step}→{item.provider} {item.title}"
+        for item in found.runnable
+    ] or [_nothing_runnable(found)]
+    for line in _capped(lines, "harness next --json"):
+        typer.echo(line)
+
+
+def _nothing_runnable(found: queue.Queue) -> str:
+    counts = [
+        f"{count} {label}"
+        for count, label in (
+            (len(found.held_back), "held back"),
+            (found.blocked, "blocked"),
+            (found.running, "running"),
+            (found.gates, "at gates"),
+            (found.paused, "paused"),
+        )
+        if count
+    ]
+    return f"nothing runnable: {', '.join(counts) or 'the queue is empty'}"
