@@ -40,6 +40,37 @@ def render(meta: dict[str, Any], sections: dict[str, str], names: Sequence[str])
     return "".join(parts)
 
 
+def read_sections(text: str, names: Sequence[str]) -> dict[str, str]:
+    """Parse `## Name` sections typed by an agent; unknown, repeated or stray text is an error.
+
+    Lines inside ``` fences are content, so a Markdown example cannot open a section.
+    """
+    sections: dict[str, str] = {}
+    current: str | None = None
+    lines: list[str] = []
+    fenced = False
+    for line in text.split("\n"):
+        if line.startswith("```"):
+            fenced = not fenced
+        if line.startswith("## ") and not fenced:
+            name = line[3:].strip()
+            if name not in names:
+                known = ", ".join(names)
+                raise UserError(f"unknown section {name!r}; use {known} (### for sub-headings)")
+            if current is not None:
+                sections[current] = "\n".join(lines).strip("\n")
+            if name in sections:
+                raise UserError(f"section {name!r} appears twice")
+            current, lines = name, []
+        elif current is not None:
+            lines.append(line)
+        elif line.strip():
+            raise UserError("text before the first ## heading")
+    if current is not None:
+        sections[current] = "\n".join(lines).strip("\n")
+    return sections
+
+
 def _split(body: str, names: Sequence[str]) -> dict[str, str]:
     headings = {f"## {name}": name for name in names}
     sections: dict[str, str] = {}

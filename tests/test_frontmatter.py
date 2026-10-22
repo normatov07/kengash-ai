@@ -1,7 +1,7 @@
 import pytest
 
-from super_harness.model import TICKET_SECTIONS, UserError
-from super_harness.store.frontmatter import parse, render
+from super_harness.model import PLAN_SECTIONS, TICKET_SECTIONS, UserError
+from super_harness.store.frontmatter import parse, read_sections, render
 
 NAMES = TICKET_SECTIONS
 EMPTY = dict.fromkeys(NAMES, "")
@@ -48,3 +48,24 @@ def test_unknown_section_names_are_refused() -> None:
 def test_bad_frontmatter_is_a_user_error(text: str, message: str) -> None:
     with pytest.raises(UserError, match=message):
         parse(text, NAMES)
+
+
+def test_read_sections_takes_known_headings_outside_fences() -> None:
+    text = "\n## Goal\nShip it.\n\n## Scope\nKeys only.\n```md\n## Goal\n```\n"
+    assert read_sections(text, PLAN_SECTIONS) == {
+        "Goal": "Ship it.",
+        "Scope": "Keys only.\n```md\n## Goal\n```",
+    }
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("## Goals\nx", "unknown section 'Goals'"),
+        ("## Goal\nx\n## Goal\ny", "section 'Goal' appears twice"),
+        ("intro\n## Goal\nx", "text before the first ## heading"),
+    ],
+)
+def test_read_sections_refuses_bad_input(text: str, message: str) -> None:
+    with pytest.raises(UserError, match=message):
+        read_sections(text, PLAN_SECTIONS)

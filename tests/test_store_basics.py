@@ -38,6 +38,14 @@ def test_new_id_rerolls_a_taken_short_id(monkeypatch: pytest.MonkeyPatch) -> Non
     assert new_id({"7b55e0c1"}) == ("a91b3d07", free)
 
 
+def test_new_id_skips_ids_that_yaml_reads_as_numbers(monkeypatch: pytest.MonkeyPatch) -> None:
+    digits = UUID("12345678-0000-4000-8000-000000000000")
+    exponent = UUID("1234e567-0000-4000-8000-000000000000")
+    free = UUID("a91b3d07-0000-4000-8000-000000000000")
+    monkeypatch.setattr("super_harness.store.ids.uuid4", iter([digits, exponent, free]).__next__)
+    assert new_id(set()) == ("a91b3d07", free)
+
+
 def test_lock_times_out_with_a_clear_error(tmp_path: Path) -> None:
     lock_file = tmp_path / "locks" / "x.lock"
     with (
