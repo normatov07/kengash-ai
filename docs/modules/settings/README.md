@@ -6,7 +6,7 @@ Resolve SETTINGS.md into a validated `Settings` model so agents never parse the 
 
 ## Interface
 
-- `load(paths, slug=None)` → `Settings`: package defaults, then `~/.harness/defaults/SETTINGS.md`, then `projects/<slug>/SETTINGS.md`. Raises `UserError("settings: …")` naming the first problem.
+- `load(paths, slug=None)` → `Settings`: package defaults, then `~/.harness/defaults/SETTINGS.md`, then `projects/<slug>/SETTINGS.md`. Raises `UserError` naming the first problem: `settings: …` for schema problems, or the file name for invalid YAML.
 - `problems(paths, slug=None)` → one line per problem, empty when valid (`harness settings check`).
 - `get(settings, key)` → the value at a dotted key, with a "did you mean" hint for unknown keys.
 - `unflatten`, `merge`: the YAML rules below, usable on any mapping.
