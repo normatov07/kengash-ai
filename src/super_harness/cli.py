@@ -11,8 +11,8 @@ from typing import Annotated, Any
 import typer
 
 from super_harness import __version__
-from super_harness.model import HarnessError, PlanMode, UserError
-from super_harness.ops import plans, projects, workspace
+from super_harness.model import Folder, HarnessError, PlanMode, UserError
+from super_harness.ops import plans, projects, status, tickets, workspace
 
 app = typer.Typer(
     name="harness",
@@ -362,3 +362,156 @@ def plan_reject(
     with _errors():
         result = plans.reject_plan(plan_id, why, project=project, by=by)
     _emit(result, as_json, f"plan {result.id} rejected")
+
+
+ticket_app = typer.Typer(help="Tickets: one vertical slice of a plan each.", no_args_is_help=True)
+app.add_typer(ticket_app, name="ticket")
+
+TicketId = Annotated[str, typer.Argument(help="Ticket id, 8 hex digits.")]
+Here = Annotated[
+    str | None,
+    typer.Option(
+        "--project", "-p", help="Project slug; default: the project here, else every project."
+    ),
+]
+MAX_LINES = 5
+
+
+def _ticket_lines(lines: list[tickets.TicketLine], as_json: bool) -> None:
+    if as_json:
+        typer.echo(json.dumps([dataclasses.asdict(line) for line in lines], indent=2))
+        return
+    for line in lines:
+        typer.echo(f"{line.id} {line.status} {line.importance} {line.project}: {line.title}")
+
+
+@ticket_app.command("add")
+def ticket_add(
+    plan: Annotated[str, typer.Option("--plan", help="The plan these tickets slice.")],
+    file: Annotated[
+        Path | None,
+        typer.Option(
+            "--file", exists=True, dir_okay=False, help="YAML or JSON list; default: stdin."
+        ),
+    ] = None,
+    project: Only = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Add tickets to an approved plan from a YAML or JSON list (SP2 spec §4)."""
+    with _errors():
+        text = file.read_text(encoding="utf-8") if file else _stdin("ticket list")
+        batch = tickets.add_tickets(plan, text, project=project, by=by)
+    count = len(batch.tickets)
+    ready = sum(new.status == "in_queue/ready" for new in batch.tickets)
+    ids = ", ".join(new.id for new in batch.tickets)
+    line = f"{_plural(count, 'ticket')}: {ids} ({ready} ready, {count - ready} blocked)"
+    _emit(batch, as_json, line)
+
+
+@ticket_app.command("show")
+def ticket_show(ticket_id: TicketId, project: Only = None, as_json: AsJson = False) -> None:
+    """Print the ticket file."""
+    with _errors():
+        doc = tickets.show_ticket(ticket_id, project=project)
+    if as_json:
+        _emit_json(doc)
+    else:
+        typer.echo(doc.text, nl=False)
+
+
+@ticket_app.command("list")
+def ticket_list(
+    project: Here = None,
+    folder: Annotated[Folder | None, typer.Option("--folder", help="Only this folder.")] = None,
+    as_json: AsJson = False,
+) -> None:
+    """One line per ticket: id, status, importance, project and title."""
+    with _errors():
+        lines = tickets.list_tickets(project=project, cwd=Path.cwd(), folder=folder)
+    _ticket_lines(lines, as_json)
+
+
+@ticket_app.command("find")
+def ticket_find(
+    text: Annotated[str, typer.Argument(help="Words to look for, in any case.")],
+    project: Here = None,
+    as_json: AsJson = False,
+) -> None:
+    """Tickets whose title, tags or text contain TEXT."""
+    with _errors():
+        lines = tickets.find_tickets(text, project=project, cwd=Path.cwd())
+    _ticket_lines(lines, as_json)
+
+
+@ticket_app.command("set")
+def ticket_set(
+    ticket_id: TicketId,
+    pairs: Annotated[
+        list[str], typer.Argument(metavar="KEY=VALUE...", help="e.g. tags=[api,auth] loop_max=8")
+    ],
+    project: Only = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Change title, importance, workflow, gate, loop_max, touches, depends_on or tags."""
+    with _errors():
+        result = tickets.set_fields(ticket_id, pairs, project=project, by=by)
+    _emit(result, as_json, f"ticket {result.id} updated")
+
+
+@ticket_app.command("move")
+def ticket_move(
+    ticket_id: TicketId,
+    target: Annotated[
+        str, typer.Argument(metavar="FOLDER[/SUB]", help="e.g. done or in_queue/parked.")
+    ],
+    why: Annotated[str, typer.Option("--why", help="One line: why it moves.")],
+    project: Only = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Move a ticket; queued tickets then turn ready or blocked to match their dependencies."""
+    with _errors():
+        moved = tickets.move_ticket(ticket_id, target, why, project=project, by=by)
+    if as_json:
+        _emit_json(moved)
+        return
+    typer.echo(f"ticket {moved.id} → {moved.after}")
+    if moved.ready:
+        typer.echo(f"ready: {', '.join(moved.ready)}")
+    if moved.blocked:
+        typer.echo(f"blocked: {', '.join(moved.blocked)}")
+
+
+@app.command("status")
+def show_status(
+    project: Annotated[
+        str | None,
+        typer.Option("--project", "-p", help="Only this project; default: every project."),
+    ] = None,
+    as_json: AsJson = False,
+) -> None:
+    """Board summary: tickets per folder for each project, then gates waiting on the user."""
+    with _errors():
+        board = status.board(project)
+    if as_json:
+        _emit_json(board)
+        return
+    lines = [
+        f"{item.project}: {item.folders['in_queue']} in_queue, "
+        f"{item.folders['in_process']} in_process, {item.folders['done']} done"
+        for item in board.projects
+    ]
+    lines += [
+        f"- {gate.id} {gate.sub_status}: {gate.title} ({item.project})"
+        for item in board.projects
+        for gate in item.gates
+    ]
+    if not lines:
+        lines = ["no projects; run: harness init"]
+    if len(lines) > MAX_LINES:
+        more = len(lines) - MAX_LINES + 1
+        lines = [*lines[: MAX_LINES - 1], f"+{more} more; run: harness status --json"]
+    for line in lines:
+        typer.echo(line)
