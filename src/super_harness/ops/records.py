@@ -104,6 +104,8 @@ def describe(exc: ValidationError, prefix: str = "", known: Collection[str] = ()
     if first["type"] == "extra_forbidden":
         hint = difflib.get_close_matches(where, list(known), n=1)
         message = "unknown field" + (f"; did you mean {hint[0]}?" if hint else "")
+    elif first["type"] == "string_type" and isinstance(first["input"], dict):
+        message = "expected text; quote text that contains ': '"  # YAML read it as a mapping
     else:
         message = first["msg"].removeprefix("Value error, ")
     more = f" (+{len(errors) - 1} more)" if len(errors) > 1 else ""

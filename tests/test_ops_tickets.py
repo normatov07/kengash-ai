@@ -74,6 +74,10 @@ def test_add_queues_ready_and_blocked_tickets(
             r"ticket 1: scop: unknown field; did you mean scope\?",
         ),
         ("- {title: x, importance: urgent}", "ticket 1: importance: "),
+        (
+            "- {title: x, importance: simple, acceptance: [Note: be brief]}",
+            "ticket 1: acceptance.0: expected text; quote text that contains ': '",
+        ),
         ("- {title: x, importance: simple, depends_on: [nope]}", "ticket 1: unknown dependency"),
         (
             "- {key: a, title: x, importance: simple}\n- {key: a, title: y, importance: simple}",

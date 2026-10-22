@@ -11,7 +11,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - `projects.doctor(fix, scan)` → `DoctorReport`: one `Problem` per repo, link, exclude or document issue; `fix` repairs links and exclude entries only.
 - `projects.adopt(path)` → `AdoptResult`: merges a real `.harness/` folder by uuid and archives the original.
 - `workspace`: `resolve_slug` (the named project, else the registered project containing the current folder), settings `settings_yaml`/`setting`/`settings_problems`, memory `remember`/`recall`, `context` → `Context(memory, project, process, gates)` (MEMORY.md, PROCESS.md headings, open gates) and `open_gates` → `OpenGate(id, sub_status, title)` items.
-- `records`: `scope`, `locate_plan`, `locate_ticket` (ids are store-unique; `project` narrows the search), `taken_ids`, `project_tickets`, `load_plan`/`load_ticket` (schema errors become `UserError`), `document` → `Document(project, path, meta, sections, text)`, `describe`, `one_line`, `record` (journal the events, then commit).
+- `records`: `scope`, `locate_plan`, `locate_ticket` (ids are store-unique; `project` narrows the search), `taken_ids`, `project_tickets`, `load_plan`/`load_ticket` (schema errors become `UserError`), `document` → `Document(project, path, meta, sections, text)`, `describe` (one line per validation error, with a "did you mean" for unknown fields and a quoting hint for YAML text read as a mapping), `one_line`, `record` (journal the events, then commit).
 - `plans`: `new_plan`, `save_plan`, `show_plan`, `approve_plan`, `reject_plan` → `PlanResult(id, project, status, sections, review_skipped)`; approval needs a review verdict, a quick plan, `plan.review_max: 0`, or `skip_review`.
 - `tickets`: `add_tickets` → `Batch(plan, project, tickets=[NewTicket(id, key, title, status)])`, `show_ticket` → `Document`, `list_tickets`/`find_tickets` → `TicketLine(id, project, status, importance, title)`; without a project they cover the project here, else every project.
 - `tickets.move_ticket` → `Moved(id, project, before, after, ready, blocked)`; `tickets.set_fields` → `Updated(id, project, fields, status)` for the `SETTABLE` fields.
@@ -29,6 +29,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-22: `describe` hints at quoting YAML text that contains `: ` (SP2 review).
 - 2026-10-22: board status (SP2 M3).
 - 2026-10-22: ticket move and set (SP2 M3).
 - 2026-10-22: `tickets` add, show, list, find (SP2 M3).
