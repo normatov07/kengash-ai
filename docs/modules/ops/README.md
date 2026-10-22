@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Use cases shared by the CLI and the UI. Each function takes plain arguments, works through `store` and `model`, and returns a dataclass the caller formats.
+Use cases shared by the CLI and the UI. Each function takes plain arguments, works through `store`, `model` and the `settings`, `memory` and `journal` units, and returns a dataclass the caller formats.
 
 ## Interface
 
@@ -10,6 +10,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - `projects.relink(slug, new_path)` → `InitResult`: re-points a moved project.
 - `projects.doctor(fix, scan)` → `DoctorReport`: one `Problem` per repo, link, exclude or document issue; `fix` repairs links and exclude entries only.
 - `projects.adopt(path)` → `AdoptResult`: merges a real `.harness/` folder by uuid and archives the original.
+- `workspace`: `resolve_slug` (the named project, else the registered project containing the current folder), settings `settings_yaml`/`setting`/`settings_problems`, memory `remember`/`recall`, `context` (MEMORY.md, PROCESS.md headings, open gates) and `open_gates`.
 - Errors are `model` errors and carry their exit code.
 
 ## Invariants
@@ -21,5 +22,6 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-22: workspace use cases for settings, memory and context (SP2 M2).
 - 2026-10-22: `relink` refuses a path already registered under another slug.
 - 2026-10-22: project use cases: init, relink, doctor, adopt (SP2 M1).
