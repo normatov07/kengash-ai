@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
 import pytest
@@ -33,6 +33,18 @@ def test_every_step_needs_its_agent() -> None:
     workflow = {"steps": ["plan", "security"]}
     with pytest.raises(ValidationError, match="security: security-reviewer"):
         Settings.model_validate({"agents": AGENTS, "workflows": {"x": workflow}})
+
+
+def test_provider_slots_cannot_be_negative() -> None:
+    with pytest.raises(ValidationError, match="greater than or equal to 0"):
+        Settings.model_validate({"sessions": {"per_provider": {"claude": -1}}})
+
+
+def test_event_times_are_kept_in_utc() -> None:
+    plus_five = timezone(timedelta(hours=5))
+    event = Event(ts=datetime(2026, 10, 22, 2, 0, tzinfo=plus_five), type="a")
+    assert event.model_dump(mode="json")["ts"] == "2026-10-21T21:00:00Z"
+    assert Event(ts=datetime(2026, 10, 22), type="a").ts.tzinfo is UTC
 
 
 def test_events_keep_extra_fields() -> None:

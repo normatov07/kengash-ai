@@ -2,7 +2,7 @@
 
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, model_validator
 
 STEP_ROLES: dict[str, str | None] = {
     "plan": "planner",
@@ -40,14 +40,14 @@ class PlanReview(_Section):
     reviewer: str = "different-provider"
 
 
-def _default_slots() -> dict[str, int]:
+def _default_slots() -> dict[str, NonNegativeInt]:
     return {"claude": 3, "codex": 3, "antigravity": 2, "gemini": 0}
 
 
 class Sessions(_Section):
     reuse: bool = True
     max: int = Field(8, ge=1)
-    per_provider: dict[str, int] = Field(default_factory=_default_slots)
+    per_provider: dict[str, NonNegativeInt] = Field(default_factory=_default_slots)
 
 
 class Tokens(_Section):

@@ -11,7 +11,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 - `Registry`, `ProjectEntry`: `registry.yaml`.
 - `Importance`, `Gate`, `Folder`, `ShortId`, `utc_now()`.
 - `Settings`, `Agent`, `Workflow`, `STEP_ROLES`: the SETTINGS.md schema; workflows may only use known steps whose agents exist.
-- `Event`: journal event with core fields `ts`, `type`, `project`, `ticket`, `plan` plus any extra detail.
+- `Event`: journal event with core fields `ts` (converted to UTC; naive times count as UTC), `type`, `project`, `ticket`, `plan` plus any extra detail.
 - Errors carry exit codes: `HarnessError` and `UserError` 1, `NeedsSetup` 4, `NeedsUser` 5.
 
 ## Invariants
@@ -22,5 +22,6 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Changes
 
+- 2026-10-22: provider slot counts must be ≥ 0; event times are kept in UTC (SP2 M2).
 - 2026-10-22: `Settings` and `Event` schemas (SP2 M2).
 - 2026-10-22: plan, ticket and registry schemas, error types (SP2 M1).
