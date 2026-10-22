@@ -1,0 +1,82 @@
+# Architecture
+
+System map of super-harness. The contract is the spec, `docs/superpowers/specs/2026-10-22-super-harness-design.md`; this page records what exists now. Update the Status columns whenever a module or sub-project lands.
+
+## Flow
+
+```
+You ──prompt──▶ CONDUCTOR: your claude | codex | agy session, running installed skills
+                      │ shell calls, compact output
+                      ▼
+                 harness CLI (deterministic) ──starts──▶ detached workers, one per job
+                      │                                        │ one CLI session per ticket×role, resumed
+                      ▼                                        ▼
+                 store ~/.harness                        claude -p · codex exec · agy -p
+                 (Markdown + JSONL, a git repo)          (official binaries, the user's login)
+                      ▲
+UI: harness ui → FastAPI + SSE on 127.0.0.1, through the same `ops` layer as the CLI
+```
+
+## Modules
+
+| Module | Responsibility | May import | Status |
+|---|---|---|---|
+| `cli` | Typer command surface, output formatting | `ops`, `model` | skeleton: `--version` |
+| `model` | Pydantic schemas: Plan, Ticket, Settings, Event, StepRequest, StepResult, Verdict | — | planned, SP2 |
+| `store` | Paths, frontmatter, atomic writes, locks, status moves, registry, links, store commits | `model` | planned, SP2 |
+| `settings` | Seed, load, validate, resolve; comment-preserving edits | `model`, `store` | planned, SP2 |
+| `memory` | MEMORY/DECISIONS/PROCESS writes and caps | `model`, `store` | planned, SP2 |
+| `journal` | Append-only JSONL events, follow, usage aggregates | `model`, `store` | planned, SP2 |
+| `ops` | Use cases shared by CLI and UI | all units above | planned, SP2; grows in SP3 and SP5 |
+| `scheduler` | Runnable set: dependencies, `touches` overlap, provider slots, fairness | `model`, `store`, `settings` | planned, SP3 |
+| `workflow` | Step graph per importance, routing, loop and budget caps, stalls | `model`, `settings` | planned, SP3 |
+| `adapters` | One driver per provider CLI behind the `Provider` protocol | `model` | planned, SP3 |
+| `gitops` | Worktrees, commits with trailers, diffs, rebase, merge | `model` | planned, SP3 |
+| `worker` | Runs one job; heartbeats; emits events | all except `ops` | planned, SP3 |
+| `roles` | Packaged role skill files (data only) | — | planned, SP4 |
+| `ui` | FastAPI app, SSE, static assets | `ops`, `model` | planned, SP5 |
+
+`adapters` and `gitops` never touch the store. Import-linter enforces this table in CI once SP2 adds the modules.
+
+## Store (planned, SP2)
+
+```
+~/.harness/                      canonical store, a git repo (mode 0700)
+├── registry.yaml                slug → repo path, base branch
+├── memory/                      MEMORY.md, DECISIONS.md (global), archive/
+├── defaults/                    SETTINGS.md, PROCESS.md, roles/ (seeds)
+├── projects/<slug>/             SETTINGS.md, PROCESS.md, memory -> ../../memory,
+│                                plans/, tasks/{in_queue,in_process,done}/
+├── journal/YYYY-MM-DD.jsonl     events
+├── worktrees/<slug>/hrn-<id8>/  ticket worktrees (git-ignored)
+└── runtime/                     locks, pids, heartbeats, logs (git-ignored)
+```
+
+Each registered repo gets one directory symlink, `<repo>/.harness -> ~/.harness/projects/<slug>`, listed in its `.git/info/exclude`.
+
+## Repository layout
+
+- `src/super_harness/`: the package; each module has `docs/modules/<module>/README.md`
+- `scripts/`: repository checks (`check_md_caps.py`, `check_docs_sync.py`), run by `make docs`, pre-commit and CI
+- `tests/`: the pytest suite (`make test`)
+- `docs/`: index in `docs/README.md`
+- `skills/` and `.claude-plugin/`: arrive in SP4
+
+## Sub-projects
+
+| # | Sub-project | Status |
+|---|---|---|
+| 1 | Foundation | in progress: `docs/superpowers/plans/2026-10-22-foundation.md` |
+| 2 | Store + `harness` CLI | planned |
+| 3 | Engine | planned |
+| 4 | Skills | planned |
+| 5 | Web UI | planned |
+
+## Agent context files
+
+| Agent | Reads | Verified |
+|---|---|---|
+| Claude Code | `CLAUDE.md`, which imports `AGENTS.md` with `@AGENTS.md` | documented import syntax |
+| Codex | `AGENTS.md` natively | documentation only; Codex CLI is not installed on the dev machine |
+| Gemini CLI | `GEMINI.md`, which imports `AGENTS.md` with `@AGENTS.md` | documentation only; Gemini CLI is not installed |
+| Antigravity `agy` | `AGENTS.md` (legacy `GEMINI.md` also supported) | 2026-10-22, agy 1.4.5: a headless run quoted hard rule 3 from `AGENTS.md` with `GEMINI.md` present |

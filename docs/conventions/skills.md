@@ -1,0 +1,64 @@
+# Writing skills
+
+Rules for installable skills (`skills/<name>/SKILL.md`) and role skills (`src/super_harness/roles/<role>/SKILL.md`). Both arrive in sub-project 4; these rules are the contract it implements.
+
+## Format
+
+Skills follow the Agent Skills specification (agentskills.io):
+
+- The folder name equals `name`: lowercase letters, digits and single hyphens, at most 64 characters.
+- `description` may hold 1024 characters by spec; keep it within 500 here.
+- Optional folders: `scripts/` (executables), `references/` (docs loaded on demand), `assets/` (templates, data).
+
+## Description
+
+- Starts with "Use when" and lists triggers only: situations, symptoms, keywords.
+- Never summarises the steps: agents that read a summarised workflow tend to follow the summary and skip the body.
+- Written in the third person, because it is injected into the system prompt.
+
+## Size
+
+| Limit | Value | Setting |
+|---|---|---|
+| Lines | 80 | `skill.max_lines` |
+| Words | 400 | `skill.max_words` |
+| Target | 200 words | — |
+
+An installed skill's name and description load into every session of every agent it is installed in; keep both short.
+
+## Body
+
+- Numbered steps. Each step is one `harness …` command or one judgment, and ends on a checkable condition, e.g. "`harness plan show <id>` prints `status: approved`".
+- Flags and options live in `harness <command> --help`, not in the skill.
+- Give the shape of any output as a template.
+- References sit one level deep and are named by their trigger: "read `references/importance.md` when assigning importance".
+- Step 0 of every installed skill runs `harness --version`. If it does not print `super-harness <version>`, the skill prints the install line and stops.
+
+## Invocation
+
+- User commands (`to-plan-with-grill`, `to-plan`, `to-ticket`, `to-loop`, `open-ui`) set `disable-model-invocation: true` for Claude Code, so only the user starts them.
+- Model-invoked skills (`harness-memory`) need sharp triggers, because the agent decides when to load them.
+
+## Test first
+
+Skills are built like code, test first (superpowers `writing-skills`):
+
+1. **RED**: write a scenario and run it without the skill; record how the agent fails.
+2. **GREEN**: write the smallest skill that makes the scenario pass.
+3. **REFACTOR**: find new loopholes, close them, re-run.
+
+`harness skills eval <skill> --agent claude,codex,antigravity` (sub-project 4) replays `evals/*.yaml` scenarios headless against a temporary store, so each skill is proven on every supported agent.
+
+## Enforcement
+
+`harness skills lint` (sub-project 4) runs in CI and at install time. It checks the frontmatter, the "Use when" prefix and description length, the line and word caps, and that every `harness` command a skill mentions exists in the CLI.
+
+## Distribution
+
+| Route | Where skills land |
+|---|---|
+| `npx skills add <owner>/super-harness [-g]` | Claude Code: `.claude/skills/`; Codex, Antigravity, Gemini CLI, Cursor, Copilot, OpenCode: `.agents/skills/` |
+| `harness skills install --agent claude,codex,antigravity [--global]` | the same paths, no Node needed |
+| Claude and Codex plugin marketplaces | managed by the agent, with auto-update |
+
+Role skills are never installed into agents: `harness` injects them into worker sessions.
