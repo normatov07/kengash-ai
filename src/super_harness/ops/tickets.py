@@ -1,14 +1,17 @@
 """Ticket lifecycle: add, show, list, find, set, move (SP2 spec §2.9, §2.16, §2.17, §3, §4)."""
 
+import difflib
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 from pydantic import ValidationError
 
 from super_harness import settings
 from super_harness.model import (
+    SUB_STATUSES,
     Doc,
     Event,
     Folder,
@@ -26,8 +29,12 @@ from super_harness.ops.workspace import resolve_slug
 from super_harness.store import documents
 from super_harness.store.ids import new_id
 from super_harness.store.locks import locked
-from super_harness.store.paths import StorePaths
+from super_harness.store.paths import ProjectPaths, StorePaths
 from super_harness.store.yamlio import load_yaml
+
+SETTABLE = ("title", "importance", "workflow", "gate", "loop_max", "touches", "depends_on", "tags")
+LISTS = frozenset({"touches", "depends_on", "tags"})
+QUEUED = ("in_queue/ready", "in_queue/blocked")
 
 
 @dataclass
@@ -52,6 +59,24 @@ class TicketLine:
     status: str
     importance: str
     title: str
+
+
+@dataclass
+class Moved:
+    id: str
+    project: str
+    before: str
+    after: str
+    ready: list[str] = field(default_factory=list)
+    blocked: list[str] = field(default_factory=list)
+
+
+@dataclass
+class Updated:
+    id: str
+    project: str
+    fields: dict[str, Any]
+    status: str
 
 
 def add_tickets(plan_id: str, text: str, *, project: str | None, by: str) -> Batch:
@@ -155,6 +180,76 @@ def find_tickets(text: str, *, project: str | None, cwd: Path) -> list[TicketLin
     )
 
 
+def move_ticket(ticket_id: str, target: str, why: str, *, project: str | None, by: str) -> Moved:
+    """Move a ticket to FOLDER[/SUB]; queued tickets then turn ready or blocked to match."""
+    reason = records.one_line(why, "why")
+    paths = StorePaths.default()
+    slug, path = records.locate_ticket(paths, ticket_id, project)
+    steps = tuple(settings.load(paths, slug).status.names.values())
+    project_paths = paths.project(slug)
+    with locked(paths.locks / f"{slug}.lock"):
+        doc = records.load_ticket(path)
+        tickets = records.project_tickets(paths, slug) | {doc.meta.id: doc}
+        ticket = doc.meta
+        before, after = ticket.status, _target(target, ticket, tickets, steps)
+        if after == before:
+            return Moved(ticket.id, slug, before, after)
+        ticket.status = after
+        ticket.updated = utc_now()
+        documents.save_ticket(project_paths, doc)
+        ready, blocked = _refresh_queue(project_paths, tickets)
+    note = f"{ticket.id} moved to {after}"
+    events = [_moved(slug, ticket.id, before, after, reason, by)]
+    events += [_moved(slug, tid, QUEUED[1], QUEUED[0], note, "harness") for tid in ready]
+    events += [_moved(slug, tid, QUEUED[0], QUEUED[1], note, "harness") for tid in blocked]
+    records.record(paths, f"harness: ticket move {ticket.id}", *events)
+    return Moved(ticket.id, slug, before, after, ready, blocked)
+
+
+def set_fields(ticket_id: str, pairs: Sequence[str], *, project: str | None, by: str) -> Updated:
+    """Change frontmatter fields from KEY=VALUE pairs; lists take `[a, b]` or `a,b`."""
+    changes = _parse_pairs(pairs)
+    paths = StorePaths.default()
+    slug, path = records.locate_ticket(paths, ticket_id, project)
+    workflows = settings.load(paths, slug).workflows
+    project_paths = paths.project(slug)
+    with locked(paths.locks / f"{slug}.lock"):
+        doc = records.load_ticket(path)
+        tickets = records.project_tickets(paths, slug) | {doc.meta.id: doc}
+        ticket = doc.meta
+        try:
+            for key, value in changes.items():
+                setattr(ticket, key, value)
+        except ValidationError as exc:
+            raise UserError(records.describe(exc)) from exc
+        if "workflow" in changes and ticket.workflow not in workflows:
+            raise UserError(f"settings have no workflow {ticket.workflow!r}")
+        if ticket.loop_max < ticket.loop:
+            raise UserError(f"loop_max cannot go below the current loop ({ticket.loop})")
+        if "depends_on" in changes:
+            unknown = [dep for dep in ticket.depends_on if dep not in tickets]
+            if unknown:
+                raise UserError(f"unknown dependency {', '.join(unknown)}")
+            cycle = _cycle({tid: item.meta.depends_on for tid, item in tickets.items()})
+            if cycle:
+                raise UserError(f"dependency cycle: {' -> '.join(cycle)}")
+        ticket.updated = utc_now()
+        documents.save_ticket(project_paths, doc)
+        _refresh_queue(project_paths, tickets)
+    values = ticket.model_dump(mode="json")
+    fields = {key: values[key] for key in changes}
+    updated = Event(
+        type="ticket.updated",
+        project=slug,
+        ticket=ticket.id,
+        fields=fields,
+        status=ticket.status,
+        by=by,
+    )
+    records.record(paths, f"harness: ticket set {ticket.id}", updated)
+    return Updated(ticket.id, slug, fields, ticket.status)
+
+
 def _parse_batch(text: str) -> list[TicketInput]:
     data = load_yaml(text, "ticket list")
     if not isinstance(data, list) or not data:
@@ -229,6 +324,92 @@ def _cycle(graph: Mapping[str, Sequence[str]]) -> list[str] | None:
 def _met(depends_on: Iterable[str], tickets: Mapping[str, Doc[Ticket]]) -> bool:
     """True when every dependency is a ticket of this project in `done/`."""
     return all(dep in tickets and tickets[dep].meta.folder is Folder.done for dep in depends_on)
+
+
+def _target(
+    target: str, ticket: Ticket, tickets: Mapping[str, Doc[Ticket]], steps: Sequence[str]
+) -> str:
+    """The full status a move to `target` means, once it is allowed."""
+    name, _, sub = target.partition("/")
+    try:
+        folder = Folder(name)
+    except ValueError:
+        raise UserError(f"unknown folder {name!r}; use in_queue, in_process or done") from None
+    met = _met(ticket.depends_on, tickets)
+    if folder is Folder.in_queue and sub in ("", "ready", "blocked"):
+        sub = "ready" if met else "blocked"
+    elif folder is Folder.done and not sub:
+        sub = "closed"
+    allowed = sorted({*SUB_STATUSES[folder], *(steps if folder is Folder.in_process else ())})
+    if sub not in allowed:
+        problem = f"has no {sub!r}" if sub else "needs a sub-status"
+        raise UserError(f"{folder.value} {problem}; use one of: {', '.join(allowed)}")
+    if folder is Folder.in_process and not met:
+        waiting = [dep for dep in ticket.depends_on if not _met([dep], tickets)]
+        raise UserError(f"{ticket.id} waits on {', '.join(waiting)}")
+    return f"{folder.value}/{sub}"
+
+
+def _refresh_queue(
+    project: ProjectPaths, tickets: Mapping[str, Doc[Ticket]]
+) -> tuple[list[str], list[str]]:
+    """Turn each ready or blocked ticket ready or blocked to match its dependencies."""
+    ready: list[str] = []
+    blocked: list[str] = []
+    for doc in tickets.values():
+        ticket = doc.meta
+        if ticket.status not in QUEUED:
+            continue
+        wanted = QUEUED[0] if _met(ticket.depends_on, tickets) else QUEUED[1]
+        if wanted != ticket.status:
+            ticket.status = wanted
+            ticket.updated = utc_now()
+            documents.save_ticket(project, doc)
+            (ready if wanted == QUEUED[0] else blocked).append(ticket.id)
+    return sorted(ready), sorted(blocked)
+
+
+def _moved(slug: str, ticket_id: str, before: str, after: str, why: str, by: str) -> Event:
+    return Event.model_validate(
+        {
+            "type": "ticket.moved",
+            "project": slug,
+            "ticket": ticket_id,
+            "from": before,
+            "to": after,
+            "why": why,
+            "by": by,
+        }
+    )
+
+
+def _parse_pairs(pairs: Sequence[str]) -> dict[str, Any]:
+    if not pairs:
+        raise UserError("nothing to set; pass KEY=VALUE pairs")
+    changes: dict[str, Any] = {}
+    for pair in pairs:
+        key, sep, raw = pair.partition("=")
+        key = key.strip()
+        if not sep:
+            raise UserError(f"{pair!r} is not KEY=VALUE")
+        if key == "status":
+            raise UserError("status changes through: harness ticket move ID FOLDER[/SUB] --why W")
+        if key not in SETTABLE:
+            hint = difflib.get_close_matches(key, SETTABLE, n=1)
+            help_text = f"did you mean {hint[0]}?" if hint else f"settable: {', '.join(SETTABLE)}"
+            raise UserError(f"cannot set {key!r}; {help_text}")
+        changes[key] = _list(raw) if key in LISTS else raw.strip()
+    return changes
+
+
+def _list(raw: str) -> list[Any]:
+    text = raw.strip()
+    if text.startswith("["):
+        value = load_yaml(text, "list")
+        if not isinstance(value, list):
+            raise UserError(f"{text!r} is not a list")
+        return value
+    return [part.strip() for part in text.split(",") if part.strip()]
 
 
 def _scope_here(paths: StorePaths, project: str | None, cwd: Path) -> list[str]:

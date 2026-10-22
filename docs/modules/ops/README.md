@@ -14,6 +14,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - `records`: `scope`, `locate_plan`, `locate_ticket` (ids are store-unique; `project` narrows the search), `taken_ids`, `project_tickets`, `load_plan`/`load_ticket` (schema errors become `UserError`), `document` → `Document(project, path, meta, sections, text)`, `describe`, `one_line`, `record` (journal the events, then commit).
 - `plans`: `new_plan`, `save_plan`, `show_plan`, `approve_plan`, `reject_plan` → `PlanResult(id, project, status, sections, review_skipped)`; approval needs a review verdict, a quick plan, `plan.review_max: 0`, or `skip_review`.
 - `tickets`: `add_tickets` → `Batch(plan, project, tickets=[NewTicket(id, key, title, status)])`, `show_ticket` → `Document`, `list_tickets`/`find_tickets` → `TicketLine(id, project, status, importance, title)`; without a project they cover the project here, else every project.
+- `tickets.move_ticket` → `Moved(id, project, before, after, ready, blocked)`; `tickets.set_fields` → `Updated(id, project, fields, status)` for the `SETTABLE` fields.
 - Errors are `model` errors and carry their exit code.
 
 ## Invariants
@@ -22,10 +23,12 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - Every state change ends with a store commit (`harness: <command> <slug>`).
 - Adopt deletes nothing: the original folder and every losing copy end up in `projects/<slug>/archive/adopted-<stamp>/`.
 - `ticket add` validates the whole batch (schema, keys, references, cycles, workflows) before writing any ticket; a ticket is `ready` only when every dependency is done.
+- Queued tickets stay consistent: after any move or `depends_on` change each `ready`/`blocked` ticket is re-derived from its dependencies; `parked` is left alone; `in_process` needs every dependency done.
 - `ops` never imports `cli` or `ui`.
 
 ## Changes
 
+- 2026-10-22: ticket move and set (SP2 M3).
 - 2026-10-22: `tickets` add, show, list, find (SP2 M3).
 - 2026-10-22: `records` and `plans` (SP2 M3).
 - 2026-10-22: `context` returns a `Context` dataclass instead of text (SP2 M2 review).

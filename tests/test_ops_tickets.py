@@ -120,3 +120,86 @@ def test_list_and_find(registered_repo: Path) -> None:
     assert len(tickets.list_tickets(project=None, cwd=registered_repo.parent)) == 2
     found = tickets.find_tickets("PREVIOUS keys", project=None, cwd=registered_repo)
     assert [line.id for line in found] == [keyring]
+
+
+def test_moving_a_dependency_to_done_unblocks_its_dependents(
+    registered_repo: Path, journal_events: Events
+) -> None:
+    keyring, rotate = add(registered_repo)
+    moved = tickets.move_ticket(keyring, "done", "merged by hand", project=None, by="claude")
+    assert (moved.before, moved.after, moved.ready) == ("in_queue/ready", "done/closed", [rotate])
+    assert tickets.show_ticket(rotate, project=None).meta["status"] == "in_queue/ready"
+    back = tickets.move_ticket(keyring, "in_queue", "reopened", project=None, by="claude")
+    assert (back.after, back.blocked) == ("in_queue/ready", [rotate])
+    moves = [
+        (event["ticket"], event["to"], event["by"])
+        for event in journal_events()
+        if event["type"] == "ticket.moved"
+    ]
+    assert moves == [
+        (keyring, "done/closed", "claude"),
+        (rotate, "in_queue/ready", "harness"),
+        (keyring, "in_queue/ready", "claude"),
+        (rotate, "in_queue/blocked", "harness"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("target", "message"),
+    [
+        ("nowhere", "unknown folder 'nowhere'"),
+        ("in_process", "in_process needs a sub-status"),
+        ("in_process/under_the_moon", "in_process has no 'under_the_moon'"),
+        ("done/shipped", "done has no 'shipped'"),
+    ],
+)
+def test_move_refuses_unknown_targets(registered_repo: Path, target: str, message: str) -> None:
+    keyring, _ = add(registered_repo)
+    with pytest.raises(UserError, match=message):
+        tickets.move_ticket(keyring, target, "x", project=None, by="x")
+
+
+def test_blocked_tickets_cannot_start_but_can_park(registered_repo: Path) -> None:
+    keyring, rotate = add(registered_repo)
+    with pytest.raises(UserError, match=f"{rotate} waits on {keyring}"):
+        tickets.move_ticket(rotate, "in_process/under_implementation", "x", project=None, by="x")
+    parked = tickets.move_ticket(rotate, "in_queue/parked", "later", project=None, by="x")
+    assert parked.after == "in_queue/parked"
+
+
+def test_set_changes_fields_and_requeues(registered_repo: Path, journal_events: Events) -> None:
+    _, rotate = add(registered_repo)
+    pairs = ["depends_on=", "tags=api, auth", "loop_max=8"]
+    updated = tickets.set_fields(rotate, pairs, project=None, by="claude")
+    assert updated.status == "in_queue/ready"
+    assert updated.fields == {"depends_on": [], "tags": ["api", "auth"], "loop_max": 8}
+    event = journal_events()[-1]
+    assert (event["type"], event["fields"]["loop_max"], event["by"]) == (
+        "ticket.updated",
+        8,
+        "claude",
+    )
+
+
+@pytest.mark.parametrize(
+    ("pair", "message"),
+    [
+        ("title", "is not KEY=VALUE"),
+        ("status=done/closed", "harness ticket move"),
+        ("titel=x", "did you mean title"),
+        ("importance=urgent", "importance: "),
+        ("workflow=nightly", "no workflow 'nightly'"),
+        ("loop_max=0", "cannot go below the current loop"),
+        ("depends_on=[deadbeef]", "unknown dependency deadbeef"),
+    ],
+)
+def test_set_refuses_bad_changes(registered_repo: Path, pair: str, message: str) -> None:
+    keyring, _ = add(registered_repo)
+    with pytest.raises(UserError, match=message):
+        tickets.set_fields(keyring, [pair], project=None, by="x")
+
+
+def test_set_refuses_dependency_cycles(registered_repo: Path) -> None:
+    keyring, rotate = add(registered_repo)
+    with pytest.raises(UserError, match="dependency cycle"):
+        tickets.set_fields(keyring, [f"depends_on={rotate}"], project=None, by="x")
