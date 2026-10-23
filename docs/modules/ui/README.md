@@ -15,6 +15,7 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 - `GET /api/agents?project=&window=&refresh=` → `AgentsView`; `views/agents.js`: provider cards (Sign in or Install copy the CLI's own command; harness never runs it), the roster (on/off, CLI·model, skill file, used in, tokens), limits and per-provider sessions, importance routing; saves through `/api/settings`. A route whose data takes over 400 ms shows Loading.
 - `GET /api/workflows?project=` → `WorkflowsView`; `graph.js` (`layout(steps, on_fail)`: trigger, steps, done left to right; `svg(graph, {selected, sub, off})`); `views/workflow.js`: workflow tabs, the graph, the selected step (its agent's CLI, where a failing verdict sends it, move, remove), the step library, a dry run of the steps that would run, loop guard rails; a save writes each edited `workflows.<name>` whole.
 - `GET /api/tickets/{id}` → `TicketView`; `GET /api/tickets/{id}/diff` → the ticket's `Changes` with the diff; `GET /api/plans/{id}` → `{project, meta, sections}`. `views/ticket.js` (`#/ticket/<id>`): header with the gate's action (Grant +N loops, Merge, Run again), tabs Overview · Changes · Timeline · Ticket file, findings, prompt with the plan on demand, acceptance, dependencies, memory writes, agent chain, metadata, attach command, Stop, Park with a why, Send back to in_queue, Force move to done (second click).
+- `GET /api/memory?project=` → `MemoryView`; `POST /api/memory/compact` → `{started}` (`compaction.start_checked`; the screen refreshes on `memory.compacted`). `views/memory.js`: backends (markdown active; sqlite index and vector recall planned), store tiles, memory files, MEMORY.md with its cap and Compact, link health and stores found nearby, the ticket index with All · Running · Done and a find box, writes to memory.
 - `GET /api/meta` → `{version}`. `GET /api/links` (link health); `POST /api/links/repair` (`harness doctor --fix`), `POST /api/links/relink` `{project, path}`, `POST /api/links/adopt` `{path}`; each answers with the new link health.
 
 ## Invariants
@@ -25,7 +26,7 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 
 ## Changes
 
-- 2026-10-23: Ticket detail, Settings, Agents and Workflow screens, scope tabs and settings saves (SP5 M2).
+- 2026-10-23: Memory store, Ticket detail, Settings, Agents and Workflow screens, scope tabs and settings saves (SP5 M2).
 - 2026-10-23: requests with a foreign `Origin` are refused (SP5 M2).
 - 2026-10-23: link health on the Memory screen, link banner on the Overview (system spec §4.2).
 - 2026-10-23: app shell, Overview and Task board (SP5 M1).

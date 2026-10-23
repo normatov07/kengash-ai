@@ -1,6 +1,7 @@
 """Read models for the UI screens (SP5 spec §3): plain dataclasses built from the store,
 the runtime files and the journal. Nothing here writes."""
 
+import contextlib
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -25,7 +26,7 @@ from super_harness.model import (
     utc_now,
 )
 from super_harness.model import Gate as TicketGate
-from super_harness.ops import agents, records
+from super_harness.ops import agents, jobs, records
 from super_harness.ops import changes as changes_ops
 from super_harness.ops import projects as project_ops
 from super_harness.ops import skills as skill_ops
@@ -322,6 +323,48 @@ class TicketView:
     chain: list[ChainStep] = field(default_factory=list)
     attach: str = ""
     grant: int = 2  # loops one approval adds (`loop_grant`)
+
+
+@dataclass
+class MemoryFile:
+    name: str
+    scope: Literal["global", "project"]
+    path: str
+    lines: int
+    entries: int  # `- ` lines
+    tokens: int  # a read's rough cost: characters / 4
+    compacted: datetime | None
+    updated: datetime | None
+
+
+@dataclass
+class IndexRow:
+    id: str
+    title: str
+    project: str
+    status: str
+    loop: int
+    loop_max: int
+    models: list[str]
+    closed: datetime | None
+
+
+@dataclass
+class MemoryView:
+    """The Memory store screen: the store's size, its memory files, link health, every
+    ticket, and who wrote what."""
+
+    project: str | None
+    size_bytes: int = 0
+    ticket_files: int = 0
+    tickets: dict[str, int] = field(default_factory=lambda: {f.value: 0 for f in Folder})
+    links: Links = field(default_factory=lambda: Links())
+    files: list[MemoryFile] = field(default_factory=list)
+    memory_text: str = ""
+    cap: int = 200
+    compacting: bool = False
+    index: list[IndexRow] = field(default_factory=list)
+    writes: list[dict[str, Any]] = field(default_factory=list)
 
 
 def overview(paths: StorePaths | None = None, *, window: Window = "today") -> Overview:
@@ -646,6 +689,98 @@ def ticket_view(
     found.chain = _chain(paths, slug, ticket, found.timeline)
     found.grant = _grant(paths, slug)
     return found
+
+
+def memory_view(paths: StorePaths | None = None, *, project: str | None) -> MemoryView:
+    """The Memory screen; `project` adds that project's PROCESS.md, SETTINGS.md and AGENTS.md
+    to the global files."""
+    paths = paths or StorePaths.default()
+    found = MemoryView(project)
+    if not paths.home.is_dir():
+        return found
+    skip = {".git", "worktrees", "runtime"}
+    found.size_bytes = sum(
+        path.stat().st_size
+        for path in paths.home.rglob("*")
+        if path.is_file() and not skip.intersection(path.relative_to(paths.home).parts)
+    )
+    events = _events(paths)
+    models: dict[str, list[str]] = defaultdict(list)
+    closed: dict[str, datetime] = {}
+    compacted: datetime | None = None
+    for event in events:
+        extra = event.model_extra or {}
+        if event.type == "step.end" and event.ticket and extra.get("provider"):
+            model = extra.get("model")
+            name = (
+                f"{extra['provider']}/{model}"
+                if model and model != "default"
+                else str(extra["provider"])
+            )
+            if name not in models[event.ticket]:
+                models[event.ticket].append(name)
+        elif event.ticket and _done(event):
+            closed[event.ticket] = event.ts
+        elif event.type == "memory.compacted" and extra.get("accepted"):
+            compacted = event.ts
+    for slug, doc in _tickets(paths, None):
+        ticket = doc.meta
+        found.ticket_files += 1
+        found.tickets[ticket.folder.value] += 1
+        found.index.append(
+            IndexRow(
+                ticket.id,
+                ticket.title,
+                slug,
+                ticket.status,
+                ticket.loop,
+                ticket.loop_max,
+                models.get(ticket.id, []),
+                closed.get(ticket.id) if ticket.folder is Folder.done else None,
+            )
+        )
+    found.index.sort(key=lambda row: (row.closed is not None, row.id))
+    found.links = links(paths)
+    memory_file = paths.memory / "MEMORY.md"
+    found.memory_text = memory_file.read_text(encoding="utf-8") if memory_file.is_file() else ""
+    found.files = [
+        _memory_file(path, name, "global", compacted if name == "MEMORY.md" else None)
+        for name, path in (
+            ("MEMORY.md", memory_file),
+            ("DECISIONS.md", paths.memory / "DECISIONS.md"),
+        )
+        if path.is_file()
+    ]
+    if project is not None:
+        repo = load_registry(paths).projects[records.scope(paths, project)[0]].path
+        own = paths.project(project)
+        for name, path in (
+            ("PROCESS.md", own.process),
+            ("SETTINGS.md", own.settings),
+            ("AGENTS.md", repo / "AGENTS.md"),
+        ):
+            if path.is_file():
+                found.files.append(_memory_file(path, name, "project", None))
+    with contextlib.suppress(HarnessError):  # an invalid defaults file keeps the default cap
+        found.cap = settings.load(paths).memory.compact_at_lines
+    found.compacting = jobs.alive(paths, jobs.COMPACT) is not None
+    kinds = ("memory.write", "memory.compacted", "ticket.moved")
+    found.writes = [
+        event.model_dump(mode="json", exclude_none=True) for event in events if event.type in kinds
+    ][-TAIL:][::-1]
+    return found
+
+
+def _memory_file(
+    path: Path, name: str, scope: Literal["global", "project"], compacted: datetime | None
+) -> MemoryFile:
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    updated = datetime.fromtimestamp(path.stat().st_mtime, tz=utc_now().tzinfo)
+    entries = sum(line.startswith("- ") for line in lines)
+    return MemoryFile(
+        name, scope, str(path), len(lines), entries, len(text) // 4, compacted, updated
+    )
 
 
 def version() -> str:

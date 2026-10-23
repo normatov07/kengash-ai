@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from super_harness.model import HarnessError, JournalCursor, NeedsSetup, NeedsUser
 from super_harness.ops import (
     changes,
+    compaction,
     configure,
     controls,
     merging,
@@ -195,6 +196,14 @@ def create_app(*, token: str, port: int) -> FastAPI:
     @app.get("/api/workflows")
     def workflows_view(project: str = "") -> views.WorkflowsView:
         return views.workflows_view(project=project or None)
+
+    @app.get("/api/memory")
+    def memory_view(project: str = "") -> views.MemoryView:
+        return views.memory_view(project=project or None)
+
+    @app.post("/api/memory/compact")
+    def compact() -> dict[str, bool]:
+        return {"started": compaction.start_checked()}
 
     @app.get("/api/settings")
     def settings_view(project: str = "") -> views.SettingsView:

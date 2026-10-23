@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from super_harness import journal
 from super_harness.model import Doc, Event, ProviderStatus, Ticket
-from super_harness.ops import agents, views
+from super_harness.ops import agents, compaction, views
 from super_harness.store import StorePaths, documents
 from super_harness.ui import app as ui_app
 
@@ -219,3 +219,26 @@ def test_a_ticket_and_its_plan_are_served(
     assert missing.status_code == 400 and "eeeeeee1" in missing.json()["error"]
     assert client.get("/api/tickets/ddddddd1/diff").status_code == 400  # no commits yet
     assert client.get("/api/plans/a1b2c3d4").status_code == 400  # no such plan file
+
+
+def test_compaction_starts_once_from_the_ui(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    started: list[str] = []
+    running: list[bool] = []
+
+    def detector(paths: StorePaths) -> Callable[[str], ProviderStatus]:
+        return lambda name: ProviderStatus(name=name, installed=True, signed_in=True)
+
+    monkeypatch.setattr(agents, "detector", detector)
+    monkeypatch.setattr(compaction.jobs, "alive", lambda paths, job_id: True if running else None)
+    monkeypatch.setattr(
+        compaction.jobs,
+        "start",
+        lambda paths, job, job_id, project, args: started.append(job) or running.append(True) or 1,
+    )
+    signed_in(client)
+    assert client.post("/api/memory/compact", headers=POST).json() == {"started": True}
+    assert client.post("/api/memory/compact", headers=POST).json() == {"started": True}
+    assert started == ["compact"]
+    assert client.get("/api/memory").json()["cap"] == 200

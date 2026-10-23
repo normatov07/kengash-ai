@@ -297,3 +297,15 @@ h3.sub { margin: 14px 0 6px; font-size: 11px; letter-spacing: 0.08em; text-trans
 .meta-list > div > span:last-child { text-align: right; word-break: break-word; }
 .stack-small { display: flex; flex-direction: column; gap: 10px; }
 .why-form { display: flex; flex-direction: column; gap: 8px; }
+
+/* memory store */
+.backends { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.cell-scope { flex: 0 0 90px; }
+.cell-when { flex: 0 0 90px; font-size: 12px; text-align: right; }
+.cell-proj { flex: 0 0 120px; font-size: 12px; }
+.cell-models { flex: 0 0 170px; font-size: 11px; padding-left: 12px; }
+.cap { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.cap-bar { flex: 0 0 160px; height: 6px; border-radius: 3px; background: var(--raised); overflow: hidden; }
+.cap-bar span { display: block; height: 100%; background: var(--accent); }
+.cap-bar span.over { background: var(--danger); }
+.file-view.wrap .line { white-space: pre-wrap; }

@@ -64,6 +64,19 @@ def start_background(paths: StorePaths) -> bool:
     return True
 
 
+def start_checked() -> bool:
+    """Start compaction in the background, or leave the running one, once the compactor's
+    CLI can run (NeedsSetup naming why not); the job journals `memory.compacted`."""
+    paths = StorePaths.default()
+    if not paths.memory.is_dir():
+        raise NeedsSetup("no store yet; run: harness init")
+    provider, _ = split_cli(settings.load(paths).memory.compactor)
+    problem = agents.problem(provider, agents.detector(paths))
+    if problem is not None:
+        raise NeedsSetup(f"compaction cannot run: {problem}")
+    return start_background(paths)
+
+
 def run_compaction() -> str:
     """Compact MEMORY.md on `memory.compactor` (the worker's job). Journals exactly one of
     `memory.compacted` or `worker.exited`; returns a line for the worker log."""

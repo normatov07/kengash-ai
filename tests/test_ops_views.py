@@ -306,3 +306,29 @@ def test_a_ticket_lists_what_it_blocks_and_its_timeline(
     assert states["plan"] == "done" and states["review_code"] == "running"
     assert states["security"] == "pending"
     assert {step.step: step.runs for step in found.chain}["plan"] == 1
+
+
+def test_an_empty_store_has_an_empty_memory_view(store_paths: StorePaths) -> None:
+    found = views.memory_view(store_paths, project=None)
+    assert (found.ticket_files, found.index, found.writes, found.files) == (0, [], [], [])
+    assert found.tickets == {"in_queue": 0, "in_process": 0, "done": 0}
+    assert not found.compacting and found.memory_text == ""
+
+
+def test_the_memory_view_counts_files_tickets_and_models(seeded: StorePaths) -> None:
+    event = step_end("aaaaaaa3", "codex", 10)
+    journal.append(seeded, Event.model_validate({**event.model_dump(), "model": "gpt-5-codex"}))
+    compacted = {"type": "memory.compacted", "file": "MEMORY.md", "before": 210, "after": 150}
+    journal.append(seeded, Event.model_validate({**compacted, "accepted": True}))
+    found = views.memory_view(seeded, project="payments-api")
+    assert found.ticket_files == 5 and found.tickets == {"in_queue": 2, "in_process": 2, "done": 1}
+    names = [(file.name, file.scope) for file in found.files]
+    assert names[:2] == [("MEMORY.md", "global"), ("DECISIONS.md", "global")]
+    assert ("PROCESS.md", "project") in names and ("SETTINGS.md", "project") in names
+    memory = found.files[0]
+    assert memory.compacted is not None and memory.tokens == len(found.memory_text) // 4
+    rows = {row.id: row for row in found.index}
+    assert rows["aaaaaaa3"].models == ["claude", "codex", "codex/gpt-5-codex"]
+    assert rows["aaaaaaa5"].closed is not None and rows["aaaaaaa1"].closed is None
+    assert found.writes[0]["type"] == "memory.compacted"  # newest first
+    assert found.cap == 200 and found.links.total == 1
