@@ -14,6 +14,7 @@ from super_harness.model import (
     Event,
     Folder,
     HarnessError,
+    JournalCursor,
     Ticket,
     split_cli,
     utc_now,
@@ -127,8 +128,9 @@ class Board:
     columns: list[Column] = field(default_factory=list)
 
 
-def overview(paths: StorePaths, *, window: Window) -> Overview:
+def overview(paths: StorePaths | None = None, *, window: Window = "today") -> Overview:
     """The Overview screen: what runs, what waits, what needs the user, what it cost."""
+    paths = paths or StorePaths.default()
     found = Overview(projects=_projects(paths))
     events = _events(paths)
     reasons = _reasons(events)
@@ -174,8 +176,9 @@ def overview(paths: StorePaths, *, window: Window) -> Overview:
     return found
 
 
-def board(paths: StorePaths, *, project: str | None) -> Board:
+def board(paths: StorePaths | None = None, *, project: str | None = None) -> Board:
     """The Task board: every ticket of the project (or of all) in its status column."""
+    paths = paths or StorePaths.default()
     columns = {key: Column(key, title) for key, title in COLUMNS}
     diffs = _diffs(_events(paths))
     for slug, doc in _tickets(paths, project):
@@ -207,6 +210,17 @@ def board(paths: StorePaths, *, project: str | None) -> Board:
     return Board(list(columns.values()))
 
 
+def journal_end() -> JournalCursor:
+    """Where the journal ends now, for an event stream to start from."""
+    return journal.end(StorePaths.default())
+
+
+def events_after(cursor: JournalCursor) -> tuple[list[dict[str, Any]], JournalCursor]:
+    """Journal events written after `cursor`, as JSON-ready mappings, and the new cursor."""
+    events, cursor = journal.read_after(StorePaths.default(), cursor)
+    return [event.model_dump(mode="json", exclude_none=True) for event in events], cursor
+
+
 def _column(ticket: Ticket) -> str:
     if ticket.folder is Folder.in_queue:
         return "in_queue"
@@ -224,7 +238,7 @@ def _projects(paths: StorePaths) -> list[str]:
 
 
 def _tickets(paths: StorePaths, project: str | None) -> list[tuple[str, Doc[Ticket]]]:
-    slugs = [project] if project else _projects(paths)
+    slugs = records.scope(paths, project) if project else _projects(paths)
     return [
         (slug, doc)
         for slug in slugs
