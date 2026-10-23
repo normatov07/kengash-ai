@@ -7,7 +7,7 @@ import shutil
 import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import ClassVar, Protocol
+from typing import Protocol
 
 from pydantic import ValidationError
 
@@ -105,10 +105,10 @@ def probe(argv: list[str]) -> subprocess.CompletedProcess[str] | None:
 class CliProvider(ABC):
     """A provider CLI: subclasses build argv, parse output and check the sign-in."""
 
-    name: ClassVar[str]
-    binary: ClassVar[str]
-    install_hint: ClassVar[str]
-    signin_hint: ClassVar[str]
+    name: str
+    binary: str
+    install_hint: str
+    signin_hint: str
 
     @abstractmethod
     def command(self, req: StepRequest) -> list[str]: ...
