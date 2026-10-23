@@ -120,7 +120,11 @@ def _rewrite(lines: list[str], found: Path_, rest: list[str], value: Any) -> str
         plain = value
     first, last = _unit(lines, mapping, name)
     column = mapping.lc.key(name)[1]
-    text = " " * column + f"{flow(name)}: {flow(plain)}"
+    line, start = mapping.lc.value(name)
+    if line == first and isinstance(mapping[name], Mapping | list):  # keep `key:   ` as written
+        text = lines[first][:start] + flow(plain)
+    else:
+        text = " " * column + f"{flow(name)}: {flow(plain)}"
     comment = _comment_at(lines[last])
     if comment is not None:
         text = text.ljust(comment - 1) + " " + lines[last][comment:]

@@ -147,7 +147,8 @@ def test_none_inside_a_flow_map_removes_only_that_leaf(
     store_paths: StorePaths, project_file: Path
 ) -> None:
     settings.set_values(store_paths, "app", {"agents.implementer.fallback": None})
-    assert "  implementer: {on: true, cli: codex, skill: implement}" in project_file.read_text()
+    expected = "  implementer:       {on: true, cli: codex, skill: implement}\n"
+    assert expected in project_file.read_text()
     assert settings.load(store_paths, "app").agents["implementer"].fallback == ["claude/sonnet"]
 
 
@@ -165,3 +166,11 @@ def test_a_missing_scope_file_is_created_with_the_change(
     project_file.unlink()
     settings.set_values(store_paths, "app", {"loop_max.simple": 5})
     assert project_file.read_text() == "loop_max.simple: 5\n"
+
+
+def test_a_rewritten_entry_keeps_the_space_after_its_key(
+    store_paths: StorePaths, project_file: Path
+) -> None:
+    simple = {"steps": ["plan", "implement"], "on_fail": {}}
+    settings.set_values(store_paths, "app", {"workflows.simple": simple})
+    assert "  simple:   {steps: [plan, implement], on_fail: {}}\n" in project_file.read_text()

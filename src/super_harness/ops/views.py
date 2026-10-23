@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
-from super_harness import __version__, journal, settings
+from super_harness import __version__, journal, settings, workflow
 from super_harness.model import (
     PROVIDERS,
     STEP_ROLES,
@@ -20,6 +20,7 @@ from super_harness.model import (
     JournalCursor,
     ProviderStatus,
     Ticket,
+    Workflow,
     split_cli,
     utc_now,
 )
@@ -232,6 +233,29 @@ class AgentsView:
     fallback_on_rate_limit: bool = True
     per_provider: dict[str, int] = field(default_factory=dict)
     routing: dict[str, list[str]] = field(default_factory=dict)
+    set_here: list[str] = field(default_factory=list)
+    problem: str = ""
+
+
+@dataclass
+class WorkflowsView:
+    """The Workflow editor for one scope (SP5 spec decision 10): each workflow as written,
+    the steps a ticket would run, loop caps per importance and each role's CLI."""
+
+    scope: str | None
+    projects: list[str]
+    names: list[str] = field(default_factory=list)
+    workflows: dict[str, Workflow] = field(default_factory=dict)
+    effective: dict[str, list[str]] = field(default_factory=dict)
+    warnings: dict[str, str] = field(default_factory=dict)
+    loop_max: dict[str, int] = field(default_factory=dict)
+    loop_ask_at_cap: bool = True
+    agents: dict[str, str] = field(default_factory=dict)
+    skills: dict[str, str] = field(default_factory=dict)
+    off: list[str] = field(default_factory=list)  # roles switched off: their steps are skipped
+    plan_review: bool = True  # False at plan.review_max 0: review_plan is skipped
+    library: list[str] = field(default_factory=lambda: list(STEP_ROLES))
+    roles: dict[str, str | None] = field(default_factory=lambda: dict(STEP_ROLES))
     set_here: list[str] = field(default_factory=list)
     problem: str = ""
 
@@ -479,6 +503,34 @@ def agents_view(
     found.fallback_on_rate_limit = resolved.fallback_on_rate_limit
     found.per_provider = dict(resolved.sessions.per_provider)
     found.routing = {name: list(flow.steps) for name, flow in resolved.workflows.items()}
+    return found
+
+
+def workflows_view(paths: StorePaths | None = None, *, project: str | None) -> WorkflowsView:
+    """The Workflow editor's data for the defaults or one project."""
+    paths = paths or StorePaths.default()
+    if project is not None:
+        records.scope(paths, project)
+    found = WorkflowsView(project, _projects(paths))
+    try:
+        resolved = settings.load(paths, project)
+        found.set_here = settings.overrides(paths, project)
+    except HarnessError as exc:
+        found.problem = str(exc)
+        return found
+    found.names = list(resolved.workflows)
+    found.workflows = dict(resolved.workflows)
+    for name in found.names:
+        found.effective[name] = workflow.steps_for(resolved, name, hitl=False)
+        off = workflow.blocking_off(resolved, name)
+        if off:
+            found.warnings[name] = f"{off} is blocking but switched off; tickets will stop there"
+    found.loop_max = resolved.loop_max.model_dump()
+    found.loop_ask_at_cap = resolved.loop_ask_at_cap
+    found.agents = {role: agent.cli for role, agent in resolved.agents.items()}
+    found.skills = {role: agent.skill for role, agent in resolved.agents.items()}
+    found.off = [role for role, agent in resolved.agents.items() if not agent.on]
+    found.plan_review = resolved.plan.review_max > 0
     return found
 
 

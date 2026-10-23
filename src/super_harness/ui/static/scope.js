@@ -80,8 +80,9 @@ export function changes(root) {
   return found;
 }
 
-// extra(): further changes a screen tracks outside its inputs (the workflow graph).
-export function bindScope(root, app, { setHere = [], extra = () => ({}) } = {}) {
+// extra(): further changes a screen tracks outside its inputs (the workflow graph);
+// clear(): forget them, on Discard, a scope switch or a save.
+export function bindScope(root, app, { setHere = [], extra = () => ({}), clear = () => {} } = {}) {
   const save = root.querySelector("[data-save]");
   const discard = root.querySelector("[data-discard]");
   const all = () => ({ ...changes(root), ...extra() });
@@ -97,19 +98,23 @@ export function bindScope(root, app, { setHere = [], extra = () => ({}) } = {}) 
     button.addEventListener("click", () => {
       app.scope = button.dataset.scope;
       app.dirty = false;
+      clear();
       app.refresh();
     }),
   );
   discard?.addEventListener("click", () => {
     app.dirty = false;
+    clear();
     app.refresh();
   });
   const post = async (body, message) => {
     const scope = encodeURIComponent(scopeOf(app));
     app.dirty = false;
     const done = await app.post(`/api/settings?project=${scope}`, body);
-    if (done) app.toast(message);
-    else dirty();
+    if (done) {
+      clear();
+      app.toast(message);
+    } else dirty();
   };
   save?.addEventListener("click", () => {
     const found = all();

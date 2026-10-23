@@ -170,6 +170,10 @@ def create_app(*, token: str, port: int) -> FastAPI:
     ) -> views.AgentsView:
         return views.agents_view(project=project or None, window=window, refresh=refresh)
 
+    @app.get("/api/workflows")
+    def workflows_view(project: str = "") -> views.WorkflowsView:
+        return views.workflows_view(project=project or None)
+
     @app.get("/api/settings")
     def settings_view(project: str = "") -> views.SettingsView:
         return views.settings_view(project=project or None)

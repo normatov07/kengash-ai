@@ -242,3 +242,24 @@ main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .routing { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
 .route { display: flex; align-items: center; gap: 10px; font-size: 12px; }
 .panel.grow, .panel.side { align-self: flex-start; }
+
+/* workflow editor */
+.wf-editor { display: contents; }
+.graph-wrap { overflow-x: auto; padding: 8px 0; scrollbar-color: var(--line-strong) transparent; }
+.graph { display: block; }
+.graph .node { cursor: pointer; outline: none; }
+.graph .node rect { fill: var(--card); stroke: var(--line-strong); stroke-width: 1.2; }
+.graph .node:hover rect, .graph .node:focus rect { stroke: var(--faint); }
+.graph .node.selected rect { stroke: var(--accent); stroke-width: 1.8; fill: #1f1a15; }
+.graph .node.fixed { cursor: default; }
+.graph .node.fixed rect { fill: var(--panel); stroke-dasharray: 4 3; }
+.graph .node.off rect { stroke-dasharray: 3 3; opacity: 0.55; }
+.graph .node-title { fill: var(--text); font-family: var(--sans); font-size: 13px; font-weight: 600; }
+.graph .node-sub { fill: var(--faint); font-family: var(--mono); font-size: 10.5px; }
+.legend { display: flex; flex-wrap: wrap; gap: 18px; padding: 10px 18px 14px; font-size: 11.5px; border-top: 1px solid var(--line-soft); }
+.legend i { display: inline-block; width: 22px; height: 0; margin-right: 6px; vertical-align: middle; border-top: 1.5px solid #5a646f; }
+.legend i.dashed { border-top: 1.5px dashed var(--accent); }
+.library { display: flex; flex-wrap: wrap; gap: 8px; }
+.library .btn span { font-size: 10px; }
+.dry { font-size: 12.5px; border-bottom: 1px solid var(--line-soft); }
+.field select { appearance: auto; }

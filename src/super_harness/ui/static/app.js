@@ -6,6 +6,7 @@ import * as board from "./views/board.js";
 import * as memory from "./views/memory.js";
 import * as overview from "./views/overview.js";
 import * as settings from "./views/settings.js";
+import * as workflow from "./views/workflow.js";
 
 const ICONS = {
   overview: '<rect x="2.3" y="2.3" width="5" height="5" rx="1"/><rect x="8.7" y="2.3" width="5" height="5" rx="1"/><rect x="2.3" y="8.7" width="5" height="5" rx="1"/><rect x="8.7" y="8.7" width="5" height="5" rx="1"/>',
@@ -20,7 +21,7 @@ const NAV = [
   ["ORCHESTRATE", [["workflow", "Workflow"], ["agents", "Agents"]]],
   ["PROJECT", [["memory", "Memory"], ["settings", "Settings"]]],
 ];
-const SCREENS = { overview, board, agents, memory, settings };
+const SCREENS = { overview, board, workflow, agents, memory, settings };
 
 export const app = {
   project: "",

@@ -237,3 +237,17 @@ def test_provider_detection_is_reused_for_a_minute(seeded: StorePaths, detected:
     assert detected.count("claude") == 1
     views.agents_view(seeded, project=None, window="today", refresh=True)
     assert detected.count("claude") == 2
+
+
+def test_workflows_show_the_steps_that_would_run(
+    registered_repo: Path, store_paths: StorePaths
+) -> None:
+    configure.save_settings({"agents.code-reviewer.on": False}, project="payments-api", by="ui")
+    found = views.workflows_view(store_paths, project="payments-api")
+    assert found.names == ["simple", "standard", "critical"]
+    assert found.workflows["simple"].on_fail == {"review_code": "implement"}
+    assert found.effective["simple"] == ["plan", "implement"]
+    assert found.loop_max == {"simple": 3, "standard": 4, "critical": 6}
+    assert found.agents["planner"] == "claude/opus" and "approve" in found.library
+    assert found.set_here == ["agents.code-reviewer.on"]
+    assert "code-reviewer" in found.off and "test-runner" in found.off and found.plan_review
