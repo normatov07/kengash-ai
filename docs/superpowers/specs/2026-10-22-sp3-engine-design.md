@@ -222,6 +222,6 @@ A resumed session gets only `Loop <n>, step <step>: <step instruction>` plus the
 - [x] Loop cap, token cap, stall, hitl approval and blocking roles behave as §6; `approve --loops` continues the ticket. (M3)
 - [x] Each ticket×role session is created once and resumed at every later step (S5); every `step.end` records provider, model, session, tokens, duration and verdict (S4). (M3)
 - [x] A killed worker is detected within 2 minutes, and `run` resumes its ticket with its sessions. (M3)
-- [ ] `plan review` runs rounds up to `plan.review_max`; `memory compact` keeps every pin and stays under the cap.
-- [ ] Live smoke green for claude and agy; codex once installed and signed in.
+- [x] `plan review` runs rounds up to `plan.review_max`; `memory compact` keeps every pin and stays under the cap. (M4)
+- [x] Live smoke green for claude and agy (2026-10-23, `make live`); codex once installed and signed in. (M4)
 - [x] `make check` (with the new import contracts) green; module docs for `workflow`, `scheduler`, `adapters`, `gitops`, `worker`. (M3)
