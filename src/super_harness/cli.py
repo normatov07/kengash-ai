@@ -19,6 +19,7 @@ from super_harness.ops import (
     plans,
     projects,
     queue,
+    reviews,
     status,
     tickets,
     waiting,
@@ -343,6 +344,32 @@ def plan_show(plan_id: PlanId, project: Only = None, as_json: AsJson = False) ->
         _emit_json(doc)
     else:
         typer.echo(doc.text, nl=False)
+
+
+@plan_app.command("review")
+def plan_review(
+    plan_id: PlanId,
+    timeout: Annotated[
+        float, typer.Option("--timeout", min=0, help="Seconds to wait for the round (exit 3).")
+    ] = 540,
+    project: Only = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Run the plan's next review round, on another provider, and wait for its verdict."""
+    with _errors():
+        result = reviews.review_plan(plan_id, project=project, by=by, timeout=timeout)
+    if as_json:
+        typer.echo(json.dumps({**dataclasses.asdict(result), "used_up": result.used_up}, indent=2))
+    else:
+        count = _plural(len(result.findings), "finding")
+        lines = [f"plan {result.id} round {result.round}: {result.verdict}, {count}"]
+        lines += [f"warning: {result.warning}"] if result.warning else []
+        for line in _capped([*lines, *result.findings], f"harness plan show {result.id}"):
+            typer.echo(line)
+    if result.used_up:
+        typer.echo(reviews.used_up_message(result.round, result.max), err=True)
+        raise typer.Exit(5)
 
 
 @plan_app.command("approve")
@@ -684,13 +711,13 @@ def wait(
     ] = 540,
     as_json: AsJson = False,
 ) -> None:
-    """Block until a ticket needs the conductor; `idle` when nothing runs."""
+    """Block until a ticket or a plan review needs the conductor; `idle` when nothing runs."""
     with _errors():
         result = waiting.wait(project, timeout=timeout)
     if as_json:
         _emit_json(result)
     elif result.events:
-        lines = [f"{e.id} {e.status} loop {e.loop}/{e.loop_max}: {e.detail}" for e in result.events]
+        lines = [_wait_line(event) for event in result.events]
         for line in _capped(lines, "harness wait --json"):
             typer.echo(line)
     elif result.idle:
@@ -698,6 +725,14 @@ def wait(
     if result.timed_out:
         typer.echo(f"wait timed out after {timeout:g} s", err=True)
         raise typer.Exit(3)
+
+
+def _wait_line(event: waiting.WaitEvent) -> str:
+    if event.kind == "plan":
+        return (
+            f"plan {event.id} round {event.loop}/{event.loop_max}: {event.status}, {event.detail}"
+        )
+    return f"{event.id} {event.status} loop {event.loop}/{event.loop_max}: {event.detail}"
 
 
 @ticket_app.command("changes")

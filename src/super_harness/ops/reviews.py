@@ -1,18 +1,21 @@
-"""Plan review (SP3 spec decisions 14, 28 to 30): who reviews, and the round a
-`plan-review` worker runs."""
+"""Plan review (SP3 spec decisions 14, 28 to 30): who reviews, the round a `plan-review`
+worker runs, and `harness plan review`, which starts the job and waits for its round."""
 
 import contextlib
 import os
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 from uuid import uuid4
 
 from super_harness import journal, memory, settings, workflow
 from super_harness.model import (
+    PLAN_SECTIONS,
     Doc,
     Event,
     HarnessError,
     NeedsSetup,
+    NeedsUser,
     Plan,
     PlanStatus,
     ProviderStatus,
@@ -24,6 +27,7 @@ from super_harness.model import (
     StepResult,
     Usage,
     UserError,
+    WaitTimeout,
     split_cli,
     utc_now,
 )
@@ -43,6 +47,98 @@ CONDUCTORS = {
     "antigravity": "antigravity",
 }
 DECISION_LINES = 40
+REVIEWED = [name for name in PLAN_SECTIONS if name not in ("Prompt", "Review log")]
+
+
+@dataclass
+class ReviewRound:
+    """One finished round: its verdict and its Review log finding lines."""
+
+    id: str
+    project: str
+    round: int
+    max: int
+    verdict: str
+    findings: list[str] = field(default_factory=list)
+    reviewer: str = ""
+    warning: str = ""
+
+    @property
+    def used_up(self) -> bool:
+        """The last round failed: only the user can approve or reject now."""
+        return self.verdict == "fail" and self.round >= self.max
+
+
+def review_plan(
+    plan_id: str, *, project: str | None, by: str, timeout: float, poll_s: float = 0.5
+) -> ReviewRound:
+    """Run the plan's next review round and wait for it (decision 28): attach to a running
+    round, reprint a round that has its verdict, or start one on the chosen reviewer."""
+    paths = StorePaths.default()
+    slug, path = records.locate_plan(paths, plan_id, project)
+    resolved = settings.load(paths, slug)
+    limit = resolved.plan.review_max
+    if limit == 0:
+        raise UserError(f"plan review is off (plan.review_max: 0); approve plan {plan_id} directly")
+    cursor = journal.end(paths)  # before the job starts, so its end cannot slip past
+    warning = ""
+    with locked(_lock(paths, slug)):
+        doc = records.load_plan(path)
+        plan = doc.meta
+        number = plan.review.round + 1
+        if jobs.alive(paths, plan_id) is None:
+            if plan.status not in (PlanStatus.draft, PlanStatus.in_review):
+                raise UserError(
+                    f"plan {plan_id} is {plan.status.value}; only a draft plan can be reviewed"
+                )
+            if plan.review.verdict is not None:
+                return _round(slug, doc, plan.review.round)
+            if plan.review.round >= limit:
+                raise NeedsUser(used_up_message(plan.review.round, limit))
+            if not any(doc.sections.get(name, "").strip() for name in REVIEWED):
+                raise UserError(
+                    f"plan {plan_id} has nothing to review yet; "
+                    f"save its sections with: harness plan save {plan_id}"
+                )
+            pick, warning = choose_reviewer(
+                resolved, conductor_provider(by), agents.detector(paths)
+            )
+            reviewer = f"{pick.provider}/{pick.model}" if pick.model else pick.provider
+            plan.review.max, plan.review.reviewer = limit, reviewer
+            plan.status = PlanStatus.in_review
+            plan.updated = utc_now()
+            documents.save_plan(paths.project(slug), doc)
+            jobs.start(paths, JOB, plan_id, slug, [JOB, plan_id, "--project", slug])
+            started = Event.model_validate(
+                {
+                    "type": "worker.started",
+                    "project": slug,
+                    "plan": plan_id,
+                    "job": JOB,
+                    "round": number,
+                    "reviewer": reviewer,
+                    "by": by,
+                }
+            )
+            records.record(paths, f"harness: plan review {plan_id}", started)
+
+    def ended(event: Event) -> bool:
+        if event.plan != plan_id:
+            return False
+        extra = event.model_extra or {}
+        if event.type == "plan.reviewed":
+            return bool(extra.get("round") == number)
+        return event.type == "worker.exited" and extra.get("job") == JOB
+
+    end = jobs.await_event(paths, cursor, ended, JOB, plan_id, timeout=timeout, poll_s=poll_s)
+    if end is None:
+        raise WaitTimeout(
+            f"plan {plan_id} review round {number} is still running; "
+            f"run harness plan review {plan_id} again to keep waiting"
+        )
+    if end.type == "worker.exited":
+        raise UserError(f"plan {plan_id} review failed: {(end.model_extra or {}).get('reason')}")
+    return _round(slug, records.load_plan(path), number, warning)
 
 
 def conductor_provider(by: str) -> str | None:
@@ -152,6 +248,31 @@ def _exit(paths: StorePaths, slug: str, plan_id: str, reason: str) -> str:
     """Journal the end of a job that produced no round."""
     journal.append(paths, jobs.exited(JOB, plan_id, slug, reason))
     return f"{plan_id}: review ended: {reason}"
+
+
+def _round(slug: str, doc: Doc[Plan], number: int, warning: str = "") -> ReviewRound:
+    review = doc.meta.review
+    prefix, passed = f"- round {number} · ", f"- round {number} · pass · "
+    lines = doc.sections.get("Review log", "").splitlines()
+    findings = [line for line in lines if line.startswith(prefix) and not line.startswith(passed)]
+    return ReviewRound(
+        doc.meta.id,
+        slug,
+        number,
+        review.max,
+        review.verdict or "",
+        findings,
+        review.reviewer or "",
+        warning,
+    )
+
+
+def used_up_message(rounds: int, limit: int) -> str:
+    """What the conductor tells the user once the review rounds are used up."""
+    return (
+        f"review rounds used up ({rounds}/{limit}): "
+        "the user approves the plan as it is or rejects it"
+    )
 
 
 def _request(

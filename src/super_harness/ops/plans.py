@@ -108,7 +108,8 @@ def show_plan(plan_id: str, *, project: str | None) -> records.Document:
 
 
 def approve_plan(plan_id: str, *, skip_review: bool, project: str | None, by: str) -> PlanResult:
-    """Record the user's approval once the plan is reviewed, quick, or the review is skipped."""
+    """Record the user's approval once the review passed or used up its rounds, the plan is
+    quick, review is off, or the user skips the review (SP3 spec decisions 14, 30)."""
     paths = StorePaths.default()
     slug, path = records.locate_plan(paths, plan_id, project)
     review_max = settings.load(paths, slug).plan.review_max
@@ -121,10 +122,20 @@ def approve_plan(plan_id: str, *, skip_review: bool, project: str | None, by: st
             raise UserError(
                 f"plan {plan.id} is {plan.status.value}; only a draft plan can be approved"
             )
-        unreviewed = (
-            review_max > 0 and plan.mode is not PlanMode.quick and plan.review.verdict is None
+        review = plan.review
+        unreviewed = not (
+            review_max == 0
+            or plan.mode is PlanMode.quick
+            or review.verdict == "pass"
+            or review.round >= review_max
         )
         if unreviewed and not skip_review:
+            if review.verdict == "fail":
+                raise NeedsUser(
+                    f"plan {plan.id} failed review round {review.round} of {review_max}; "
+                    f"save a revision and run: harness plan review {plan.id}, "
+                    "or approve with --skip-review"
+                )
             raise NeedsUser(
                 f"plan {plan.id} has no review (plan.review_max: {review_max}); "
                 "approve it with --skip-review"

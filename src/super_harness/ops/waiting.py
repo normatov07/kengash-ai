@@ -1,4 +1,4 @@
-"""Wait for gates, find dead workers, record conductor pings (SP3 spec decisions 9, 24)."""
+"""Wait for gates, find dead workers, record conductor pings (SP3 spec decisions 9, 24, 33)."""
 
 import os
 import subprocess
@@ -8,7 +8,15 @@ from pathlib import Path
 from typing import Any
 
 from super_harness import journal
-from super_harness.model import ConductorPing, Event, Folder, Ticket, WorkerRecord, utc_now
+from super_harness.model import (
+    ConductorPing,
+    Event,
+    Folder,
+    PlanStatus,
+    Ticket,
+    WorkerRecord,
+    utc_now,
+)
 from super_harness.ops import jobs, lifecycle, records, steps
 from super_harness.ops.workspace import GATES
 from super_harness.store import runtime
@@ -20,6 +28,7 @@ WAIT_TYPES = (
     "ticket.failed",
     "ticket.awaiting_merge",
     "ticket.merged",
+    "plan.reviewed",
 )
 NOT_RUNNING = (*GATES, "paused")
 AGENTS = ("claude", "codex", "agy")
@@ -34,6 +43,7 @@ class WaitEvent:
     loop: int
     loop_max: int
     detail: str
+    kind: str = "ticket"  # or "plan": status is the verdict, loop the review round
 
 
 @dataclass
@@ -115,6 +125,16 @@ def _wanted(event: Event, slugs: list[str]) -> bool:
 
 
 def _wait_event(paths: StorePaths, event: Event) -> WaitEvent:
+    if event.type == "plan.reviewed":
+        return WaitEvent(
+            id=str(event.plan),
+            project=str(event.project),
+            status=str(_extra(event, "verdict")),
+            loop=int(_extra(event, "round") or 0),
+            loop_max=int(_extra(event, "max") or 0),
+            detail=str(_extra(event, "summary") or ""),
+            kind="plan",
+        )
     status = _extra(event, "status") or _extra(event, "to")
     loop, loop_max = _extra(event, "loop"), _extra(event, "loop_max")
     if loop is None or loop_max is None:
@@ -131,7 +151,8 @@ def _wait_event(paths: StorePaths, event: Event) -> WaitEvent:
 
 
 def _open_gates(paths: StorePaths, slugs: list[str]) -> list[WaitEvent]:
-    return [
+    """Tickets at a gate, and reviewed plans waiting for the user's approval."""
+    gates = [
         WaitEvent(
             doc.meta.id, slug, doc.meta.status, doc.meta.loop, doc.meta.loop_max, doc.meta.title
         )
@@ -139,10 +160,26 @@ def _open_gates(paths: StorePaths, slugs: list[str]) -> list[WaitEvent]:
         for doc in records.project_tickets(paths, slug).values()
         if doc.meta.folder is Folder.in_process and doc.meta.sub_status in GATES
     ]
+    for slug in slugs:
+        for plan in (doc.meta for doc in records.project_plans(paths, slug).values()):
+            review = plan.review
+            if plan.status is PlanStatus.in_review and review.verdict is not None:
+                detail = f"review {review.verdict}; waiting for the user's approval"
+                gates.append(
+                    WaitEvent(plan.id, slug, "in_review", review.round, review.max, detail, "plan")
+                )
+    return gates
 
 
 def _running(paths: StorePaths, slugs: list[str]) -> bool:
-    return any(
+    """A ticket in scope is running a step, or a plan review in scope is running."""
+    reviewing = any(
+        record.job == "plan-review"
+        and record.project in slugs
+        and jobs.alive(paths, record.id) is not None
+        for record in runtime.load_workers(paths)
+    )
+    return reviewing or any(
         doc.meta.folder is Folder.in_process and doc.meta.sub_status not in NOT_RUNNING
         for slug in slugs
         for doc in records.project_tickets(paths, slug).values()

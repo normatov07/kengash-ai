@@ -8,8 +8,18 @@ from pathlib import Path
 import pytest
 from conftest import Engine, Events
 
-from super_harness.model import SlotEntry, SlotTable, TicketState, WorkerRecord, utc_now
-from super_harness.ops import lifecycle, steps, waiting
+from super_harness import journal
+from super_harness.model import (
+    Event,
+    PlanMode,
+    PlanStatus,
+    SlotEntry,
+    SlotTable,
+    TicketState,
+    WorkerRecord,
+    utc_now,
+)
+from super_harness.ops import lifecycle, plans, records, steps, waiting
 from super_harness.store import StorePaths, documents, runtime
 
 
@@ -91,3 +101,52 @@ def test_ping_records_the_conductor(
     waiting.ping(store_paths, "payments-api")
     [ping] = [json.loads(p.read_text()) for p in store_paths.conductors.glob("[0-9]*.json")]
     assert (ping["agent"], ping["project"]) == ("codex", "payments-api")
+
+
+def test_wait_reports_plan_reviews_and_reviewed_plans_awaiting_approval(
+    registered_repo: Path, store_paths: StorePaths
+) -> None:
+    plan_id = plans.new_plan(
+        "Rotate keys.",
+        title="Keys",
+        mode=PlanMode.direct,
+        project=None,
+        cwd=registered_repo,
+        by="x",
+    ).id
+    assert waiting.wait(None, timeout=1).idle  # first call: no gates; sets the cursor
+    _, path = records.locate_plan(store_paths, plan_id, None)
+    doc = records.load_plan(path)
+    doc.meta.status, doc.meta.review.round, doc.meta.review.verdict = (
+        PlanStatus.in_review,
+        1,
+        "fail",
+    )
+    documents.save_plan(store_paths.project("payments-api"), doc)
+    event = {"round": 1, "max": 2, "verdict": "fail", "summary": "Gaps."}
+    journal.append(
+        store_paths,
+        Event.model_validate(
+            {"type": "plan.reviewed", "project": "payments-api", "plan": plan_id, **event}
+        ),
+    )
+    (found,) = waiting.wait(None, timeout=1).events
+    assert (found.kind, found.id, found.status, found.loop, found.loop_max, found.detail) == (
+        "plan",
+        plan_id,
+        "fail",
+        1,
+        2,
+        "Gaps.",
+    )
+    (gate,) = waiting.wait("payments-api", timeout=1).events  # a new scope: open gates first
+    assert (gate.kind, gate.id, gate.status, gate.loop) == ("plan", plan_id, "in_review", 1)
+
+
+def test_a_running_plan_review_is_not_idle(registered_repo: Path, store_paths: StorePaths) -> None:
+    runtime.save_worker(
+        store_paths,
+        WorkerRecord(id="a1b2c3d4", project="payments-api", pid=os.getpid(), job="plan-review"),
+    )
+    waiting.wait(None, timeout=0.1)  # sets the cursor
+    assert waiting.wait(None, timeout=0.2, poll_s=0.05).timed_out
