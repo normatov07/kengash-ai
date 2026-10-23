@@ -44,6 +44,7 @@ from super_harness.store.registry import load_registry
 
 SLOT_POLL_S = 5
 QUOTA_WAIT_S = 900
+BINARIES = {"claude": "claude", "codex": "codex", "antigravity": "agy"}
 sleep = time.sleep
 
 
@@ -83,9 +84,10 @@ class _Ready:
 
 @dataclass
 class _Ran:
-    """A step's successful CLI call and what it committed."""
+    """A step's successful CLI call, the request that made it, and what it committed."""
 
     pick: agents.Pick
+    request: StepRequest
     result: StepResult
     usage: Usage
     loop: int
@@ -99,6 +101,7 @@ def run_job(ticket_id: str, *, project: str | None = None, steps: int | None = N
     slug, _ = records.locate_ticket(paths, ticket_id, project)
     entry = load_registry(paths).projects[slug]
     job = _Job(paths, slug, ticket_id, entry.path, entry.base, agents.detector(paths))
+    _recover(job)
     done = 0
     while True:
         began = _begin(job, budget_left=steps is None or done < steps)
@@ -111,15 +114,22 @@ def run_job(ticket_id: str, *, project: str | None = None, steps: int | None = N
 
 
 def fail_ticket(
-    paths: StorePaths, slug: str, ticket_id: str, reason: str, *, kind: str | None = None
+    paths: StorePaths,
+    slug: str,
+    ticket_id: str,
+    reason: str,
+    *,
+    kind: str | None = None,
+    tokens: int = 0,
 ) -> str:
-    """Mark a running ticket failed; a ticket at a gate or outside in_process keeps its
-    status. Returns the ticket's status afterwards."""
+    """Mark a running ticket failed, adding `tokens` its failed calls used; a ticket at a
+    gate or outside in_process keeps its status. Returns the ticket's status afterwards."""
     with locked(_lock(paths, slug)):
         doc = _load(paths, slug, ticket_id)
         ticket = doc.meta
         if ticket.folder is not Folder.in_process or ticket.sub_status in GATES:
             return ticket.status
+        ticket.tokens += tokens
         event = _set_status(paths, slug, doc, "in_process/failed", reason, kind=kind)
         slots.release(paths, ticket_id)
         records.record(paths, f"harness: {ticket_id} failed", event)
@@ -191,30 +201,63 @@ def _take_slot(job: _Job, ready: _Ready, pick: agents.Pick) -> None:
     )
     if slots.acquire(job.paths, entry):
         return
-    _update(job, lambda doc, state: _status(doc, "in_process/waiting_slot"))
+    _update(job, ready.step, lambda doc, state: _status(doc, "in_process/waiting_slot"))
     while not slots.acquire(job.paths, entry):
         runtime.beat(job.paths, job.ticket_id)
         sleep(SLOT_POLL_S)
     step_status = lifecycle.step_status(ready.resolved, ready.step)
-    _update(job, lambda doc, state: _status(doc, step_status))
+    _update(job, ready.step, lambda doc, state: _status(doc, step_status))
 
 
 def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
-    """Start or resume the role's session and run the step's CLI once."""
-    paths, ticket = job.paths, ready.doc.meta
-    step, resolved = ready.step, ready.resolved
+    """Run the step's CLI: timeouts and schema errors retry once, rate limits fall back
+    or wait for the quota, other errors fail the ticket (SP3 spec §5 item 5)."""
+    request = _prepare(job, ready, pick)
+    usage = Usage()
+    tried = {pick.provider}
+    timed_out = repaired = False
+    while True:
+        result = adapters.get(pick.provider, runtime=job.paths.runtime).run(request)
+        usage = _plus(usage, result.usage)
+        error = result.error
+        if error is None:
+            return _Ran(pick, request, result, usage, ready.doc.meta.loop)
+        if error == "timeout" and not timed_out:
+            timed_out = True
+            request = _again(job, request)
+            continue
+        if error == "schema" and not repaired:
+            repaired = True
+            request = _repair(job, request, result, result.detail)
+            continue
+        if error == "rate_limit":
+            fallback = _fallback(job, ready, pick, tried)
+            if fallback is not None:
+                pick = fallback
+                tried.add(pick.provider)
+                slots.release(job.paths, job.ticket_id)
+                _take_slot(job, ready, pick)
+                request = _prepare(job, ready, pick)
+                continue
+            _wait_quota(job, ready, result)
+            request = _again(job, request)
+            continue
+        return _fail(job, _failure(pick, request, result), usage)
+
+
+def _prepare(job: _Job, ready: _Ready, pick: agents.Pick) -> StepRequest:
+    """Start or resume the role's session on `pick` and build the step's request."""
+    ticket, step, resolved = ready.doc.meta, ready.step, ready.resolved
     role = pick.role
     ref = ticket.sessions.get(role)
     resume = resolved.sessions.reuse and ref is not None and ref.provider == pick.provider
     session_id = ref.id if resume and ref is not None else None
     if pick.provider == "claude" and not resume:
         session_id = str(uuid4())  # known before the step ends, so a killed step can resume
-    calls = ready.state.calls + 1
-    log = paths.logs / f"{job.ticket_id}-{calls}.out"
     start = gitops.head(job.worktree) if step in prompts.EDIT_STEPS else None
+    log = _next_log(job)
 
     def begin(doc: Doc[Ticket], state: TicketState) -> None:
-        state.calls = calls
         state.running = Running(role=role, provider=pick.provider, model=pick.model, log=log)
         if start is not None:
             state.start_commit = start
@@ -223,17 +266,77 @@ def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
                 provider=pick.provider, model=pick.model or "default", id=session_id
             )
 
-    _update(job, begin)
-    ready.state.calls = calls
+    _update(job, step, begin)
+    ready.state = runtime.load_ticket_state(job.paths, job.ticket_id)
     _journal(job, "step.start", step=step, role=role, provider=pick.provider, loop=ticket.loop)
     if pick.provider != "shell":
         kind = "session.resumed" if resume else "session.created"
         _journal(job, kind, role=role, provider=pick.provider, session=session_id)
-    request = _request(job, ready, pick, session_id=session_id, resume=resume, log=log)
-    result = adapters.get(pick.provider, runtime=paths.runtime).run(request)
-    if result.error is not None:
-        return _fail(job, f"{result.error}: {result.detail}; log: {log}")
-    return _Ran(pick, result, result.usage, ticket.loop)
+    return _request(job, ready, pick, session_id=session_id, resume=resume, log=log)
+
+
+def _again(job: _Job, request: StepRequest) -> StepRequest:
+    """The same request once more, logging to a fresh file."""
+    return request.model_copy(update={"log": _next_log(job)})
+
+
+def _repair(job: _Job, request: StepRequest, result: StepResult, problem: str) -> StepRequest:
+    """A resumed turn that asks the session to fix `problem`; without a session, a retry."""
+    session = result.session_id or request.session_id
+    if session is None:
+        return _again(job, request)
+    return request.model_copy(
+        update={
+            "prompt": prompts.repair_prompt(problem),
+            "resume": True,
+            "session_id": session,
+            "skill": None,
+            "prior_usage": result.total_usage or request.prior_usage,
+            "log": _next_log(job),
+        }
+    )
+
+
+def _fallback(job: _Job, ready: _Ready, pick: agents.Pick, tried: set[str]) -> agents.Pick | None:
+    if not ready.resolved.fallback_on_rate_limit:
+        return None
+    try:
+        return agents.pick(ready.resolved, pick.role, job.detect, skip=tried)
+    except NeedsSetup:
+        return None
+
+
+def _wait_quota(job: _Job, ready: _Ready, result: StepResult) -> None:
+    """Show `waiting_quota` and sleep until the reset time (15 minutes when unknown)."""
+    _update(job, ready.step, lambda doc, state: _status(doc, "in_process/waiting_quota"))
+    if result.retry_after is not None:
+        remaining = max((result.retry_after - utc_now()).total_seconds(), 0.0)
+    else:
+        remaining = float(QUOTA_WAIT_S)
+    while remaining > 0:
+        nap = min(remaining, 60.0)
+        sleep(nap)
+        runtime.beat(job.paths, job.ticket_id)
+        remaining -= nap
+    step_status = lifecycle.step_status(ready.resolved, ready.step)
+    _update(job, ready.step, lambda doc, state: _status(doc, step_status))
+
+
+def _failure(pick: agents.Pick, request: StepRequest, result: StepResult) -> str:
+    if result.error == "timeout":
+        return f"timeout: killed after {request.timeout_s} s twice; log: {request.log}"
+    if result.error == "auth":
+        return f"sign in to {BINARIES.get(pick.provider, pick.provider)} interactively"
+    return f"{result.error}: {result.detail}; log: {request.log}"
+
+
+def _next_log(job: _Job) -> Path:
+    """Count one more CLI call for the ticket and name its raw-output file."""
+    with locked(_lock(job.paths, job.slug)):
+        state = runtime.load_ticket_state(job.paths, job.ticket_id)
+        state.calls += 1
+        runtime.save_ticket_state(job.paths, job.ticket_id, state)
+    return job.paths.logs / f"{job.ticket_id}-{state.calls}.out"
 
 
 def _request(
@@ -285,12 +388,9 @@ def _request(
 
 
 def _commit(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
-    """Fold any commits the agent made, then commit the step's changes with trailers."""
+    """Fold any commits the agent made, then commit the step's changes with trailers; a
+    failing hook gets one repair turn on the step's session (SP3 spec decision 12)."""
     ticket = ready.doc.meta
-    state = runtime.load_ticket_state(job.paths, job.ticket_id)
-    start = state.start_commit
-    if start is not None and gitops.head(job.worktree) != start:
-        gitops.reset_soft(job.worktree, start)
     output = ran.result.output
     summary = output.summary if isinstance(output, WorkOutput) else ""
     first = summary.strip().splitlines()[0] if summary.strip() else ready.step
@@ -302,9 +402,33 @@ def _commit(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
         "Harness-Agent": ran.pick.role,
         "Harness-Model": f"{ran.pick.provider}/{ran.pick.model or 'default'}",
     }
-    ran.commit = gitops.commit_all(job.worktree, subject, trailers)
+    for attempt in (1, 2):
+        _fold(job)
+        try:
+            ran.commit = gitops.commit_all(job.worktree, subject, trailers)
+            break
+        except gitops.CommitFailed as exc:
+            lines = exc.output.strip().splitlines()
+            if attempt == 2:
+                last = lines[-1] if lines else str(exc)
+                return _fail(job, f"commit failed: {last}", ran.usage)
+            problem = "the commit hook failed:\n" + "\n".join(lines[-20:])
+            request = _repair(job, ran.request, ran.result, problem)
+            result = adapters.get(ran.pick.provider, runtime=job.paths.runtime).run(request)
+            ran.usage = _plus(ran.usage, result.usage)
+            if result.error is not None:
+                return _fail(job, _failure(ran.pick, request, result), ran.usage)
+            session = result.session_id or ran.result.session_id
+            ran.result = ran.result.model_copy(update={"session_id": session})
     ran.files = gitops.commit_files(job.worktree, ran.commit) if ran.commit else []
     return None
+
+
+def _fold(job: _Job) -> None:
+    """Undo commits the agent made during the step, keeping their changes staged."""
+    start = runtime.load_ticket_state(job.paths, job.ticket_id).start_commit
+    if start is not None and gitops.head(job.worktree) != start:
+        gitops.reset_soft(job.worktree, start)
 
 
 def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
@@ -314,6 +438,9 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
     with locked(_lock(paths, job.slug)):
         doc = _load(paths, job.slug, job.ticket_id)
         ticket = doc.meta
+        if ticket.folder is not Folder.in_process or ticket.step != step:
+            slots.release(paths, job.ticket_id)  # the user moved it: their status stands
+            return JobEnd(ticket.status, "changed while the step ran")
         state = runtime.load_ticket_state(paths, job.ticket_id)
         output = result.output
         fingerprints: tuple[str, ...] = ()
@@ -376,8 +503,9 @@ def _halt(job: _Job, doc: Doc[Ticket], status: str, reason: str) -> JobEnd:
     return JobEnd(status, reason)
 
 
-def _fail(job: _Job, reason: str) -> JobEnd:
-    status = fail_ticket(job.paths, job.slug, job.ticket_id, reason)
+def _fail(job: _Job, reason: str, usage: Usage | None = None) -> JobEnd:
+    tokens = usage.tokens if usage is not None else 0
+    status = fail_ticket(job.paths, job.slug, job.ticket_id, reason, tokens=tokens)
     return JobEnd(status, reason)
 
 
@@ -405,14 +533,50 @@ def _status(doc: Doc[Ticket], status: str) -> None:
     doc.meta.updated = utc_now()
 
 
-def _update(job: _Job, change: Callable[[Doc[Ticket], TicketState], None]) -> None:
-    """Reload the ticket and its state under the project lock, change both, save both."""
+def _update(job: _Job, step: str, change: Callable[[Doc[Ticket], TicketState], None]) -> None:
+    """Reload the ticket and its state under the project lock, change both, save both;
+    nothing changes once the user has moved the ticket off `step` (decision 26)."""
     with locked(_lock(job.paths, job.slug)):
         doc = _load(job.paths, job.slug, job.ticket_id)
+        if doc.meta.folder is not Folder.in_process or doc.meta.step != step:
+            return
         state = runtime.load_ticket_state(job.paths, job.ticket_id)
         change(doc, state)
         documents.save_ticket(job.paths.project(job.slug), doc)
         runtime.save_ticket_state(job.paths, job.ticket_id, state)
+
+
+def _recover(job: _Job) -> None:
+    """A worker that died mid-call left `state.running`: keep the session its CLI printed."""
+    with locked(_lock(job.paths, job.slug)):
+        state = runtime.load_ticket_state(job.paths, job.ticket_id)
+        running = state.running
+        if running is None:
+            return
+        doc = _load(job.paths, job.slug, job.ticket_id)
+        if running.role not in doc.meta.sessions and running.provider != "shell":
+            provider = adapters.get(running.provider, runtime=job.paths.runtime)
+            session = provider.recover_session(running.log)
+            if session is not None:
+                doc.meta.sessions[running.role] = SessionRef(
+                    provider=running.provider, model=running.model or "default", id=session
+                )
+                documents.save_ticket(job.paths.project(job.slug), doc)
+        state.running = None
+        runtime.save_ticket_state(job.paths, job.ticket_id, state)
+
+
+def _plus(a: Usage, b: Usage) -> Usage:
+    cost = (
+        None if a.cost_usd is None and b.cost_usd is None else (a.cost_usd or 0) + (b.cost_usd or 0)
+    )
+    return Usage(
+        input=a.input + b.input,
+        output=a.output + b.output,
+        cache_read=a.cache_read + b.cache_read,
+        cache_write=a.cache_write + b.cache_write,
+        cost_usd=cost,
+    )
 
 
 def _progress(resolved: Settings, ticket: Ticket, state: TicketState) -> workflow.Progress:
