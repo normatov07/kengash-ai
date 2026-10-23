@@ -88,6 +88,7 @@ class Slot:
 @dataclass
 class Overview:
     projects: list[str] = field(default_factory=list)
+    paused: bool = False  # `harness pause` without a project
     sessions: list[Session] = field(default_factory=list)
     queue: Counts = field(default_factory=Counts)
     gates: list[Gate] = field(default_factory=list)
@@ -131,7 +132,7 @@ class Board:
 def overview(paths: StorePaths | None = None, *, window: Window = "today") -> Overview:
     """The Overview screen: what runs, what waits, what needs the user, what it cost."""
     paths = paths or StorePaths.default()
-    found = Overview(projects=_projects(paths))
+    found = Overview(projects=_projects(paths), paused=runtime.pause_state(paths).everything)
     events = _events(paths)
     reasons = _reasons(events)
     for slug, doc in _tickets(paths, None):

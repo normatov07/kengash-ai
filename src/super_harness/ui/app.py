@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
 from typing import Literal, Protocol
 
-from fastapi import FastAPI, Query, Request, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -18,9 +18,10 @@ from fastapi.responses import (
     StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from super_harness.model import HarnessError, JournalCursor, NeedsSetup, NeedsUser
-from super_harness.ops import controls, views
+from super_harness.ops import controls, merging, tickets, views
 
 STATIC = Path(__file__).parent / "static"
 COOKIE = "harness_token"
@@ -30,6 +31,15 @@ LOCKED = (
     "<!doctype html><title>harness</title>"
     "<p>Open the link that <code>harness ui open</code> printed.</p>"
 )
+
+
+class Action(BaseModel):
+    """The body of a ticket action; each action reads the fields it needs."""
+
+    loops: int | None = None
+    tokens: int | None = None
+    why: str = ""
+    to: str = ""
 
 
 class Connection(Protocol):
@@ -95,6 +105,25 @@ def create_app(*, token: str, port: int) -> FastAPI:
     @app.post("/api/resume")
     def resume(project: str | None = None) -> controls.Resumed:
         return controls.resume(project, by=BY)
+
+    @app.post("/api/tickets/{ticket_id}/{action}")
+    def ticket_action(ticket_id: str, action: str, body: Action | None = None) -> object:
+        body = body or Action()
+        if action == "approve":
+            return controls.approve_ticket(
+                ticket_id, loops=body.loops, tokens=body.tokens, project=None, by=BY
+            )
+        if action == "park":
+            return controls.park_ticket(ticket_id, body.why, project=None, by=BY)
+        if action == "run":
+            return controls.run_tickets([ticket_id], by=BY)
+        if action == "stop":
+            return {"status": controls.stop_ticket(ticket_id, project=None, by=BY)}
+        if action == "merge":
+            return merging.merge_ticket(ticket_id, project=None, by=BY)
+        if action == "move":
+            return tickets.move_ticket(ticket_id, body.to, body.why, project=None, by=BY)
+        raise HTTPException(status_code=404, detail=f"unknown action {action}")
 
     @app.get("/api/events")
     def events(request: Request) -> StreamingResponse:

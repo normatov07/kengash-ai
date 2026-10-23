@@ -2,15 +2,16 @@
 
 import asyncio
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from super_harness import journal
-from super_harness.model import Event
+from super_harness.model import Doc, Event, Ticket
 from super_harness.ops import views
-from super_harness.store import StorePaths
+from super_harness.store import StorePaths, documents
 from super_harness.ui import app as ui_app
 
 TOKEN = "t" * 43
@@ -86,3 +87,30 @@ def test_the_event_stream_sends_new_journal_events(store_paths: StorePaths) -> N
     chunk = asyncio.run(first())
     assert chunk.startswith("event: journal\ndata: ")
     assert json.loads(chunk.split("data: ", 1)[1])["type"] == "ticket.moved"
+
+
+POST = {"X-Harness": "1"}
+
+
+def test_ticket_actions_go_through_ops(
+    client: TestClient, store_paths: StorePaths, make_ticket: Callable[..., Doc[Ticket]]
+) -> None:
+    documents.save_ticket(store_paths.project("payments-api"), make_ticket())
+    signed_in(client)
+    refused = client.post("/api/tickets/7b55e0c1/approve", json={}, headers=POST)
+    assert refused.status_code == 400 and "not waiting for approval" in refused.json()["error"]
+    parked = client.post("/api/tickets/7b55e0c1/park", json={"why": "later"}, headers=POST)
+    assert parked.status_code == 200
+    moved = client.post(
+        "/api/tickets/7b55e0c1/move", json={"to": "in_queue", "why": "back"}, headers=POST
+    )
+    assert moved.json()["after"] == "in_queue/ready"
+    assert client.post("/api/tickets/ffffffff/stop", headers=POST).status_code == 400
+    assert client.post("/api/tickets/7b55e0c1/fly", headers=POST).status_code == 404
+
+
+def test_the_overview_says_when_everything_is_paused(client: TestClient) -> None:
+    signed_in(client)
+    assert client.get("/api/overview").json()["paused"] is False
+    client.post("/api/pause", headers=POST)
+    assert client.get("/api/overview").json()["paused"] is True

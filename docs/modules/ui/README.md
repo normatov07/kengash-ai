@@ -7,7 +7,7 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 ## Interface
 
 - `python -m super_harness.ui --port N`, token in `HARNESS_UI_TOKEN` (popped from the environment); started by `harness ui open` (`ops.ui_server`).
-- `app.create_app(token=, port=)`: `GET /` (`?token=` sets an `HttpOnly`, `SameSite=Strict` cookie and redirects to `/`; otherwise 401 without it), `/static/*`, `GET /api/overview?window=today|7d|all`, `GET /api/board?project=`, `POST /api/pause|resume?project=`, `GET /api/events` (SSE `event: journal` per new journal line, `: ping` every 15 s; `app.event_stream`). Harness errors come back as `{"error": …}`: 400, or 409 for setup and user decisions.
+- `app.create_app(token=, port=)`: `GET /` (`?token=` sets an `HttpOnly`, `SameSite=Strict` cookie and redirects to `/`; otherwise 401 without it), `/static/*`, `GET /api/overview?window=today|7d|all`, `GET /api/board?project=`, `POST /api/pause|resume?project=`, `POST /api/tickets/{id}/approve|park|run|stop|merge|move` (body `{loops, tokens, why, to}`; each action reads what it needs), `GET /api/events` (SSE `event: journal` per new journal line, `: ping` every 15 s; `app.event_stream`). Harness errors come back as `{"error": …}`: 400, or 409 for setup and user decisions.
 
 ## Invariants
 
