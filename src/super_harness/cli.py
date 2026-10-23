@@ -13,6 +13,7 @@ import typer
 from super_harness import __version__
 from super_harness.model import Folder, HarnessError, PlanMode, UserError
 from super_harness.ops import (
+    changes,
     controls,
     merging,
     plans,
@@ -697,3 +698,42 @@ def wait(
     if result.timed_out:
         typer.echo(f"wait timed out after {timeout:g} s", err=True)
         raise typer.Exit(3)
+
+
+@ticket_app.command("changes")
+def ticket_changes(
+    ticket_id: TicketId,
+    diff: Annotated[bool, typer.Option("--diff", help="Also print each commit's diff.")] = False,
+    project: Only = None,
+    as_json: AsJson = False,
+) -> None:
+    """Files the ticket changed, with the loop, step and model of each commit."""
+    with _errors():
+        found = changes.ticket_changes(ticket_id, diff=diff, project=project)
+    if as_json:
+        _emit_json(found)
+        return
+    for change in found.changes:
+        added = "-" if change.added is None else change.added
+        removed = "-" if change.removed is None else change.removed
+        typer.echo(
+            f"{change.path} +{added} -{removed}  loop {change.loop} {change.step} {change.model}"
+        )
+    if found.diff:
+        typer.echo(found.diff)
+
+
+@ticket_app.command("attach")
+def ticket_attach(
+    ticket_id: TicketId,
+    role: Annotated[str | None, typer.Option("--role", help="Role whose session to open.")] = None,
+    project: Only = None,
+    as_json: AsJson = False,
+) -> None:
+    """Print the command that opens a role's live CLI session in the ticket's worktree."""
+    with _errors():
+        found = changes.attach_command(ticket_id, role=role, project=project)
+    if as_json:
+        _emit_json(found)
+        return
+    typer.echo(found.command)

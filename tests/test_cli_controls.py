@@ -6,8 +6,9 @@ import pytest
 from conftest import Engine
 from typer.testing import CliRunner
 
+from super_harness import gitops
 from super_harness.cli import app
-from super_harness.model import WorkerRecord
+from super_harness.model import SessionRef, WorkerRecord
 from super_harness.ops import controls
 from super_harness.store import StorePaths, documents, runtime
 
@@ -52,3 +53,22 @@ def test_doctor_reports_a_dead_worker(engine: Engine) -> None:
     assert "payments-api: worker of 7b55e0c1 died; run: harness doctor --fix" in result.stdout
     fixed = runner.invoke(app, ["doctor", "--fix"])
     assert "worker of 7b55e0c1 died; marked failed" in fixed.stdout
+
+
+def test_ticket_changes_and_attach_print_lines(engine: Engine) -> None:
+    (engine.worktree / "retry.py").write_text("a = 1\nb = 2\n")
+    trailers = {
+        "Harness-Ticket": str(engine.ticket().meta.uuid),
+        "Harness-Step": "implement",
+        "Harness-Loop": "1",
+        "Harness-Agent": "implementer",
+        "Harness-Model": "codex/default",
+    }
+    gitops.commit_all(engine.worktree, "hrn(7b55e0c1): loop 1 implement: retry", trailers)
+    listed = runner.invoke(app, ["ticket", "changes", "7b55e0c1"])
+    assert listed.stdout == "retry.py +2 -0  loop 1 implement codex/default\n"
+    doc = engine.ticket()
+    doc.meta.sessions["implementer"] = SessionRef(provider="codex", id="t-1")
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    attached = runner.invoke(app, ["ticket", "attach", "7b55e0c1", "--role", "implementer"])
+    assert attached.stdout.strip().endswith("codex resume t-1")

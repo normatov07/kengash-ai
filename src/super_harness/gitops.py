@@ -52,7 +52,7 @@ def ensure_worktree(repo: Path, path: Path, branch: str, base: str) -> Worktree:
             return Worktree(path, branch, created=False)
         raise GitError(f"{path} exists and is not the worktree of {branch}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    if _run(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}").returncode == 0:
+    if branch_exists(repo, branch):
         _git(repo, "worktree", "add", "--quiet", str(path), branch)
     else:
         _git(repo, "worktree", "add", "--quiet", "-b", branch, str(path), base)
@@ -134,7 +134,7 @@ def remove_worktree(repo: Path, path: Path, branch: str) -> None:
     if path.exists():
         _git(repo, "worktree", "remove", "--force", str(path))
     _git(repo, "worktree", "prune")
-    if _run(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}").returncode == 0:
+    if branch_exists(repo, branch):
         _git(repo, "branch", "-D", branch)
 
 
@@ -149,6 +149,15 @@ def ticket_commits(repo: Path, ticket_uuid: str, ref: str) -> list[Commit]:
         trailers = dict(line.split(": ", 1) for line in raw.splitlines() if ": " in line)
         commits.append(Commit(sha, subject, trailers, commit_files(repo, sha)))
     return commits
+
+
+def branch_exists(repo: Path, branch: str) -> bool:
+    return _run(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}").returncode == 0
+
+
+def show(repo: Path, sha: str) -> str:
+    """One commit's sha, subject and diff."""
+    return _git(repo, "show", "--format=%H%n%s", sha)
 
 
 def commit_files(cwd: Path, sha: str) -> list[FileChange]:

@@ -15,6 +15,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - `controls.approve_ticket`, `park_ticket` (deferred while a worker runs), `stop_ticket` (SIGTERM, SIGKILL after 10 s, then failed "stopped"), `pause`, `resume`.
 - `merging.merge_ticket(id, project=, by=)` → `Merged(id, project, commits, base)`: from `awaiting_merge` or `branch_ready`, under the project lock and `repo-<slug>.lock`: rebase in the worktree (a conflict writes a finding and sends the ticket to `in_queue/ready` at `implement` with loop + 1, or to `needs_approval` at the loop cap, exit 1), `git merge --ff-only` in the main working tree (refused when dirty or off base), remove the worktree and branch, `done/merged`, dependents turn ready. `merging.merge_if_clean` serves `merge.mode: auto` (called after the project lock is released).
 - `waiting.wait(project, timeout=, poll_s=)` → `WaitResult(events, idle, timed_out)`: the first call per scope reports the open gates (its cursor saved first); later calls report gate events from the journal after the scope's cursor (`ticket.needs_approval|stalled|failed|awaiting_merge|merged`, moves into `done/`), `idle` when nothing in scope runs, or `timed_out`. `waiting.check_workers(paths, fix=)` fails the tickets of dead workers (gone pid or heartbeat older than 2 minutes) "worker died"; `dead_workers` lists them; `ping` records the conductor. `next` checks workers and pings; `doctor` reports dead workers and marks them with `--fix`.
+- `changes.ticket_changes(id, diff=, project=)` → `Changes(id, project, ref, changes, diff)`: one `Change(path, added, removed, loop, step, model, commit)` per file and commit, from the `Harness-*` trailers, on the ticket branch or (once merged) the base branch. `changes.attach_command(id, role=, project=)` → `Attach(..., command)`: `cd <worktree> && <the CLI's resume command>`.
 - `lifecycle`: `step_status` (the `status.names` sub-status), `status_event` (the journal event of a status, with `status`, `loop`, `loop_max`, `reason`), `progress_of` (moved from `queue`), `progress_for` and `apply_progress` (workflow progress to and from a ticket and its state), `pid_alive`, `DEAD_AFTER_S`.
 - `slots.reserve`: a claim's check and queueing under one lock.
 - `tickets.refresh_queue` (was private): turn queued tickets ready or blocked to match their dependencies.
@@ -43,6 +44,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-23: `changes`: ticket changes and attach (SP3 M3).
 - 2026-10-23: `waiting`: wait, dead workers, conductor pings; `records.repo_root` (moved from `projects`, still importable there) (SP3 M3).
 - 2026-10-23: `merging`: merge, auto merge (SP3 M3).
 - 2026-10-23: worker wrappers in `steps` (SP3 M3).
