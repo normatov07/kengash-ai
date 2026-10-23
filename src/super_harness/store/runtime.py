@@ -121,6 +121,18 @@ def save_ping(paths: StorePaths, ping: ConductorPing) -> None:
     _save(paths.conductors / f"{ping.pid}.json", ping)
 
 
+def load_pings(paths: StorePaths) -> list[ConductorPing]:
+    """Every conductor ping on record, newest first."""
+    if not paths.conductors.is_dir():
+        return []
+    pings = [
+        _load(path, ConductorPing)
+        for path in paths.conductors.glob("*.json")
+        if not path.name.startswith("cursor-")
+    ]
+    return sorted(pings, key=lambda ping: ping.time, reverse=True)
+
+
 def load_cursor(paths: StorePaths, scope: str) -> JournalCursor | None:
     path = paths.conductors / f"cursor-{scope}.json"
     return _load(path, JournalCursor) if path.exists() else None
