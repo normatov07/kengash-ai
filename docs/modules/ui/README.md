@@ -1,0 +1,19 @@
+# ui
+
+## Purpose
+
+The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that serves the static screens, a JSON API over `ops` and a server-sent event stream of the journal. Needs the `[ui]` extra (`fastapi`, `uvicorn`).
+
+## Interface
+
+- `python -m super_harness.ui --port N`, token in `HARNESS_UI_TOKEN`; started by `harness ui open` (`ops.ui_server`).
+
+## Invariants
+
+- Imports only `ops` and `model` (import-linter); every action goes through `ops` with `by="ui"`.
+- No network fetches, no build step: the screens are static ES modules and one stylesheet.
+- Every `/api` request needs the run's token; foreign `Host` headers are refused; `POST` needs `X-Harness: 1`.
+
+## Changes
+
+- 2026-10-23: the `ui` unit and its layer contract (SP5 M1).

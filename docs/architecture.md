@@ -34,9 +34,9 @@ UI: harness ui → FastAPI + SSE on 127.0.0.1, through the same `ops` layer as t
 | `gitops` | Worktrees, commits with trailers, diffs, rebase, merge | `model` | built (SP3 M2) |
 | `worker` | Runs one job through `ops`; heartbeats; handles signals | `ops`, `model` | built (SP3 M3–M4): `ticket`, `plan-review` and `compact` jobs |
 | `roles` | Packaged role skill files (data only) | — | built (SP4 M1): seven role skills, seeded into `defaults/roles/` |
-| `ui` | FastAPI app, SSE, static assets | `ops`, `model` | planned, SP5 |
+| `ui` | FastAPI app, SSE, static assets | `ops`, `model` | in progress (SP5 M1): layer contract, `[ui]` extra |
 
-`adapters` and `gitops` never touch the store. Import-linter (`make lint`) enforces the layers `cli | worker > ops > memory > journal | settings > store > model` (`journal` and `settings` independent of each other) and keeps `cli` and `worker` from importing `store`, `settings`, `memory` or `journal` directly; `workflow`, `scheduler`, `adapters` and `gitops` import only `model`; each new module adds its contract.
+`adapters` and `gitops` never touch the store. Import-linter (`make lint`) enforces the layers `cli | worker | ui > ops > memory > journal | settings > store > model` (`journal` and `settings` independent of each other) and keeps `cli`, `worker` and `ui` from importing `store`, `settings`, `memory` or `journal` directly; `workflow`, `scheduler`, `adapters` and `gitops` import only `model`; each new module adds its contract.
 
 ## Store (built in SP2 M1)
 
