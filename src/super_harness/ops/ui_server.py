@@ -94,6 +94,9 @@ def _start(paths: StorePaths) -> UiRecord:
     deadline = time.monotonic() + START_S
     while not _answers(port):
         if process.poll() is not None or time.monotonic() >= deadline:
+            if process.poll() is None:  # alive but silent: end it rather than orphan it
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
             runtime.drop_ui(paths)
             raise UserError(f"the UI did not start; log: {paths.logs / 'ui.log'}")
         time.sleep(0.05)

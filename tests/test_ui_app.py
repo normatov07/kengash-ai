@@ -90,6 +90,18 @@ def test_the_event_stream_sends_new_journal_events(store_paths: StorePaths) -> N
     assert json.loads(chunk.split("data: ", 1)[1])["type"] == "ticket.moved"
 
 
+def test_the_event_stream_ends_when_the_browser_goes_away(store_paths: StorePaths) -> None:
+    class Gone:
+        async def is_disconnected(self) -> bool:
+            return True
+
+    async def drain() -> list[str]:
+        stream = ui_app.event_stream(Gone(), views.journal_end(), poll_s=0.01)
+        return [chunk async for chunk in stream]
+
+    assert asyncio.run(drain()) == []
+
+
 POST = {"X-Harness": "1"}
 
 

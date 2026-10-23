@@ -2,15 +2,18 @@
 (SP5 spec decisions 2 and 3)."""
 
 import json
+import subprocess
 import urllib.request
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import pytest
 from typer.testing import CliRunner
 
 from super_harness.cli import app
+from super_harness.model import UserError
 from super_harness.ops import ui_server
 from super_harness.store import StorePaths
 
@@ -52,6 +55,24 @@ def test_a_stale_record_starts_a_new_server(stopped: None, store_paths: StorePat
     store_paths.ui_file.write_text(json.dumps(stale))
     server = ui_server.open_ui(browser=False)
     assert not server.reused and get_overview(server.url)["sessions"] == []
+
+
+def test_a_server_that_never_answers_is_ended(
+    stopped: None, store_paths: StorePaths, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    started: list[subprocess.Popen[bytes]] = []
+    popen = subprocess.Popen
+
+    def spy(*args: Any, **kwargs: Any) -> subprocess.Popen[bytes]:
+        started.append(popen(*args, **kwargs))
+        return started[-1]
+
+    monkeypatch.setattr(subprocess, "Popen", spy)
+    monkeypatch.setattr(ui_server, "_answers", lambda port: False)
+    monkeypatch.setattr(ui_server, "START_S", 0.5)
+    with pytest.raises(UserError, match="did not start"):
+        ui_server.open_ui(browser=False)
+    assert started[0].poll() is not None and not store_paths.ui_file.exists()
 
 
 def test_the_cli_opens_and_stops(stopped: None) -> None:
