@@ -27,6 +27,7 @@ from super_harness.model.runtime import (
     SlotTable,
     TicketState,
     Trust,
+    UiRecord,
     WorkerRecord,
 )
 from super_harness.model.settings import (
@@ -108,6 +109,7 @@ __all__ = [
     "TicketState",
     "Title",
     "Trust",
+    "UiRecord",
     "Usage",
     "UserError",
     "WaitTimeout",

@@ -15,6 +15,7 @@ from super_harness.model import (
     SlotTable,
     TicketState,
     Trust,
+    UiRecord,
     WorkerRecord,
     utc_now,
 )
@@ -131,6 +132,20 @@ def load_pings(paths: StorePaths) -> list[ConductorPing]:
         if not path.name.startswith("cursor-")
     ]
     return sorted(pings, key=lambda ping: ping.time, reverse=True)
+
+
+def load_ui(paths: StorePaths) -> UiRecord | None:
+    return _load(paths.ui_file, UiRecord) if paths.ui_file.exists() else None
+
+
+def save_ui(paths: StorePaths, record: UiRecord) -> None:
+    """Save the UI record readable by the user only: it holds the run's token."""
+    _save(paths.ui_file, record)
+    paths.ui_file.chmod(0o600)
+
+
+def drop_ui(paths: StorePaths) -> None:
+    paths.ui_file.unlink(missing_ok=True)
 
 
 def load_cursor(paths: StorePaths, scope: str) -> JournalCursor | None:

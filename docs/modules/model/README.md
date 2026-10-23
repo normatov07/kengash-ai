@@ -28,6 +28,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Changes
 
+- 2026-10-23: `UiRecord` (SP5 M1).
 - 2026-10-23: `Expect.clean` (SP4 M3).
 - 2026-10-23: eval scenarios: `EvalScenario`, `SetupStep`, `Expect`, `RecordsExpect` (SP4 M2).
 - 2026-10-23: `SkillMeta`, skill frontmatter (SP4 M1).

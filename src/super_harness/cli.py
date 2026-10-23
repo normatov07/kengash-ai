@@ -25,6 +25,7 @@ from super_harness.ops import (
     skills,
     status,
     tickets,
+    ui_server,
     waiting,
     workspace,
 )
@@ -920,3 +921,31 @@ def skills_eval(
         typer.echo(f"transcripts: {base}")
     if not all(run.passed for run in runs):
         raise typer.Exit(1)
+
+
+ui_app = typer.Typer(help="The local web UI.", no_args_is_help=True)
+app.add_typer(ui_app, name="ui")
+
+
+@ui_app.command("open")
+def ui_open(
+    no_browser: Annotated[
+        bool, typer.Option("--no-browser", help="Print the link without opening it.")
+    ] = False,
+    as_json: AsJson = False,
+) -> None:
+    """Start the UI, or reuse the running one, and open it in the browser."""
+    with _errors():
+        server = ui_server.open_ui(browser=not no_browser)
+    if as_json:
+        _emit_json(server)
+    else:
+        typer.echo(server.url)
+
+
+@ui_app.command("stop")
+def ui_stop() -> None:
+    """Stop the UI server."""
+    with _errors():
+        stopped = ui_server.stop_ui()
+    typer.echo("stopped" if stopped else "not running")

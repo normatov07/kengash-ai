@@ -87,6 +87,15 @@ class ConductorPing(_Runtime):
     time: datetime = Field(default_factory=utc_now)
 
 
+class UiRecord(_Runtime):
+    """runtime/ui.json: the running UI server (mode 0600: it holds the run's token)."""
+
+    pid: int
+    port: int
+    token: str
+    started: datetime = Field(default_factory=utc_now)
+
+
 class JournalCursor(_Runtime):
     """A journal position: the day file last read and how many of its lines were read."""
 

@@ -28,7 +28,7 @@ Everything under `~/.harness`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
-- 2026-10-23: `runtime.load_pings` (SP5 M1).
+- 2026-10-23: `runtime.load_pings`; `runtime/ui.json` (`load_ui`, `save_ui` at mode 0600, `drop_ui`) (SP5 M1).
 - 2026-10-23: role skills seeded into `defaults/roles/`; `split_frontmatter` (SP4 M1).
 - 2026-10-23: worker records, ticket state, park flags, conductor pings and wait cursors (SP3 M3).
 - 2026-10-23: `runtime/trust.json` (SP3 M2).
