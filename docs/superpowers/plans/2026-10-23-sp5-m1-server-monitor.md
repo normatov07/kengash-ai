@@ -6,7 +6,7 @@
 
 **Architecture:** `ops.views` builds read models (dataclasses) from the store, runtime and journal. `ui` is a FastAPI app over those views and the existing `ops` actions, with cookie-token auth, a Host check and SSE from the journal. `ops.ui_server` starts, reuses and stops the detached server. The frontend is plain ES modules under `ui/static/` with a hash router.
 
-**Tech Stack:** FastAPI, uvicorn (the `[ui]` extra), httpx (`TestClient`, dev), plain JavaScript and CSS; Chrome through the Claude in Chrome extension for screen checks.
+**Tech Stack:** FastAPI, uvicorn (the `[ui]` extra), httpx2 (`TestClient`, dev; Starlette 1.9 replaced httpx with it), plain JavaScript and CSS; Chrome through the Claude in Chrome extension for screen checks.
 
 **Spec:** `docs/superpowers/specs/2026-10-23-sp5-ui-design.md` (decisions 1–6, 8, 9, 11; §3; §4 rows "all", "Overview", "Task board").
 
@@ -28,7 +28,7 @@
 ---
 
 ### Task 1: Dependencies and the layer contract
-- [ ] `uv add --optional ui fastapi uvicorn`; `uv add --dev fastapi uvicorn httpx`; import-linter: `ui` in the top layer beside `cli` and `worker`, and a contract that `ui` reaches the store only through `ops`; `docs/modules/ui/README.md`; `make check`; commit `build: the [ui] extra and the ui layer`.
+- [ ] `uv add --optional ui fastapi uvicorn`; `uv add --dev fastapi uvicorn httpx2`; import-linter: `ui` in the top layer beside `cli` and `worker`, and a contract that `ui` reaches the store only through `ops`; `docs/modules/ui/README.md`; `make check`; commit `build: the [ui] extra and the ui layer`.
 
 ### Task 2: Read models for Overview and Task board
 **Files:** Create `src/super_harness/ops/views.py`, `tests/test_ops_views.py`.
