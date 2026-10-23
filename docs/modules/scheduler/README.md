@@ -7,6 +7,7 @@ Pick which ready tickets may start now (SP3 spec §7): no `touches` overlap insi
 ## Interface
 
 - `overlaps(a, b)`: path prefixes overlap when one contains the other segment by segment; an empty list is the whole repo.
+- `fits(provider, project, used, machine, projects)`: one more session stays within the machine's and the project's limits.
 - `select(candidates, busy, held, machine, projects, last_claims)` → `Selection(chosen, held_back)`; `held_back` maps a ticket id to `touches overlap <id>` or `no free <provider> slot`.
 - Types: `Candidate(id, project, importance, created, touches, provider)` (`provider` None: the step needs no slot), `Busy(id, project, touches)`, `Held(project, provider)`, `Limits(total, per_provider)`.
 
@@ -18,4 +19,5 @@ Pick which ready tickets may start now (SP3 spec §7): no `touches` overlap insi
 
 ## Changes
 
+- 2026-10-23: `fits` is public; `ops.slots` uses it (SP3 M3).
 - 2026-10-22: overlap, slots, project turns (SP3 M1).

@@ -92,15 +92,27 @@ def select(
             continue
         provider = candidate.provider
         if provider is not None:
-            own = [slot for slot in used if slot.project == candidate.project]
-            limits = projects.get(candidate.project, machine)
-            if not (_fits(provider, used, machine) and _fits(provider, own, limits)):
+            if not fits(provider, candidate.project, used, machine, projects):
                 selection.held_back[candidate.id] = f"no free {provider} slot"
                 continue
             used.append(Held(candidate.project, provider))
         selection.chosen.append(candidate)
         taken.append(Busy(candidate.id, candidate.project, candidate.touches))
     return selection
+
+
+def fits(
+    provider: str,
+    project: str,
+    used: Sequence[Held],
+    machine: Limits,
+    projects: Mapping[str, Limits],
+) -> bool:
+    """One more `provider` session for `project` stays within the machine's and the
+    project's limits, given the sessions in `used`."""
+    own = [slot for slot in used if slot.project == project]
+    limits = projects.get(project, machine)
+    return _fits(provider, used, machine) and _fits(provider, own, limits)
 
 
 def _fits(provider: str, used: Sequence[Held], limits: Limits) -> bool:

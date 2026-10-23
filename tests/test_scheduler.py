@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 from super_harness.model import Importance
-from super_harness.scheduler import Busy, Candidate, Held, Limits, overlaps, select
+from super_harness.scheduler import Busy, Candidate, Held, Limits, fits, overlaps, select
 
 T0 = datetime(2026, 10, 22, 9, 0, tzinfo=UTC)
 ROOMY = Limits(total=8, per_provider={"claude": 8, "codex": 8})
@@ -83,3 +83,12 @@ def test_projects_take_turns_and_critical_tickets_go_first() -> None:
         last_claims={"app": T0},
     )
     assert [c.id for c in picks.chosen] == ["w1", "a2", "a3", "a1"]
+
+
+def test_fits_checks_machine_and_project_limits() -> None:
+    machine = Limits(3, {"claude": 2})
+    projects = {"a": Limits(1, {"claude": 1})}
+    assert fits("claude", "b", [Held("a", "claude")], machine, projects)
+    assert not fits("claude", "a", [Held("a", "claude")], machine, projects)
+    assert not fits("claude", "b", [Held("a", "claude"), Held("b", "claude")], machine, projects)
+    assert not fits("codex", "b", [], machine, projects)

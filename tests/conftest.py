@@ -105,6 +105,15 @@ def journal_events(store_paths: StorePaths) -> Callable[[], list[dict[str, Any]]
     return read
 
 
+def write_settings(
+    paths: StorePaths, text: str, slugs: tuple[str | None, ...] = (None, "payments-api")
+) -> None:
+    """Replace each scope's SETTINGS.md with `text`; layers merge it over the package defaults."""
+    for slug in slugs:
+        target = paths.defaults / "SETTINGS.md" if slug is None else paths.project(slug).settings
+        target.write_text(text, encoding="utf-8")
+
+
 @dataclass
 class FakeClis:
     """Drives the fake claude, codex and agy that come first on PATH in every test."""

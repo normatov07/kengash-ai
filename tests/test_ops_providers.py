@@ -2,19 +2,10 @@
 
 from pathlib import Path
 
-from conftest import FakeClis
+from conftest import FakeClis, write_settings
+
 from super_harness.ops.providers import check_providers, trust_notice
-
 from super_harness.store import StorePaths
-
-
-def write_settings(
-    paths: StorePaths, text: str, slugs: tuple[str | None, ...] = (None, "payments-api")
-) -> None:
-    """Replace each scope's SETTINGS.md with `text`; layers merge it over the package defaults."""
-    for slug in slugs:
-        target = paths.defaults / "SETTINGS.md" if slug is None else paths.project(slug).settings
-        target.write_text(text, encoding="utf-8")
 
 
 def test_every_provider_usable_reports_nothing(
