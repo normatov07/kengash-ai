@@ -90,3 +90,4 @@ def test_detect(fake_clis: FakeClis, tmp_path: Path) -> None:
     assert Codex(tmp_path).detect().version == "0.161.0"
     fake_clis.sign_out("codex")
     assert Codex(tmp_path).detect().hint == "run `codex login`"
+    assert Codex(tmp_path).attach_command("t-1") == ["codex", "resume", "t-1"]
