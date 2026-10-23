@@ -35,10 +35,10 @@ def pick(
             return Pick(role, provider, None, False)
         if provider in skip:
             continue
-        problem = _problem(provider, status)
-        if problem is None:
+        found = problem(provider, status)
+        if found is None:
             return Pick(role, provider, model, index > 0)
-        first_problem = first_problem or problem
+        first_problem = first_problem or found
     raise NeedsSetup(f"{role} cannot run: {first_problem or 'no other provider to fall back to'}")
 
 
@@ -54,7 +54,8 @@ def detector(paths: StorePaths) -> Callable[[str], ProviderStatus]:
     return detect
 
 
-def _problem(provider: str, status: Callable[[str], ProviderStatus]) -> str | None:
+def problem(provider: str, status: Callable[[str], ProviderStatus]) -> str | None:
+    """Why `provider` cannot run now, or None when it can."""
     if provider in UNSUPPORTED:
         return f"{provider} is not supported yet; pick another provider in SETTINGS.md"
     found = status(provider)

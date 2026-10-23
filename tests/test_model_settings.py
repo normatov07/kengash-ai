@@ -84,3 +84,11 @@ def test_provider_options_default_per_provider() -> None:
 def test_split_cli_separates_provider_and_model() -> None:
     assert split_cli("claude/opus") == ("claude", "opus")
     assert split_cli("codex") == ("codex", None)
+
+
+def test_the_plan_reviewer_is_different_provider_or_a_known_provider() -> None:
+    assert Settings.model_validate({"plan": {"reviewer": "codex/gpt-5"}}).plan.reviewer == (
+        "codex/gpt-5"
+    )
+    with pytest.raises(ValidationError, match="unknown provider"):
+        Settings.model_validate({"plan": {"reviewer": "same-provider"}})

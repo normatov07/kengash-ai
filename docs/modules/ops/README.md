@@ -22,8 +22,9 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - `lifecycle`: `step_status` (the `status.names` sub-status), `status_event` (the journal event of a status, with `status`, `loop`, `loop_max`, `reason`), `progress_of` (moved from `queue`), `progress_for` and `apply_progress` (workflow progress to and from a ticket and its state), `pid_alive`, `DEAD_AFTER_S`.
 - `slots.reserve`: a claim's check and queueing under one lock.
 - `tickets.refresh_queue` (was private): turn queued tickets ready or blocked to match their dependencies.
-- `prompts`: step instructions, `new_prompt` (role, step, Goal, Scope, Acceptance, Handoff, Findings, diff stat inline), `resumed_prompt` (Findings for work steps; Handoff and diff stat for review steps), `repair_prompt`, `handoff_text` (redacted, 15 lines), `findings_text`, `log_line`, `output_kind`, `profile`, `role_skill` (project `roles/`, then `defaults/roles/`).
-- `agents.pick(settings, role, status, skip=)` → `Pick(role, provider, model, fallback)`: the role's `cli`, then each fallback, first usable; `NeedsSetup` naming the install or sign-in step when none is. `agents.detector(paths)` detects each provider once.
+- `prompts`: step instructions, `new_prompt` (role, step, Goal, Scope, Acceptance, Handoff, Findings, diff stat inline), `resumed_prompt` (Findings for work steps; Handoff and diff stat for review steps), `repair_prompt`, `handoff_text` (redacted, 15 lines), `findings_text`, `log_line`, `output_kind`, `profile`, `role_skill` (project `roles/`, then `defaults/roles/`), `plan_review_prompt` (the plan inline; a new session also gets the newest DECISIONS entries, a resumed one the Review log), `review_log_lines`.
+- `reviews` (SP3 spec decisions 14, 28 to 30): `conductor_provider(by)` (`--by`, else claude under `CLAUDECODE=1`), `choose_reviewer(settings, conductor, detect)` → `(Pick, warning)` (a named `plan.reviewer`; else the plan-reviewer chain without the conductor's provider, then any other usable provider, then the conductor's own with a warning), `run_review(plan_id, project=)` (the `plan-review` worker's round: read-only in the repo, a slot, the reviewer session resumed per plan and provider, round, verdict, session and Review log written, `plan.reviewed` journaled; a failed call or a plan changed meanwhile journals `worker.exited` instead), `fail_review`.
+- `agents.pick(settings, role, status, skip=)` → `Pick(role, provider, model, fallback)`: the role's `cli`, then each fallback, first usable; `NeedsSetup` naming the install or sign-in step when none is. `agents.detector(paths)` detects each provider once; `agents.problem(provider, status)` says why one cannot run.
 - `providers.check_providers(paths)` → `ProviderCheck(provider, users, blocking, message)` for each provider that enabled agents, their fallbacks or the compactor need (all scopes) and that is missing, signed out or unsupported (`blocking` when a role or the compactor is left with no usable provider), plus a warning for a claude login other than claude.ai unless `providers.claude.allow_api_key`; scopes with invalid settings are skipped. Detection goes through `adapters`.
 - `providers.trust_notice(paths, slug, repo)`: a warning when the repo ships `.claude/settings.json` hooks or `.mcp.json`, once until those files change (digest in `runtime/trust.json`).
 - `projects.adopt(path)` → `AdoptResult`: merges a real `.harness/` folder by uuid and archives the original.
@@ -47,6 +48,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-23: `reviews`: the plan-review job; `agents.problem` is public (SP3 M4).
 - 2026-10-23: `jobs`: job workers; `steps.heartbeat` and `forget_worker` moved there (SP3 M4).
 - 2026-10-23: `calls`: shared call retries, moved out of `steps` (SP3 M4).
 - 2026-10-23: `calls`: retry rules shared by steps, plan reviews and compaction (SP3 M4).
