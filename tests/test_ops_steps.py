@@ -229,3 +229,24 @@ def test_auto_merge_ends_the_job_merged(
     end = steps.run_job("7b55e0c1")
     assert end.status == "done/merged"
     assert (engine.repo / "retry.py").exists() and not engine.worktree.exists()
+
+
+def test_a_new_claude_session_that_never_started_is_forgotten(
+    engine: Engine, fake_clis: FakeClis
+) -> None:
+    fake_clis.queue("claude", stdout="", stderr="boom", exit=1)
+    assert steps.run_job("7b55e0c1").status == "in_process/failed"
+    assert "planner" not in engine.ticket().meta.sessions
+
+
+def test_a_timed_out_new_claude_session_retries_by_resuming(
+    engine: Engine, fake_clis: FakeClis, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(steps, "step_timeout", lambda resolved: 1)
+    fake_clis.queue("claude", fixture="claude/work_resume.json", sleep=3)
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    steps.run_job("7b55e0c1", steps=1)
+    first, second = (call["argv"] for call in fake_clis.calls("claude"))
+    session = first[first.index("--session-id") + 1]
+    assert "--session-id" not in second and second[second.index("--resume") + 1] == session
+    assert engine.ticket().meta.step == "implement"

@@ -254,7 +254,7 @@ def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
             return _Ran(pick, request, result, usage, ready.doc.meta.loop)
         if error == "timeout" and not timed_out:
             timed_out = True
-            request = _again(job, request)
+            request = _again(job, request, result)
             continue
         if error == "schema" and not repaired:
             repaired = True
@@ -270,8 +270,10 @@ def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
                 request = _prepare(job, ready, pick)
                 continue
             _wait_quota(job, ready, result)
-            request = _again(job, request)
+            request = _again(job, request, result)
             continue
+        if _never_started(request, result):
+            _forget_session(job, ready.step, pick.role, str(request.session_id))
         return _fail(job, _failure(pick, request, result), usage)
 
 
@@ -305,9 +307,33 @@ def _prepare(job: _Job, ready: _Ready, pick: agents.Pick) -> StepRequest:
     return _request(job, ready, pick, session_id=session_id, resume=resume, log=log)
 
 
-def _again(job: _Job, request: StepRequest) -> StepRequest:
-    """The same request once more, logging to a fresh file."""
-    return request.model_copy(update={"log": _next_log(job)})
+def _again(job: _Job, request: StepRequest, result: StepResult | None = None) -> StepRequest:
+    """The same request once more, logging to a fresh file. A new claude session that the
+    CLI reported, or that ran until the timeout, exists now: the retry resumes it, since
+    claude refuses a `--session-id` already in use."""
+    update: dict[str, Any] = {"log": _next_log(job)}
+    fresh = result is not None and not request.resume and request.session_id is not None
+    if fresh and result is not None and (result.session_id or result.error == "timeout"):
+        session = result.session_id or request.session_id
+        update |= {"resume": True, "session_id": session, "skill": None}
+    return request.model_copy(update=update)
+
+
+def _never_started(request: StepRequest, result: StepResult) -> bool:
+    """A new claude session whose CLI failed before creating it (no id, no timeout)."""
+    fresh = not request.resume and request.session_id is not None
+    return fresh and not result.session_id and result.error != "timeout"
+
+
+def _forget_session(job: _Job, step: str, role: str, session_id: str) -> None:
+    """Drop the session id stored before the call, so the next run starts a new one."""
+
+    def forget(doc: Doc[Ticket], state: TicketState) -> None:
+        ref = doc.meta.sessions.get(role)
+        if ref is not None and ref.id == session_id:
+            del doc.meta.sessions[role]
+
+    _update(job, step, forget)
 
 
 def _repair(job: _Job, request: StepRequest, result: StepResult, problem: str) -> StepRequest:

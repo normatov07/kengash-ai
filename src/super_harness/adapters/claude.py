@@ -55,15 +55,17 @@ class Claude(CliProvider):
 
     def parse(self, req: StepRequest, proc: ProcessResult) -> StepResult:
         stdout = proc.stdout.strip()
+        # Without claude's JSON, only a resumed session is known to exist.
+        known = req.session_id if req.resume else None
         if not stdout and proc.exit_code == 0:
-            return StepResult(session_id=req.session_id, error="empty", detail="no output")
+            return StepResult(session_id=known, error="empty", detail="no output")
         try:
             data = json.loads(stdout)
         except json.JSONDecodeError:
             data = None
         if not isinstance(data, dict):
             message = tail(proc.stderr or proc.stdout) or f"exit {proc.exit_code}"
-            return StepResult(session_id=req.session_id, error=classify(message), detail=message)
+            return StepResult(session_id=known, error=classify(message), detail=message)
         session = data.get("session_id") or req.session_id
         text = str(data.get("result") or "")
         usage = _usage(data)

@@ -121,8 +121,8 @@ def test_error_kinds(fake_clis: FakeClis, tmp_path: Path) -> None:
     fake_clis.queue("claude", stdout=json.dumps(raw))
     assert Claude().run(_request(tmp_path, prompt="p")).error == "schema"
     fake_clis.queue("claude", stdout="", stderr="boom", exit=1)
-    crashed = Claude().run(_request(tmp_path, prompt="p"))
-    assert (crashed.error, crashed.detail) == ("crash", "boom")
+    crashed = Claude().run(_request(tmp_path, prompt="p", session_id="s-1"))
+    assert (crashed.error, crashed.detail, crashed.session_id) == ("crash", "boom", None)
 
 
 def test_timeouts_keep_the_session(fake_clis: FakeClis, tmp_path: Path) -> None:
