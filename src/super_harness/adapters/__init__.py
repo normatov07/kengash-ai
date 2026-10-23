@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from super_harness.adapters.antigravity import Antigravity
 from super_harness.adapters.base import Provider
 from super_harness.adapters.claude import Claude
 from super_harness.adapters.codex import Codex
@@ -17,6 +18,8 @@ def get(name: str, *, runtime: Path) -> Provider:
         return Claude()
     if name == "codex":
         return Codex(runtime / "schemas")
+    if name == "antigravity":
+        return Antigravity()
     if name == "shell":
         return Shell()
     if name == "gemini":
