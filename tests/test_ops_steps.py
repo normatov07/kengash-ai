@@ -250,3 +250,15 @@ def test_a_timed_out_new_claude_session_retries_by_resuming(
     session = first[first.index("--session-id") + 1]
     assert "--session-id" not in second and second[second.index("--resume") + 1] == session
     assert engine.ticket().meta.step == "implement"
+
+
+def test_a_denied_command_gets_one_repair_turn(engine: Engine, fake_clis: FakeClis) -> None:
+    write_settings(
+        engine.paths, "agents:\n  planner: {cli: antigravity, skill: plan, fallback: []}\n"
+    )
+    fake_clis.queue("agy", fixture="agy/denied.json")
+    fake_clis.queue("agy", fixture="agy/work_resume.json")
+    steps.run_job("7b55e0c1", steps=1)
+    second = fake_clis.calls("agy")[1]["argv"]
+    assert "--conversation" in second and "RunCommand" in second[1]
+    assert engine.ticket().meta.step == "implement"

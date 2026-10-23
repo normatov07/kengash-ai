@@ -101,3 +101,22 @@ def test_other_errors_return_at_once(
     assert calls.failure("claude", called.request, called.result) == (
         "sign in to claude interactively"
     )
+
+
+def test_an_empty_turn_with_denied_actions_gets_one_repair_turn(
+    scripted: Any, request_: StepRequest, tmp_path: Path, store_paths: StorePaths
+) -> None:
+    denied = StepResult(session_id="c-1", error="empty", detail="no output; denied: RunCommand")
+    provider = scripted(denied, OK)
+    called = calls.call(store_paths, "antigravity", request_, logs(tmp_path))
+    repair = provider.requests[1]
+    assert called.result.ok and (repair.resume, repair.session_id) == (True, "c-1")
+    assert "RunCommand" in repair.prompt and "file tools" in repair.prompt
+
+
+def test_an_empty_turn_without_denials_returns_at_once(
+    scripted: Any, request_: StepRequest, tmp_path: Path, store_paths: StorePaths
+) -> None:
+    provider = scripted(StepResult(error="empty", detail="no output"))
+    assert calls.call(store_paths, "claude", request_, logs(tmp_path)).result.error == "empty"
+    assert len(provider.requests) == 1

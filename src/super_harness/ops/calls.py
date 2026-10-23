@@ -1,5 +1,6 @@
 """Retry rules every CLI call shares: ticket steps, plan reviews and compaction (SP3 spec §5
-item 5). A timeout retries once; a schema error gets one repair turn on the session."""
+item 5). A timeout retries once; a schema error, and an empty turn whose actions were
+denied, each get one repair turn on the session."""
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -30,9 +31,9 @@ def step_timeout(resolved: Settings) -> int:
 def call(
     paths: StorePaths, provider: str, request: StepRequest, next_log: Callable[[], Path]
 ) -> Called:
-    """Run `request`; a timeout and a schema error each get one more attempt."""
+    """Run `request`; a timeout, a schema error and denied actions each get one more attempt."""
     usage = Usage()
-    timed_out = repaired = False
+    timed_out = repaired = unblocked = False
     while True:
         result = adapters.get(provider, runtime=paths.runtime).run(request)
         usage = plus(usage, result.usage)
@@ -44,7 +45,25 @@ def call(
             repaired = True
             request = repair(request, result, result.detail, next_log())
             continue
+        problem = denied(result)
+        if problem is not None and not unblocked:
+            unblocked = True
+            request = repair(request, result, problem, next_log())
+            continue
         return Called(request, result, usage)
+
+
+def denied(result: StepResult) -> str | None:
+    """For an empty turn whose actions the CLI denied (agy ends the turn after a denied
+    terminal command): what the repair turn tells the session; None otherwise."""
+    marker = "denied: "
+    if result.error != "empty" or marker not in result.detail:
+        return None
+    actions = result.detail.split(marker, 1)[1]
+    return (
+        f"this step denied {actions}; those actions are not available here. "
+        "Read and edit files with your file tools only"
+    )
 
 
 def again(request: StepRequest, result: StepResult | None, log: Path) -> StepRequest:

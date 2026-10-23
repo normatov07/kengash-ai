@@ -222,12 +222,13 @@ def _take_slot(job: _Job, ready: _Ready, pick: agents.Pick) -> None:
 
 
 def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
-    """Run the step's CLI: timeouts and schema errors retry once, rate limits fall back
-    or wait for the quota, other errors fail the ticket (SP3 spec §5 item 5)."""
+    """Run the step's CLI: timeouts retry once, schema errors and denied actions get one
+    repair turn, rate limits fall back or wait for the quota, other errors fail the ticket
+    (SP3 spec §5 item 5)."""
     request = _prepare(job, ready, pick)
     usage = Usage()
     tried = {pick.provider}
-    timed_out = repaired = False
+    timed_out = repaired = unblocked = False
     while True:
         result = adapters.get(pick.provider, runtime=job.paths.runtime).run(request)
         usage = calls.plus(usage, result.usage)
@@ -241,6 +242,11 @@ def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
         if error == "schema" and not repaired:
             repaired = True
             request = _repair(job, request, result, result.detail)
+            continue
+        problem = calls.denied(result)
+        if problem is not None and not unblocked:
+            unblocked = True
+            request = _repair(job, request, result, problem)
             continue
         if error == "rate_limit":
             fallback = _fallback(job, ready, pick, tried)
