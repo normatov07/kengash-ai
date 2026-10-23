@@ -81,9 +81,9 @@ function indexBody(data) {
 function write(event) {
   const what = event.type === "memory.compacted"
     ? `compacted ${event.before} → ${event.after} lines${event.accepted ? "" : ` (refused: ${event.reason})`}`
-    : event.type === "ticket.moved" ? `${event.from ?? ""} → ${event.to ?? ""}` : event.line;
+    : event.type === "ticket.moved" ? `${event.from ?? ""} → ${event.to ?? ""}` : String(event.line).replace(/^- /, "");
   const file = event.type === "ticket.moved" ? `tasks/${event.ticket}` : event.file;
-  return html`<div class="journal-row"><span class="time">${clock(event.ts)}</span><span class="kind mono">${file}</span><span class="id mono faint">${event.by ?? "harness"}</span><span class="text">${what}${event.why ? html` <span class="faint">· ${event.why}</span>` : ""}</span></div>`;
+  return html`<div class="journal-row"><span class="time">${clock(event.ts)}</span><span class="kind mono">${file}</span><span class="id mono faint">${event.by ?? "harness"}</span><span class="text">${what}${event.why && !String(what).includes(event.why) ? html` <span class="faint">· ${event.why}</span>` : ""}</span></div>`;
 }
 
 export function view(data, app) {

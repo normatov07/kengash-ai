@@ -2,7 +2,7 @@
 // SETTINGS.md with this scope's overrides marked, and the folder links behind the memory.
 import { get } from "../api.js";
 import { html } from "../html.js";
-import { actions, bindScope, check, field, loadScoped, pick, tabs } from "../scope.js";
+import { actions, bindScope, check, field, loadScoped, pick, tabs, text } from "../scope.js";
 import { bindLinks, project } from "./memory.js";
 
 export async function load(app) {
@@ -72,6 +72,10 @@ export function view(data, app) {
           <h2 class="section-title">Token discipline</h2><p class="section-note">Caps checked when a skill or memory file is written, so reads stay cheap</p>
           <div class="fields">${num("skill.max_lines", "SKILL LINES", { min: 1 })}${num("skill.max_words", "SKILL WORDS", { min: 1 })}${num("memory.compact_at_lines", "COMPACT AT", { min: 10 })}</div>
           <div class="checks">${box("review.diff_only", "Reviewers read the diff only")}${box("sessions.reuse", "Reuse each ticket's CLI session per role across loops")}</div>
+        </div></section>
+        <section class="panel"><div class="panel-body">
+          <h2 class="section-title">Project commands</h2><p class="section-note">What test steps and reviewers run; empty means the project has none</p>
+          <div class="fields">${text({ key: "project.test_cmd", label: "TEST COMMAND", value: pick(v, "project.test_cmd"), setHere: on("project.test_cmd"), placeholder: "uv run pytest -q" })}${text({ key: "project.lint_cmd", label: "LINT COMMAND", value: pick(v, "project.lint_cmd"), setHere: on("project.lint_cmd"), placeholder: "uv run ruff check" })}</div>
         </div></section>
         <section class="panel"><div class="panel-body">
           <h2 class="section-title">Status flow</h2><p class="section-note">Sub-statuses inside in_process, in the order a ticket passes them; the Workflow editor sets which steps run</p>

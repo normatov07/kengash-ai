@@ -4,8 +4,9 @@
     HARNESS_HOME=/tmp/harness-demo/.harness uv run harness ui open
 
 Builds three scratch repos, registers them, and writes plans, tickets in every column,
-journal events with token counts and diffs, held slots and a conductor ping. Never touches
-the user's own store: the store lives under the given folder.
+journal events with token counts and diffs, held slots and a conductor ping, settings
+overrides in payments-api, CLI sessions and a branch with commits on 7b55e0c1, and memory
+writes. Never touches the user's own store: the store lives under the given folder.
 """
 
 import os
@@ -168,22 +169,46 @@ def git(cwd: Path, *args: str) -> None:
     )
 
 
+FEATURED = "7b55e0c1"  # the ticket with sessions and a branch of commits
+
+
+def commit_work(repo: Path, ticket: Any) -> None:
+    """Two loops of trailered commits on the ticket's branch, as workers write them."""
+    git(repo, "checkout", "-q", "-b", ticket.branch)
+    for loop, (name, body) in enumerate(
+        (
+            ("signing.py", "def verify(payload, header):\n    return True\n"),
+            ("rotate.py", "def rotate(keyring):\n    keyring.promote()\n"),
+        ),
+        start=1,
+    ):
+        (repo / name).write_text(body, encoding="utf-8")
+        git(repo, "add", name)
+        trailers = (
+            f"Harness-Ticket: {ticket.uuid}\nHarness-Step: implement\n"
+            f"Harness-Loop: {loop}\nHarness-Model: codex/gpt-5-codex"
+        )
+        git(repo, "commit", "-q", "-m", f"{ticket.id}: loop {loop}\n\n{trailers}")
+    git(repo, "checkout", "-q", "main")
+
+
 def main(root: Path) -> int:
     os.environ["HARNESS_HOME"] = str(root / ".harness")
-    from super_harness import journal
+    from super_harness import journal, memory
     from super_harness.model import (
         ConductorPing,
         Doc,
         Event,
         Plan,
         Running,
+        SessionRef,
         SlotEntry,
         SlotTable,
         Ticket,
         TicketState,
         utc_now,
     )
-    from super_harness.ops import projects
+    from super_harness.ops import configure, projects
     from super_harness.store import StorePaths, documents, runtime
 
     paths = StorePaths.default()
@@ -243,6 +268,12 @@ def main(root: Path) -> int:
             for n in range(1, item.get("findings", 0) + 1)
         )
         sections = {"Scope": item["title"], "Acceptance": "- [ ] it works", "Findings": findings}
+        if item["id"] == FEATURED:
+            ticket.sessions = {
+                "implementer": SessionRef(provider="codex", model="gpt-5-codex", id="demo-impl"),
+                "security-reviewer": SessionRef(provider="claude", model="sonnet", id="demo-sec"),
+            }
+            commit_work(root / "code" / slug, ticket)
         documents.save_ticket(paths.project(slug), Doc(ticket, sections))
         provider = item.get("provider")
         if provider:
@@ -298,6 +329,20 @@ def main(root: Path) -> int:
             events.append(Event(ts=updated, type="ticket.merged", project=slug, ticket=item["id"]))
     for event in sorted(events, key=lambda e: e.ts):
         journal.append(paths, event)
+    for text, why, decision in (
+        ("Owner prefers rotation runbooks over inline docs", f"review of {FEATURED}", False),
+        ("Webhook keys rotate through a keyring with a 48h overlap", f"plan of {FEATURED}", True),
+    ):
+        memory.add(paths, text, why, decision=decision, by="claude/opus")
+    configure.save_settings(
+        {
+            "loop_max.critical": 8,
+            "agents.doc-writer.on": True,
+            "project.test_cmd": "uv run pytest -q",
+        },
+        project="payments-api",
+        by="demo",
+    )
     runtime.save_slots(paths, SlotTable(held=slots))
     runtime.save_ping(paths, ConductorPing(pid=os.getpid(), agent="claude", project=None))
     print(f"demo store at {paths.home}; run: HARNESS_HOME={paths.home} uv run harness ui open")

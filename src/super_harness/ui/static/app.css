@@ -114,6 +114,7 @@ main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .table .rows { min-width: 700px; }
 .thead, .trow { display: flex; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--line-soft); font-size: 13px; }
 .thead { padding: 9px 18px; border-bottom-color: var(--line); font-size: 10px; font-weight: 600; letter-spacing: 0.1em; color: var(--faint); }
+.thead > *, .thead > [class] { font-family: var(--sans); font-size: 10px; color: var(--faint); }
 .trow:last-child { border-bottom: 0; }
 .cell-step { flex: 0 0 170px; display: flex; align-items: center; gap: 8px; }
 .cell-id { flex: 0 0 100px; font-family: var(--mono); font-size: 12px; }
@@ -272,7 +273,7 @@ main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .segmented.tabs { align-self: flex-start; }
 .cell-diff { flex: 0 0 110px; }
 .cell-time { flex: 0 0 76px; font-size: 12px; }
-.trow .cell-agent, .thead .cell-agent { flex: 0 0 180px; font-size: 12px; }
+.trow .cell-agent, .thead .cell-agent { flex: 0 0 180px; }
 pre.diff { margin: 0; max-height: 520px; overflow: auto; padding: 10px 0; border-top: 1px solid var(--line); background: var(--bg); font-size: 11.5px; line-height: 1.6; }
 pre.diff span { display: block; padding: 0 14px; white-space: pre; color: var(--muted); }
 pre.diff .add { color: var(--ok); background: #13221a; }

@@ -117,7 +117,7 @@ export function view(data, app) {
         ${body}
       </div>
       <div class="side">
-        <section class="panel"><div class="panel-head"><h2>Written to shared memory</h2></div><div class="panel-body">${data.memory_writes.length ? data.memory_writes.map((w) => html`<div class="memo"><span class="mono">${w.file}</span><span>${w.line}</span><span class="faint mono">${clock(w.ts)}</span></div>`) : html`<span class="faint">Nothing written for this ticket.</span>`}</div></section>
+        <section class="panel"><div class="panel-head"><h2>Written to shared memory</h2></div><div class="panel-body">${data.memory_writes.length ? data.memory_writes.map((w) => html`<div class="memo"><span class="mono">${w.file}</span><span>${String(w.line).replace(/^- /, "")}</span><span class="faint mono">${clock(w.ts)}</span></div>`) : html`<span class="faint">Nothing written for this ticket.</span>`}</div></section>
         <section class="panel"><div class="panel-head"><h2>Agent chain</h2><span class="end faint mono">${meta.workflow}</span></div><div class="panel-body">${chainView(data)}</div></section>
         <section class="panel"><div class="panel-head"><h2>Metadata</h2></div><div class="panel-body meta-list">
           <div><span class="faint">workflow</span><span class="mono">${meta.workflow}</span></div>
