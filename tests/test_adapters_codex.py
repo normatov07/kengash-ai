@@ -91,3 +91,13 @@ def test_detect(fake_clis: FakeClis, tmp_path: Path) -> None:
     fake_clis.sign_out("codex")
     assert Codex(tmp_path).detect().hint == "run `codex login`"
     assert Codex(tmp_path).attach_command("t-1") == ["codex", "resume", "t-1"]
+
+
+def test_an_error_event_followed_by_a_completed_turn_is_not_a_failure(
+    fake_clis: FakeClis, tmp_path: Path
+) -> None:
+    lines = fake_clis.fixture("codex/review_new.jsonl").splitlines()
+    retry = json.dumps({"type": "error", "message": "stream disconnected; retrying 1/5"})
+    fake_clis.queue("codex", stdout="\n".join([lines[0], lines[1], retry, *lines[2:]]) + "\n")
+    result = Codex(tmp_path).run(_request(tmp_path, prompt="Review"))
+    assert result.ok and isinstance(result.output, ReviewOutput)

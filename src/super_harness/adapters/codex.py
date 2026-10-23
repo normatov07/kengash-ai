@@ -75,6 +75,7 @@ class Codex(CliProvider):
                     message = str(item.get("text") or "")
             elif kind == "turn.completed":
                 usage = _add(usage, event.get("usage") or {})
+                failure = None  # an earlier `error` event was a retry the turn survived
             elif kind == "error":
                 failure = str(event.get("message") or "error")
             elif kind == "turn.failed":
