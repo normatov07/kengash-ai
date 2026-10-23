@@ -115,11 +115,13 @@ def doctor(
                 problems.append(
                     Problem(f"unmanaged store {found}; run: harness adopt {found.parent}")
                 )
-    for slug, ticket_id in waiting.dead_workers(paths):
-        if fix:
-            waiting.check_workers(paths)
-        hint = "marked failed" if fix else "run: harness doctor --fix"
-        problems.append(Problem(f"worker of {ticket_id} died; {hint}", slug, fix))
+    dead = waiting.dead_workers(paths)
+    if fix and dead:
+        waiting.check_workers(paths)
+    for record in dead:
+        done = "marked failed" if record.job == "ticket" else "dropped"
+        hint = done if fix else "run: harness doctor --fix"
+        problems.append(Problem(f"worker of {record.id} died; {hint}", record.project, fix))
     problems += [
         Problem(check.message, warning=not check.blocking)
         for check in providers.check_providers(paths)

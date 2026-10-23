@@ -10,7 +10,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 - `Doc[M]`: a frontmatter model plus ordered Markdown sections; `PLAN_SECTIONS` and `TICKET_SECTIONS` name them.
 - `Registry`, `ProjectEntry`: `registry.yaml`.
 - `SlotEntry`, `SlotTable`, `Claims`, `Trust`: `runtime/slots.json`, `runtime/claims.json` and `runtime/trust.json` (SP3 spec §4).
-- `WorkerRecord` (`runtime/workers/<id>.json`), `TicketState` with `Running` (`runtime/tickets/<id>.json`: stall streaks, plan-review rounds, pending approval, editing start commit, agy usage totals, the call in flight, call count), `ConductorPing` and `JournalCursor` (`runtime/conductors/`).
+- `WorkerRecord` (`runtime/workers/<id>.json`; `job`: `ticket`, `plan-review` or `compact`), `TicketState` with `Running` (`runtime/tickets/<id>.json`: stall streaks, plan-review rounds, pending approval, editing start commit, agy usage totals, the call in flight, call count), `ConductorPing` and `JournalCursor` (`runtime/conductors/`).
 - `Importance`, `Gate`, `Folder`, `ShortId`, `Title`, `utc_now()`.
 - `TicketInput`: one item of `harness ticket add` input (SP2 spec §4); unknown fields are rejected.
 - `SUB_STATUSES`: sub-statuses per folder, `in_process/paused` included (`in_process` also takes the step names of `status.names`); `Ticket.sub_status`.
@@ -28,6 +28,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Changes
 
+- 2026-10-23: `WorkerRecord.job` names plan-review and compaction jobs (SP3 M4).
 - 2026-10-23: `WaitTimeout` (exit 3) (SP3 M4).
 - 2026-10-23: `WaitTimeout` (exit 3) (SP3 M4).
 - 2026-10-23: worker, ticket-state, conductor and cursor runtime models (SP3 M3).

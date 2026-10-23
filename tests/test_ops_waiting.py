@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from conftest import Engine, Events
 
-from super_harness.model import TicketState, WorkerRecord, utc_now
+from super_harness.model import SlotEntry, SlotTable, TicketState, WorkerRecord, utc_now
 from super_harness.ops import lifecycle, steps, waiting
 from super_harness.store import StorePaths, documents, runtime
 
@@ -23,6 +23,29 @@ def test_a_dead_worker_fails_its_ticket(engine: Engine, journal_events: Events) 
     event = journal_events()[-1]
     assert (event["type"], event["reason"]) == ("ticket.failed", "worker died")
     assert runtime.load_worker(engine.paths, "7b55e0c1") is None
+
+
+def test_dead_job_workers_are_dropped_and_free_their_slot(
+    engine: Engine, journal_events: Events
+) -> None:
+    held = SlotEntry(
+        provider="claude", project=engine.slug, ticket="a1b2c3d4", step="review_plan", pid=1
+    )
+    runtime.save_slots(engine.paths, SlotTable(held=[held]))
+    runtime.save_worker(
+        engine.paths,
+        WorkerRecord(id="a1b2c3d4", project=engine.slug, pid=2**22 + 7, job="plan-review"),
+    )
+    assert waiting.check_workers(engine.paths) == ["a1b2c3d4"]
+    assert runtime.load_worker(engine.paths, "a1b2c3d4") is None
+    assert runtime.load_slots(engine.paths).held == []
+    event = journal_events()[-1]
+    assert (event["type"], event["job"], event["reason"]) == (
+        "worker.exited",
+        "plan-review",
+        "worker died",
+    )
+    assert engine.ticket().meta.status == "in_process/under_planning"
 
 
 def test_a_stale_heartbeat_counts_as_dead(engine: Engine) -> None:

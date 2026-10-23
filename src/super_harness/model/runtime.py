@@ -50,7 +50,7 @@ class WorkerRecord(_Runtime):
     id: str
     project: str
     pid: int
-    job: Literal["ticket"] = "ticket"
+    job: Literal["ticket", "plan-review", "compact"] = "ticket"
     step: str | None = None
     started: datetime = Field(default_factory=utc_now)
     heartbeat: datetime = Field(default_factory=utc_now)

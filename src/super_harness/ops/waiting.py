@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from super_harness import journal
-from super_harness.model import ConductorPing, Event, Folder, Ticket, utc_now
-from super_harness.ops import lifecycle, records, steps
+from super_harness.model import ConductorPing, Event, Folder, Ticket, WorkerRecord, utc_now
+from super_harness.ops import jobs, lifecycle, records, steps
 from super_harness.ops.workspace import GATES
 from super_harness.store import runtime
 from super_harness.store.paths import StorePaths
@@ -43,25 +43,29 @@ class WaitResult:
     timed_out: bool = False
 
 
-def dead_workers(paths: StorePaths) -> list[tuple[str, str]]:
-    """(project, ticket) of every worker record whose process is gone or whose heartbeat
-    is older than DEAD_AFTER_S."""
-    dead: list[tuple[str, str]] = []
+def dead_workers(paths: StorePaths) -> list[WorkerRecord]:
+    """Every worker record whose process is gone or whose heartbeat is older than
+    DEAD_AFTER_S."""
+    dead: list[WorkerRecord] = []
     for record in runtime.load_workers(paths):
         age = (utc_now() - record.heartbeat).total_seconds()
         if age >= lifecycle.DEAD_AFTER_S or not lifecycle.pid_alive(record.pid):
-            dead.append((record.project, record.id))
+            dead.append(record)
     return dead
 
 
 def check_workers(paths: StorePaths, *, fix: bool = True) -> list[str]:
-    """Tickets whose worker died; with `fix`, each running one fails "worker died"."""
+    """Ids of the jobs whose worker died; with `fix`, each running ticket fails "worker
+    died", and a dead plan-review or compaction job is dropped (its slot freed)."""
     dead = dead_workers(paths)
     if fix:
-        for slug, ticket_id in dead:
-            steps.fail_ticket(paths, slug, ticket_id, "worker died")
-            runtime.drop_worker(paths, ticket_id)
-    return [ticket_id for _, ticket_id in dead]
+        for record in dead:
+            if record.job == "ticket":
+                steps.fail_ticket(paths, record.project, record.id, "worker died")
+            else:
+                jobs.died(paths, record)
+            runtime.drop_worker(paths, record.id)
+    return [record.id for record in dead]
 
 
 def ping(paths: StorePaths, project: str | None) -> None:

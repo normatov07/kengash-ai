@@ -11,7 +11,7 @@ import threading
 import traceback
 from types import FrameType
 
-from super_harness.ops import steps
+from super_harness.ops import jobs, steps
 
 HEARTBEAT_S = 15
 STOPPED = 143
@@ -19,8 +19,8 @@ STOPPED = 143
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m super_harness.worker")
-    jobs = parser.add_subparsers(dest="job", required=True)
-    ticket = jobs.add_parser("ticket", help="run a ticket's steps")
+    kinds = parser.add_subparsers(dest="job", required=True)
+    ticket = kinds.add_parser("ticket", help="run a ticket's steps")
     ticket.add_argument("id")
     ticket.add_argument("--steps", type=int, default=None)
     ticket.add_argument("--project", default=None)
@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     finally:
         done.set()
-        steps.forget_worker(args.id)
+        jobs.forget(args.id)
 
 
 def _stop(signum: int, frame: FrameType | None) -> None:
@@ -49,7 +49,7 @@ def _stop(signum: int, frame: FrameType | None) -> None:
 
 def _beat(ticket_id: str, done: threading.Event) -> None:
     while not done.wait(HEARTBEAT_S):
-        steps.heartbeat(ticket_id)
+        jobs.heartbeat(ticket_id)
 
 
 if __name__ == "__main__":

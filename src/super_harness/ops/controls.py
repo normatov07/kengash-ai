@@ -3,8 +3,6 @@
 import contextlib
 import os
 import signal
-import subprocess
-import sys
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -24,7 +22,7 @@ from super_harness.model import (
     WorkerRecord,
     utc_now,
 )
-from super_harness.ops import agents, lifecycle, merging, records, slots, steps
+from super_harness.ops import agents, jobs, lifecycle, merging, records, slots, steps
 from super_harness.store import documents, runtime, storegit
 from super_harness.store.locks import locked
 from super_harness.store.paths import StorePaths
@@ -115,21 +113,9 @@ def run_tickets(
 
 
 def spawn_worker(paths: StorePaths, slug: str, ticket_id: str, steps: int | None) -> int:
-    """Start `python -m super_harness.worker` detached, logging to runtime/logs/<id>.log."""
-    paths.logs.mkdir(parents=True, exist_ok=True)
-    argv = [sys.executable, "-m", "super_harness.worker", "ticket", ticket_id]
-    argv += ["--steps", str(steps)] if steps else []
-    argv += ["--project", slug]
-    with (paths.logs / f"{ticket_id}.log").open("ab") as log:
-        process = subprocess.Popen(
-            argv,
-            start_new_session=True,
-            stdin=subprocess.DEVNULL,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            env=dict(os.environ),
-        )
-    return process.pid
+    """Start the ticket's worker detached, logging to runtime/logs/<id>.log."""
+    args = ["ticket", ticket_id, *(["--steps", str(steps)] if steps else []), "--project", slug]
+    return jobs.spawn(paths, args, ticket_id)
 
 
 def approve_ticket(
