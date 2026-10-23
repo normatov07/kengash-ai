@@ -4,7 +4,7 @@
 - Status: approved by default (user prefers momentum; assumptions listed in §2 for veto)
 - Implements: system spec `2026-10-22-super-harness-design.md` §5 (loop semantics), §6 (`next`, `run`, `wait`, gates and controls, `plan review`, `ticket changes`, `memory compact`), §7 (workers and provider adapters); units `workflow`, `scheduler`, `adapters`, `gitops`, `worker`, and their `ops` use cases.
 - This spec only adds what the system spec leaves open. The system spec changes it needs (§2) were made in the same commit.
-- CLI facts were checked on 2026-10-22: claude 2.1.308 and agy 1.4.5 with short real runs; codex 0.161.0 through `--help` only, because it is not installed or signed in on the dev machine.
+- CLI facts were checked on 2026-10-22: claude 2.1.308 and agy 1.4.5 with short real runs; codex 0.161.0 through `--help` only, because it is not installed or signed in on the dev machine. Permission rows re-checked on 2026-10-23 with claude 2.1.309 and agy 1.4.5 (M2).
 
 ## 1. Milestones
 
@@ -22,7 +22,7 @@ Each milestone is planned just before it is built (`docs/superpowers/plans/`), e
 1. **`worker` imports `ops`.** The worker is a frontend for detached jobs, as `cli` is for commands: `python -m super_harness.worker` parses its job, heartbeats and calls `ops`. `ops` never imports `worker`; it starts it as a process. Merge, queue refresh and gate handling then live once, in `ops`. (System spec §3.1 changed.)
 2. **Worktree at claim.** `harness run` creates or reuses the ticket's worktree before the first step, and every step of the ticket runs in it: all roles see the same code, and every CLI resumes its session from the directory that created it. (§7.1 changed.)
 3. **Context inline.** Prompts carry the ticket's Scope, Acceptance, latest Handoff and open Findings, plus the plan's Goal. Agents never read or write store files. (§7.1 changed.)
-4. **Workers skip the user's personal agent setup.** A default `claude -p` loaded the user's 6 plugins, 7 hooks and 5 MCP servers (Gmail and Drive among them); with `--setting-sources project,local --strict-mcp-config` it loaded none of them. Workers therefore run claude with those flags, codex with `--ignore-user-config` and agy with `--disable-slash-commands`. The repo's own AGENTS.md, CLAUDE.md and project settings still apply. `providers.<p>.user_config: true` opts back in.
+4. **Workers skip the user's personal agent setup.** A default `claude -p` loaded the user's 6 plugins, 7 hooks and 5 MCP servers (Gmail and Drive among them); with `--setting-sources project,local --strict-mcp-config` it loaded none of them. Workers therefore run claude with those flags, codex with `--ignore-user-config`; agy gets no isolation flag, because `--disable-slash-commands` voids `--mode`. The repo's own AGENTS.md, CLAUDE.md and project settings still apply. `providers.<p>.user_config: true` opts back in.
 5. **Session ids are known before a step ends.** New claude sessions get `--session-id <uuid>` chosen by harness; codex prints its id first (`thread.started`); agy returns it at the end. A killed claude or codex step resumes its session; a killed agy step starts the role's session again.
 6. **Dependencies are met by `done/merged` and `done/closed` only.** `done/branch_ready` keeps dependents blocked until the branch is merged or the ticket closed, because a dependent's worktree starts from the base branch. (SP2 decision 16 and system spec §4.4, §6 changed.)
 7. **Fallback covers unavailable providers.** A role's `fallback` list is used when its provider is not installed or not signed in, and on rate limits while `fallback_on_rate_limit` is on. With no usable provider, `run` exits 4 naming the install or sign-in step.
@@ -71,6 +71,7 @@ runtime/                       (git-ignored)
 ├── workers/<id>.json          job, pid, step, started, heartbeat (every 15 s)
 ├── slots.json                 held slots (provider, project, ticket, step, pid, since) and waiters in arrival order
 ├── claims.json                last claim time per project (project turns in `next`)
+├── trust.json                 digest of each repo's hook and MCP files doctor last reported
 ├── flags/                     pause · pause-<slug> · park-<id>
 ├── tickets/<id>.json          stall streaks, review_plan rounds, approval reason, implement start commit
 ├── conductors/                <pid>.json pings (pid, agent, project filter, time) · cursor-<scope>.json
@@ -127,18 +128,21 @@ Rows are checked top to bottom; the first match decides. A fingerprint is the fi
 | resume | `claude -p <delta> --resume <id> --output-format json --json-schema <json>` | `codex exec resume --json --output-schema <file> -c sandbox_mode="<sandbox>" [-m M] <id> <delta>` (resume takes no `-s` or `-C`) | `agy -p <delta> --conversation <id> --output-format json --json-schema <json> --mode <mode>` |
 | `read_only` | `--permission-mode dontAsk --allowedTools Read Grep Glob "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)" "Bash(git status:*)"` | sandbox `read-only` | `--mode plan` |
 | `edit_worktree` | `--permission-mode acceptEdits --permission-prompts none --allowedTools` the read set plus `"Bash(<test_cmd>:*)" "Bash(<lint_cmd>:*)"` | sandbox `workspace-write` | `--mode accept-edits` |
-| isolation (default) | `--setting-sources project,local --strict-mcp-config` | `--ignore-user-config` | `--disable-slash-commands` |
+| isolation (default) | `--setting-sources project,local --strict-mcp-config` | `--ignore-user-config` | none (see below) |
 | bypass (opt-in) | `--dangerously-skip-permissions` | `--dangerously-bypass-approvals-and-sandbox` | `--dangerously-skip-permissions` |
-| output | one JSON object: `session_id`, `is_error`, `subtype`, `structured_output`, `result`, `usage`, `total_cost_usd`, `api_error_status` | JSONL: `thread.started` (`thread_id`), `item.completed` with an `agent_message` whose text is the schema JSON, `turn.completed` (`usage`: input, cached input, output, reasoning), `turn.failed`, `error` | one JSON object: `conversation_id`, `status` (`SUCCESS`), `response`, `structured_output`, `usage` (input, output, thinking, cache read) |
+| output | one JSON object: `session_id`, `is_error`, `subtype`, `structured_output`, `result`, `usage`, `total_cost_usd`, `api_error_status` | JSONL: `thread.started` (`thread_id`), `item.completed` with an `agent_message` whose text is the schema JSON, `turn.completed` (`usage`: input, cached input, output, reasoning), `turn.failed`, `error` | one JSON object: `conversation_id`, `status` (`SUCCESS`), `response`, `structured_output`, `usage` (input, output, thinking, cache read), `denied_actions`; `usage` and `num_turns` are conversation totals |
 | signed in | `claude auth status --json`: `loggedIn`; `authMethod` reveals API-key logins | `codex login status`: exit 0, else "Not logged in" and exit 1 | `agy models` exits 0 |
 | attach | `claude --resume <id>` | `codex resume <id>` | `agy --conversation <id>` |
 
 Profile, isolation and bypass flags go on every call, new or resumed (codex resumes take the sandbox as `-c sandbox_mode=…`), and so does the model when the agent names one. Every CLI runs with the worktree as its working directory, in its own process group, stdout to `runtime/logs/<id>-<n>.out`. Workers drop `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CODEX_API_KEY`, `GEMINI_API_KEY` and `GOOGLE_API_KEY` (unless `providers.<p>.allow_api_key`) and the conductor markers `CLAUDECODE` and `CLAUDE_CODE_ENTRYPOINT`, and set `HARNESS_AGENT=<role>`. Never used: claude `--bare` and `--no-session-persistence`, codex `--ephemeral`.
 
-- agy repeats the previous turn's `structured_output` when a turn runs without a schema, so every agy turn passes the schema.
+- agy repeats the previous turn's `structured_output` when a turn ends without schema JSON, even with the schema passed: the output counts only when `response` parses to the same JSON, else `schema`. Every agy turn still passes the schema.
+- agy read-only steps run `--mode plan` and end the prompt with: `This is a read-only step: read files with your file-viewing tools only; never run terminal commands.` A turn with `denied_actions` and no output is `empty`, naming the denied actions.
+- Token fields: `input` excludes cache reads (codex and agy include them in `input_tokens`, so the adapter subtracts); `output` includes thinking. agy reports conversation totals: the adapter subtracts the totals after the session's previous turn (`StepRequest.prior_usage`) and returns the new totals (`StepResult.total_usage`).
+- `allow_api_key` keeps only that provider's variables: claude `ANTHROPIC_API_KEY`; codex `OPENAI_API_KEY`, `CODEX_API_KEY`; antigravity `GEMINI_API_KEY`, `GOOGLE_API_KEY`. The bypass flag replaces the permission-profile flags for claude and codex; agy keeps `--mode`. Prompt and skill text never start with `-` in argv (a newline is prepended), and a prompt over 120 KiB fails as `crash` before the CLI starts. New claude sessions get their `--session-id` from harness, so a killed step can resume.
 - `--ignore-user-config` also drops the user's codex model default and any credential-store setting; if codex then reports a sign-in error, `providers.codex.user_config: true` restores both.
 - Error kinds: claude `api_error_status` 401 or 403 → `auth`, 429 or a usage-limit `result` → `rate_limit` (reset time parsed when given); codex `turn.failed` and `error` messages; agy a `status` other than `SUCCESS`; exit 0 with no output → `empty`; output that fails the schema → `schema`; killed at the timeout → `timeout`; anything else → `crash`. Exact strings come from recorded fixtures, and live smoke re-checks them.
-- The permission rows for agy, agy's sign-in check, and claude's `dontAsk` and `--permission-prompts none` in print mode are confirmed by live runs in M2 and the M4 live smoke; if one misbehaves, the adapter changes, not this contract.
+- claude's `dontAsk`, `acceptEdits --permission-prompts none` and the agy rows were confirmed by live runs on 2026-10-23; the M4 live smoke re-checks them.
 - `shell` runs `sh -c <project.test_cmd>` in the worktree: exit 0 passes; otherwise one finding holds the last 20 output lines. An empty `test_cmd` fails the step with "set project.test_cmd".
 
 ### 8.2 Prompts and outputs
@@ -183,7 +187,7 @@ A resumed session gets only `Loop <n>, step <step>: <step instruction>` plus the
 | `harness ticket changes ID [--diff]` | `<path> +a -r  loop n <step> <provider>/<model>` per file and commit | 0 · 1 |
 | `harness ticket attach ID [--role R]` | the command that opens the role's session in its worktree | 0 · 1 no session |
 | `harness memory compact [--timeout 540]` | `MEMORY.md N → M lines` | 0 · 1 result rejected · 3 timeout |
-| `harness doctor` (additions) | dead workers; missing or signed-out providers of enabled agents; repo hooks or MCP config (once per repo) | as in SP2 |
+| `harness doctor` (additions) | dead workers (M3); providers of enabled agents and the compactor that are missing, signed out or unsupported (a problem when a role has no usable fallback, else a warning); a claude login other than claude.ai (warning); repo hooks or MCP config (warning, once per repo until the files change) | as in SP2 |
 
 `next` and `wait` write a conductor ping: the nearest ancestor process named `claude`, `codex` or `agy` (else the parent), the agent (`$HARNESS_AGENT`, else detected), the project filter and the time.
 

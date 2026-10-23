@@ -381,13 +381,12 @@ class Provider(Protocol):
 
     def detect(self) -> ProviderStatus: ...  # installed, version, signed-in state
     def run(self, req: StepRequest) -> StepResult: ...
-    def attach_command(
-        self, session_id: str, cwd: Path
-    ) -> list[str]: ...  # "Attach to live CLI session"
+    def attach_command(self, session_id: str) -> list[str]: ...  # run in the worktree
+    def recover_session(self, log: Path) -> str | None: ...  # id from a killed step's output
 ```
 
-- `StepRequest`: cwd, prompt, role skill path, model, session id (`None` = new session), JSON schema, permission profile (`read_only` | `edit_worktree`), timeout.
-- `StepResult`: session id, ok, structured output, text, usage (input, output, cache read and write, cost when reported), duration, and an error kind (`auth`, `rate_limit`, `timeout`, `empty`, `schema`, `crash`) with an optional `retry_after`.
+- `StepRequest`: cwd, prompt, role skill text, raw-output log path, the session's previous usage totals (agy), model, session id (`None` = new session), JSON schema, permission profile (`read_only` | `edit_worktree`), timeout.
+- `StepResult`: session id, ok, structured output, text, usage (input, output, cache read and write, cost when reported), duration, and an error kind (`auth`, `rate_limit`, `timeout`, `empty`, `schema`, `crash`) with an optional `retry_after`, and the session's new usage totals (agy).
 - Signed-in state comes from each CLI's own status command where one exists, otherwise from the last run's `auth` error. Token files are never read.
 
 | Provider | New session | Resume | Notes |
