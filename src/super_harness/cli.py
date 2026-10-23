@@ -20,6 +20,7 @@ from super_harness.ops import (
     queue,
     status,
     tickets,
+    waiting,
     workspace,
 )
 
@@ -672,3 +673,27 @@ def merge_ticket(
         _emit_json(merged)
         return
     typer.echo(f"merged {merged.id}: {merged.commits} commits into {merged.base}")
+
+
+@app.command("wait")
+def wait(
+    project: Every = None,
+    timeout: Annotated[
+        float, typer.Option("--timeout", min=0, help="Seconds before giving up (exit 3).")
+    ] = 540,
+    as_json: AsJson = False,
+) -> None:
+    """Block until a ticket needs the conductor; `idle` when nothing runs."""
+    with _errors():
+        result = waiting.wait(project, timeout=timeout)
+    if as_json:
+        _emit_json(result)
+    elif result.events:
+        lines = [f"{e.id} {e.status} loop {e.loop}/{e.loop_max}: {e.detail}" for e in result.events]
+        for line in _capped(lines, "harness wait --json"):
+            typer.echo(line)
+    elif result.idle:
+        typer.echo("idle")
+    if result.timed_out:
+        typer.echo(f"wait timed out after {timeout:g} s", err=True)
+        raise typer.Exit(3)

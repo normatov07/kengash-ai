@@ -3,8 +3,8 @@
 from dataclasses import dataclass, field
 
 from super_harness import scheduler, settings, workflow
-from super_harness.model import STEP_ROLES, Folder, Gate, Settings, Ticket, split_cli
-from super_harness.ops import records
+from super_harness.model import STEP_ROLES, Folder, Settings, Ticket, split_cli
+from super_harness.ops import lifecycle, records, waiting
 from super_harness.ops.workspace import GATES
 from super_harness.store import runtime
 from super_harness.store.paths import StorePaths
@@ -35,6 +35,8 @@ class Queue:
 def next_tickets(project: str | None = None) -> Queue:
     """Tickets to start now, in start order: of every project, or of the named one."""
     paths = StorePaths.default()
+    waiting.check_workers(paths)
+    waiting.ping(paths, project)
     machine = settings.load(paths)
     pause = runtime.pause_state(paths)
     found = Queue()
@@ -81,28 +83,13 @@ def next_tickets(project: str | None = None) -> Queue:
     return found
 
 
-def progress_of(resolved: Settings, ticket: Ticket) -> workflow.Progress:
-    """The ticket's place in its workflow; a ticket that never ran starts at the first step."""
-    hitl = ticket.gate is Gate.hitl
-    first = workflow.first_step(resolved, ticket.workflow, hitl=hitl)
-    return workflow.Progress(
-        workflow=ticket.workflow,
-        hitl=hitl,
-        step=ticket.step or first,
-        loop=ticket.loop,
-        loop_max=ticket.loop_max,
-        tokens=ticket.tokens,
-        tokens_max=ticket.tokens_max or resolved.tokens.per_ticket_max,
-    )
-
-
 def _start(resolved: Settings, ticket: Ticket, *, paused: bool) -> tuple[str | None, str]:
     """The step a claim would start with, or None and the reason the ticket waits."""
     if paused:
         return None, "paused"
     if ticket.workflow not in resolved.workflows:
         return None, f"settings have no workflow {ticket.workflow!r}"
-    decision = workflow.before(resolved, progress_of(resolved, ticket)).decision
+    decision = workflow.before(resolved, lifecycle.progress_of(resolved, ticket)).decision
     if isinstance(decision, workflow.Run):
         return decision.step, ""
     if isinstance(decision, workflow.Halt) and decision.approval == "approve_step":

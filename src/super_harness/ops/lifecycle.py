@@ -6,8 +6,7 @@ import os
 from dataclasses import replace
 
 from super_harness import workflow
-from super_harness.model import Doc, Event, Settings, Ticket, TicketState
-from super_harness.ops import queue
+from super_harness.model import Doc, Event, Gate, Settings, Ticket, TicketState
 
 DEAD_AFTER_S = 120  # a worker heartbeats every 15 s
 
@@ -67,7 +66,7 @@ def pid_alive(pid: int) -> bool:
 
 def progress_for(resolved: Settings, ticket: Ticket, state: TicketState) -> workflow.Progress:
     return replace(
-        queue.progress_of(resolved, ticket), streaks=state.streaks, plan_rounds=state.plan_rounds
+        progress_of(resolved, ticket), streaks=state.streaks, plan_rounds=state.plan_rounds
     )
 
 
@@ -83,3 +82,18 @@ def apply_progress(
         ticket.tokens_max = progress.tokens_max
     state.streaks = {step: dict(counts) for step, counts in progress.streaks.items()}
     state.plan_rounds = progress.plan_rounds
+
+
+def progress_of(resolved: Settings, ticket: Ticket) -> workflow.Progress:
+    """The ticket's place in its workflow; a ticket that never ran starts at the first step."""
+    hitl = ticket.gate is Gate.hitl
+    first = workflow.first_step(resolved, ticket.workflow, hitl=hitl)
+    return workflow.Progress(
+        workflow=ticket.workflow,
+        hitl=hitl,
+        step=ticket.step or first,
+        loop=ticket.loop,
+        loop_max=ticket.loop_max,
+        tokens=ticket.tokens,
+        tokens_max=ticket.tokens_max or resolved.tokens.per_ticket_max,
+    )

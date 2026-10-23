@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from super_harness import memory, settings
 from super_harness.model import Folder, Settings, UserError
-from super_harness.ops.projects import repo_root
+from super_harness.ops.records import repo_root
 from super_harness.store import documents
 from super_harness.store.paths import StorePaths
 from super_harness.store.registry import load_registry

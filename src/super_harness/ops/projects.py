@@ -10,7 +10,8 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from super_harness.model import NeedsSetup, Plan, ProjectEntry, Ticket, UserError, utc_now
-from super_harness.ops import providers
+from super_harness.ops import providers, waiting
+from super_harness.ops.records import repo_root
 from super_harness.store import documents, links, storegit
 from super_harness.store.locks import locked
 from super_harness.store.paths import ProjectPaths, StorePaths
@@ -57,19 +58,6 @@ class AdoptResult:
     added: int
     conflicts: int
     archive: Path
-
-
-def repo_root(path: Path) -> Path:
-    """The git top-level that contains `path`, else `path` itself as an absolute path."""
-    if not path.is_dir():
-        raise UserError(f"not a folder: {path}")
-    result = subprocess.run(
-        ["git", "-C", str(path), "rev-parse", "--show-toplevel"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return Path(result.stdout.strip()) if result.returncode == 0 else path.absolute()
 
 
 def init_project(path: Path, paths: StorePaths | None = None) -> InitResult:
@@ -127,6 +115,11 @@ def doctor(
                 problems.append(
                     Problem(f"unmanaged store {found}; run: harness adopt {found.parent}")
                 )
+    for slug, ticket_id in waiting.dead_workers(paths):
+        if fix:
+            waiting.check_workers(paths)
+        hint = "marked failed" if fix else "run: harness doctor --fix"
+        problems.append(Problem(f"worker of {ticket_id} died; {hint}", slug, fix))
     problems += [
         Problem(check.message, warning=not check.blocking)
         for check in providers.check_providers(paths)
