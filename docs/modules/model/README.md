@@ -14,6 +14,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 - `TicketInput`: one item of `harness ticket add` input (SP2 spec §4); unknown fields are rejected.
 - `SUB_STATUSES`: sub-statuses per folder, `in_process/paused` included (`in_process` also takes the step names of `status.names`); `Ticket.sub_status`.
 - `Settings`, `Agent`, `Workflow`, `ProviderOptions`, `STEP_ROLES`, `PROVIDERS`, `split_cli`: the SETTINGS.md schema; workflows may only use known steps whose agents exist; an agent's `cli` names a provider or `shell`, while fallbacks and `memory.compactor` name a provider; `Settings.provider(name)` gives a provider's worker options, defaults included.
+- Step contract (SP3 spec §8): `StepRequest` (role, worktree, prompt, output kind, permission profile, timeout, raw-output log, model, session and resume, skill text, test and lint commands, provider options, the session's previous usage totals), `StepResult` (session, parsed output, text, usage, totals, duration, `error` kind, `retry_after`, detail; `ok` when `error` is None), `Usage` (`tokens` = input + output; `minus` subtracts running totals), outputs `WorkOutput`, `ReviewOutput` (a fail needs findings), `CompactOutput`, `Finding`, their strict `OUTPUT_SCHEMAS` and `parse_output`; `ProviderStatus` (installed, version, signed in, auth method, hint; `usable`).
 - `Event`: journal event with core fields `ts` (converted to UTC; naive times count as UTC), `type`, `project`, `ticket`, `plan` plus any extra detail.
 - Errors carry exit codes: `HarnessError` and `UserError` 1, `NeedsSetup` 4, `NeedsUser` 5.
 
@@ -26,6 +27,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Changes
 
+- 2026-10-23: step contract and provider status (SP3 M2).
 - 2026-10-22: runtime file schemas (SP3 M1).
 - 2026-10-22: provider names checked, `ProviderOptions`, `memory.compactor`, `bypass_permissions`, ticket `step` and `tokens_max`, `paused`, `Review.session` (SP3 M1).
 - 2026-10-22: `TicketInput`, `SUB_STATUSES`, one-line `Title`, `Ticket.sub_status` (SP2 M3).
