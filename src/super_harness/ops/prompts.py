@@ -125,7 +125,8 @@ def compact_prompt(text: str, *, cap: int) -> str:
         "facts, and keep one fact per line of about 20 words.\n"
         "Keep the title, the intro paragraph and every '## ' heading. Keep every entry "
         "marked (pin) exactly as it is.\n"
-        "Return the whole new file as text.\n\n"
+        "Everything you need is below: use no tools, read and write no files, and return "
+        "the whole new file as text.\n\n"
         f"MEMORY.md:\n```markdown\n{text.rstrip(chr(10))}\n```\n\n{REPLY}"
     )
 

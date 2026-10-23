@@ -1,7 +1,7 @@
 DOCS_BASE ?= main
 MAKEFLAGS += --silent
 
-.PHONY: setup fmt lint type test docs check
+.PHONY: setup fmt lint type test live docs check
 
 setup:
 	uv sync
@@ -21,6 +21,10 @@ type:
 
 test:
 	uv run pytest
+
+# real provider CLIs on a scratch repo (SP3 spec §11); spends subscription quota
+live:
+	uv run pytest -m live -v
 
 docs:
 	uv run python scripts/check_md_caps.py

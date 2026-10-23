@@ -49,6 +49,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-23: the compaction prompt says no tools are needed (SP3 M4 live smoke).
 - 2026-10-23: resuming a stalled ticket also clears its plan-review rounds (SP3 M4).
 - 2026-10-23: `compaction`; `remember` starts it past the cap (SP3 M4).
 - 2026-10-23: `reviews.review_plan`, approval after review, plan reviews in `wait`, `records.project_plans` (SP3 M4).

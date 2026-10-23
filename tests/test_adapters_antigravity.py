@@ -6,7 +6,7 @@ from typing import Any
 
 from conftest import FakeClis
 
-from super_harness.adapters.antigravity import READ_ONLY_LINE, Antigravity
+from super_harness.adapters.antigravity import EDIT_LINE, READ_ONLY_LINE, Antigravity
 from super_harness.model import OUTPUT_SCHEMAS, ReviewOutput, StepRequest, Usage, WorkOutput
 
 
@@ -46,6 +46,17 @@ def test_resumed_edits_keep_the_schema(tmp_path: Path) -> None:
     assert json.loads(argv[argv.index("--json-schema") + 1]) == OUTPUT_SCHEMAS["work"]
     assert argv[argv.index("--mode") + 1] == "accept-edits"
     assert argv[-1] == "--dangerously-skip-permissions" and READ_ONLY_LINE not in argv[2]
+    assert EDIT_LINE not in argv[2]  # bypass allows terminal commands
+
+
+def test_editing_steps_say_terminal_commands_are_off(tmp_path: Path) -> None:
+    # Live run 2026-10-23: in accept-edits mode headless agy denies its first terminal
+    # command and ends the turn with no output.
+    argv = Antigravity().command(
+        _request(tmp_path, prompt="Implement", output="work", profile="edit_worktree")
+    )
+    assert argv[2] == f"Implement\n\n{EDIT_LINE}"
+    assert argv[argv.index("--mode") + 1] == "accept-edits"
 
 
 def test_a_recorded_review_parses(fake_clis: FakeClis, tmp_path: Path) -> None:

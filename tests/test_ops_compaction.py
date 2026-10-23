@@ -20,6 +20,7 @@ def test_run_compaction_accepts_a_shorter_file_that_keeps_pins(
     assert argv[argv.index("--model") + 1] == "haiku" and "dontAsk" in argv
     prompt = argv[argv.index("-p") + 1]
     assert "at most 13 lines" in prompt and PINNED in prompt
+    assert "use no tools" in prompt  # agy otherwise tries to edit MEMORY.md itself (live run)
     assert runtime.load_slots(store_paths).held == []
 
 
