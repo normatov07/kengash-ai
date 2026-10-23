@@ -35,7 +35,7 @@ from super_harness.model import (
     WorkOutput,
     utc_now,
 )
-from super_harness.ops import agents, lifecycle, prompts, records, slots
+from super_harness.ops import agents, lifecycle, merging, prompts, records, slots
 from super_harness.ops.workspace import GATES
 from super_harness.store import documents, runtime
 from super_harness.store.locks import locked
@@ -66,6 +66,7 @@ class _Job:
     repo: Path
     base: str
     detect: Callable[[str], ProviderStatus]
+    merge_pending: bool = False  # every step passed under merge.mode: auto
 
     @property
     def worktree(self) -> Path:
@@ -106,11 +107,19 @@ def run_job(ticket_id: str, *, project: str | None = None, steps: int | None = N
     while True:
         began = _begin(job, budget_left=steps is None or done < steps)
         if isinstance(began, JobEnd):
-            return began
+            return _merge_now(job, began)
         ended = _step(job, began)
         done += 1
         if ended is not None:
-            return ended
+            return _merge_now(job, ended)
+
+
+def _merge_now(job: _Job, end: JobEnd) -> JobEnd:
+    """After the lock is released: merge a ticket whose last step passed under `auto`."""
+    if not job.merge_pending:
+        return end
+    status = merging.merge_if_clean(job.paths, job.slug, job.ticket_id, by="harness")
+    return JobEnd(status, "merged" if status == "done/merged" else end.reason)
 
 
 def heartbeat(ticket_id: str) -> None:
@@ -182,6 +191,7 @@ def _begin(job: _Job, *, budget_left: bool) -> _Ready | JobEnd:
             return _halt(job, doc, decision.status, decision.reason)
         if isinstance(decision, workflow.Merge):
             runtime.save_ticket_state(paths, job.ticket_id, state)
+            job.merge_pending = True
             return _halt(job, doc, workflow.AWAITING_MERGE, "every step passed")
         ticket.status = lifecycle.step_status(resolved, decision.step)
         ticket.updated = utc_now()
@@ -507,6 +517,7 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
                 state.approval = decision.approval
             else:
                 status, reason = workflow.AWAITING_MERGE, "every step passed"
+                job.merge_pending = True
             events.append(_set_status(paths, job.slug, doc, status, reason))
             end = JobEnd(status, reason)
         runtime.save_ticket_state(paths, job.ticket_id, state)

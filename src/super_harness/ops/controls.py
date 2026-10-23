@@ -24,7 +24,7 @@ from super_harness.model import (
     WorkerRecord,
     utc_now,
 )
-from super_harness.ops import agents, lifecycle, records, slots, steps
+from super_harness.ops import agents, lifecycle, merging, records, slots, steps
 from super_harness.store import documents, runtime, storegit
 from super_harness.store.locks import locked
 from super_harness.store.paths import StorePaths
@@ -179,6 +179,8 @@ def approve_ticket(
         if restart:
             _start_worker(paths, slug, ticket, steps=None)
         records.record(paths, f"harness: approve {ticket_id}", approved, *events)
+    if isinstance(decision, workflow.Merge):
+        return Approved(ticket_id, slug, merging.merge_if_clean(paths, slug, ticket_id, by=by))
     return Approved(ticket_id, slug, ticket.status)
 
 

@@ -217,3 +217,15 @@ def test_a_dead_workers_codex_session_is_recovered(engine: Engine, fake_clis: Fa
     steps.run_job("7b55e0c1", steps=1)
     argv = fake_clis.calls("codex")[0]["argv"]
     assert argv[:2] == ["exec", "resume"] and "0199a213-81c0-7800-8aa1-bbab2a035a53" in argv
+
+
+def test_auto_merge_ends_the_job_merged(
+    engine: Engine, fake_clis: FakeClis, store_paths: StorePaths
+) -> None:
+    write_settings(store_paths, "merge.mode: auto\n")
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "retries = 3\n"})
+    fake_clis.queue("claude", stdout=fake_clis.claude_output(REVIEW_PASS))
+    end = steps.run_job("7b55e0c1")
+    assert end.status == "done/merged"
+    assert (engine.repo / "retry.py").exists() and not engine.worktree.exists()

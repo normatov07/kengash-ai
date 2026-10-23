@@ -12,7 +12,16 @@ import typer
 
 from super_harness import __version__
 from super_harness.model import Folder, HarnessError, PlanMode, UserError
-from super_harness.ops import controls, plans, projects, queue, status, tickets, workspace
+from super_harness.ops import (
+    controls,
+    merging,
+    plans,
+    projects,
+    queue,
+    status,
+    tickets,
+    workspace,
+)
 
 app = typer.Typer(
     name="harness",
@@ -650,3 +659,16 @@ def resume(project: Every = None, by: By = "unknown", as_json: AsJson = False) -
         _emit_json(resumed)
         return
     typer.echo(f"resumed {len(resumed.started)}")
+
+
+@app.command("merge")
+def merge_ticket(
+    ticket_id: TicketId, project: Only = None, by: By = "unknown", as_json: AsJson = False
+) -> None:
+    """Rebase the ticket branch, fast-forward the base branch, remove the worktree."""
+    with _errors():
+        merged = merging.merge_ticket(ticket_id, project=project, by=by)
+    if as_json:
+        _emit_json(merged)
+        return
+    typer.echo(f"merged {merged.id}: {merged.commits} commits into {merged.base}")
