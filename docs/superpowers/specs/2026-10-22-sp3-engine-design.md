@@ -208,12 +208,12 @@ A resumed session gets only `Loop <n>, step <step>: <step instruction>` plus the
 
 ## 12. Acceptance (SP3 exit)
 
-- [ ] `harness next` lists only runnable tickets (§7) in the right order.
-- [ ] `harness run` returns at once; its worker outlives the calling shell; `harness wait` returns once per gate, and `idle` when nothing runs.
-- [ ] The integration lifecycle passes with fakes; commits carry trailers, and `git log --grep "Harness-Ticket: <uuid>"` finds them after the merge.
-- [ ] Loop cap, token cap, stall, hitl approval and blocking roles behave as §6; `approve --loops` continues the ticket.
-- [ ] Each ticket×role session is created once and resumed at every later step (S5); every `step.end` records provider, model, session, tokens, duration and verdict (S4).
-- [ ] A killed worker is detected within 2 minutes, and `run` resumes its ticket with its sessions.
+- [x] `harness next` lists only runnable tickets (§7) in the right order. (M3)
+- [x] `harness run` returns at once; its worker outlives the calling shell; `harness wait` returns once per gate, and `idle` when nothing runs. (M3)
+- [x] The integration lifecycle passes with fakes; commits carry trailers, and `git log --grep "Harness-Ticket: <uuid>"` finds them after the merge. (M3)
+- [x] Loop cap, token cap, stall, hitl approval and blocking roles behave as §6; `approve --loops` continues the ticket. (M3)
+- [x] Each ticket×role session is created once and resumed at every later step (S5); every `step.end` records provider, model, session, tokens, duration and verdict (S4). (M3)
+- [x] A killed worker is detected within 2 minutes, and `run` resumes its ticket with its sessions. (M3)
 - [ ] `plan review` runs rounds up to `plan.review_max`; `memory compact` keeps every pin and stays under the cap.
 - [ ] Live smoke green for claude and agy; codex once installed and signed in.
-- [ ] `make check` (with the new import contracts) green; module docs for `workflow`, `scheduler`, `adapters`, `gitops`, `worker`.
+- [x] `make check` (with the new import contracts) green; module docs for `workflow`, `scheduler`, `adapters`, `gitops`, `worker`. (M3)

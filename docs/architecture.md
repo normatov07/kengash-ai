@@ -27,7 +27,7 @@ UI: harness ui → FastAPI + SSE on 127.0.0.1, through the same `ops` layer as t
 | `settings` | Seed, load, validate, resolve; comment-preserving edits | `model`, `store` | built (SP2 M2); comment-preserving edits in SP5 |
 | `memory` | MEMORY/DECISIONS/PROCESS writes and caps | `model`, `store`, `journal`, `settings` | built (SP2 M2): MEMORY and DECISIONS writes; compaction in SP3 |
 | `journal` | Append-only JSONL events, follow, usage aggregates | `model`, `store` | built (SP2 M2): append, read; follow and usage later |
-| `ops` | Use cases shared by CLI, UI and workers | all units above; starts workers as processes | `projects`, `workspace`, `records`, `plans`, `tickets`, `status` (SP2 M1–M3); `queue` (SP3 M1); `providers` (SP3 M2); grows in SP3, SP5 |
+| `ops` | Use cases shared by CLI, UI and workers | all units above; starts workers as processes | `projects`, `workspace`, `records`, `plans`, `tickets`, `status` (SP2 M1–M3); `queue` (SP3 M1); `providers` (SP3 M2); `slots`, `agents`, `prompts`, `lifecycle`, `steps`, `controls`, `merging`, `waiting`, `changes` (SP3 M3); grows in SP3 M4, SP5 |
 | `scheduler` | Runnable set: dependencies, `touches` overlap, provider slots, fairness | `model` | built (SP3 M1) |
 | `workflow` | Step graph per importance, routing, loop and budget caps, stalls | `model` | built (SP3 M1) |
 | `adapters` | One driver per provider CLI behind the `Provider` protocol | `model` | built (SP3 M2): claude, codex, antigravity, shell |
@@ -68,7 +68,7 @@ Each registered repo gets one directory symlink, `<repo>/.harness -> ~/.harness/
 |---|---|---|
 | 1 | Foundation | done: `docs/superpowers/plans/2026-10-22-foundation.md`; CI runs after the first push |
 | 2 | Store + `harness` CLI | done: M1 store core, M2 settings, memory, journal, M3 plans and tickets; plans in `docs/superpowers/plans/` |
-| 3 | Engine | in progress: spec `docs/superpowers/specs/2026-10-22-sp3-engine-design.md`; M1 engine rules and M2 providers and git built; M3 workers and controls next |
+| 3 | Engine | in progress: spec `docs/superpowers/specs/2026-10-22-sp3-engine-design.md`; M1 engine rules, M2 providers and git, M3 workers and controls built; M4 plan review, compaction and live smoke next |
 | 4 | Skills | planned |
 | 5 | Web UI | planned |
 
