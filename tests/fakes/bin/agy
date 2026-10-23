@@ -1,0 +1,3 @@
+#!/bin/sh
+# Fake agy for tests; the fake_clis fixture in tests/conftest.py sets these variables.
+exec "$HARNESS_FAKE_PYTHON" "$HARNESS_FAKE_CLI" agy "$@"
