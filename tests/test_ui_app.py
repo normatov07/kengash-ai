@@ -206,3 +206,16 @@ def test_the_agents_screen_reads_one_scope(
     assert shown["scope"] == "payments-api"
     assert {role["role"] for role in shown["roster"]} >= {"planner", "implementer"}
     assert all(card["hint"] == "install it" for card in shown["providers"])
+
+
+def test_a_ticket_and_its_plan_are_served(
+    client: TestClient, store_paths: StorePaths, make_ticket: Callable[..., Doc[Ticket]]
+) -> None:
+    documents.save_ticket(store_paths.project("payments-api"), make_ticket("ddddddd1"))
+    signed_in(client)
+    shown = client.get("/api/tickets/ddddddd1")
+    assert shown.status_code == 200 and shown.json()["meta"]["id"] == "ddddddd1"
+    missing = client.get("/api/tickets/eeeeeee1")
+    assert missing.status_code == 400 and "eeeeeee1" in missing.json()["error"]
+    assert client.get("/api/tickets/ddddddd1/diff").status_code == 400  # no commits yet
+    assert client.get("/api/plans/a1b2c3d4").status_code == 400  # no such plan file

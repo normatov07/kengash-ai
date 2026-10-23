@@ -6,6 +6,7 @@ import * as board from "./views/board.js";
 import * as memory from "./views/memory.js";
 import * as overview from "./views/overview.js";
 import * as settings from "./views/settings.js";
+import * as ticketView from "./views/ticket.js";
 import * as workflow from "./views/workflow.js";
 
 const ICONS = {
@@ -21,7 +22,7 @@ const NAV = [
   ["ORCHESTRATE", [["workflow", "Workflow"], ["agents", "Agents"]]],
   ["PROJECT", [["memory", "Memory"], ["settings", "Settings"]]],
 ];
-const SCREENS = { overview, board, workflow, agents, memory, settings };
+const SCREENS = { overview, board, ticket: ticketView, workflow, agents, memory, settings };
 
 export const app = {
   project: "",
@@ -109,7 +110,7 @@ async function show() {
     const data = screen ? await screen.load(app, arg) : null;
     const body = screen ? screen.view(data, app) : placeholder(name);
     if (ticket !== showing) return;
-    nav(name);
+    nav(name === "ticket" ? "board" : name);
     if (!document.getElementById("q") || document.activeElement?.id !== "q") top();
     const root = fresh();
     mount(root, body);

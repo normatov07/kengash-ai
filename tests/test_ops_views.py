@@ -251,3 +251,58 @@ def test_workflows_show_the_steps_that_would_run(
     assert found.agents["planner"] == "claude/opus" and "approve" in found.library
     assert found.set_here == ["agents.code-reviewer.on"]
     assert "code-reviewer" in found.off and "test-runner" in found.off and found.plan_review
+
+
+def test_a_sparse_ticket_renders_empty_sections(
+    registered_repo: Path, store_paths: StorePaths, make_ticket: Make
+) -> None:
+    documents.save_ticket(store_paths.project("payments-api"), make_ticket("bbbbbbb1"))
+    found = views.ticket_view(store_paths, "bbbbbbb1", project=None)
+    assert (found.meta["id"], found.project, found.plan.found) == (
+        "bbbbbbb1",
+        "payments-api",
+        False,
+    )
+    assert (found.changes, found.timeline, found.memory_writes, found.attach) == ([], [], [], "")
+    assert (found.depends_on, found.blocks, found.siblings) == ([], [], [])
+    assert found.sections["Scope"] == "Rotate keys." and "id: bbbbbbb1" in found.file
+    assert found.store_path.endswith("tasks/in_queue/bbbbbbb1.md")
+    assert found.repo_path == str(registered_repo / ".harness/tasks/in_queue/bbbbbbb1.md")
+    assert [step.step for step in found.chain][:2] == ["plan", "review_plan"]
+    assert {step.state for step in found.chain} == {"pending"}
+    assert found.grant == 2
+
+
+def test_a_ticket_lists_what_it_blocks_and_its_timeline(
+    registered_repo: Path, store_paths: StorePaths, make_ticket: Make
+) -> None:
+    project = store_paths.project("payments-api")
+    documents.save_ticket(
+        project,
+        make_ticket("ccccccc1", status="in_process/under_review", step="review_code", loop=2),
+    )
+    documents.save_ticket(
+        project, make_ticket("ccccccc2", status="in_queue/blocked", depends_on=["ccccccc1"])
+    )
+    for step, verdict in (("plan", "pass"), ("implement", "done")):
+        event = step_end("ccccccc1", "codex", 300)
+        data = {**event.model_dump(), "step": step, "verdict": verdict, "role": "implementer"}
+        journal.append(store_paths, Event.model_validate(data))
+    memo = Event.model_validate(
+        {"type": "memory.write", "file": "MEMORY.md", "line": "x", "why": "from ccccccc1"}
+    )
+    journal.append(store_paths, memo)
+    configure.save_settings({"loop_grant": 3}, project="payments-api", by="ui")
+    found = views.ticket_view(store_paths, "ccccccc1", project="payments-api")
+    assert found.grant == 3
+    assert [(link.id, link.status) for link in found.blocks] == [("ccccccc2", "in_queue/blocked")]
+    assert [link.id for link in found.siblings] == ["ccccccc2"]
+    assert [(row.step, row.verdict, row.tokens) for row in found.timeline] == [
+        ("plan", "pass", 300),
+        ("implement", "done", 300),
+    ]
+    assert [write["why"] for write in found.memory_writes] == ["from ccccccc1"]
+    states = {step.step: step.state for step in found.chain}
+    assert states["plan"] == "done" and states["review_code"] == "running"
+    assert states["security"] == "pending"
+    assert {step.step: step.runs for step in found.chain}["plan"] == 1

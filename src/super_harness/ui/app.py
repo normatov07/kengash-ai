@@ -21,7 +21,16 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from super_harness.model import HarnessError, JournalCursor, NeedsSetup, NeedsUser
-from super_harness.ops import configure, controls, merging, projects, tickets, views
+from super_harness.ops import (
+    changes,
+    configure,
+    controls,
+    merging,
+    plans,
+    projects,
+    tickets,
+    views,
+)
 
 STATIC = Path(__file__).parent / "static"
 COOKIE = "harness_token"
@@ -125,6 +134,19 @@ def create_app(*, token: str, port: int) -> FastAPI:
     @app.post("/api/resume")
     def resume(project: str | None = None) -> controls.Resumed:
         return controls.resume(project, by=BY)
+
+    @app.get("/api/tickets/{ticket_id}")
+    def ticket_view(ticket_id: str) -> views.TicketView:
+        return views.ticket_view(ticket_id=ticket_id, project=None)
+
+    @app.get("/api/tickets/{ticket_id}/diff")
+    def ticket_diff(ticket_id: str) -> changes.Changes:
+        return changes.ticket_changes(ticket_id, diff=True, project=None)
+
+    @app.get("/api/plans/{plan_id}")
+    def plan_view(plan_id: str) -> dict[str, Any]:
+        found = plans.show_plan(plan_id, project=None)
+        return {"project": found.project, "meta": found.meta, "sections": found.sections}
 
     @app.post("/api/tickets/{ticket_id}/{action}")
     def ticket_action(ticket_id: str, action: str, body: Action | None = None) -> object:

@@ -14,6 +14,7 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 - `scope.js`: the configure screens' scope tabs, fields with set-here marks, Save · Discard · Reset (Reset and other destructive buttons act on a second click within 4 s); while a form has unsaved edits (`app.dirty`) journal events do not re-render it. `views/settings.js`: loop limits, token discipline, status flow, SETTINGS.md with this scope's overrides in amber and both paths, memory links.
 - `GET /api/agents?project=&window=&refresh=` → `AgentsView`; `views/agents.js`: provider cards (Sign in or Install copy the CLI's own command; harness never runs it), the roster (on/off, CLI·model, skill file, used in, tokens), limits and per-provider sessions, importance routing; saves through `/api/settings`. A route whose data takes over 400 ms shows Loading.
 - `GET /api/workflows?project=` → `WorkflowsView`; `graph.js` (`layout(steps, on_fail)`: trigger, steps, done left to right; `svg(graph, {selected, sub, off})`); `views/workflow.js`: workflow tabs, the graph, the selected step (its agent's CLI, where a failing verdict sends it, move, remove), the step library, a dry run of the steps that would run, loop guard rails; a save writes each edited `workflows.<name>` whole.
+- `GET /api/tickets/{id}` → `TicketView`; `GET /api/tickets/{id}/diff` → the ticket's `Changes` with the diff; `GET /api/plans/{id}` → `{project, meta, sections}`. `views/ticket.js` (`#/ticket/<id>`): header with the gate's action (Grant +N loops, Merge, Run again), tabs Overview · Changes · Timeline · Ticket file, findings, prompt with the plan on demand, acceptance, dependencies, memory writes, agent chain, metadata, attach command, Stop, Park with a why, Send back to in_queue, Force move to done (second click).
 - `GET /api/meta` → `{version}`. `GET /api/links` (link health); `POST /api/links/repair` (`harness doctor --fix`), `POST /api/links/relink` `{project, path}`, `POST /api/links/adopt` `{path}`; each answers with the new link health.
 
 ## Invariants
@@ -24,7 +25,7 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 
 ## Changes
 
-- 2026-10-23: Settings, Agents and Workflow screens, scope tabs and settings saves (SP5 M2).
+- 2026-10-23: Ticket detail, Settings, Agents and Workflow screens, scope tabs and settings saves (SP5 M2).
 - 2026-10-23: requests with a foreign `Origin` are refused (SP5 M2).
 - 2026-10-23: link health on the Memory screen, link banner on the Overview (system spec §4.2).
 - 2026-10-23: app shell, Overview and Task board (SP5 M1).

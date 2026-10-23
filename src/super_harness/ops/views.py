@@ -24,7 +24,9 @@ from super_harness.model import (
     split_cli,
     utc_now,
 )
+from super_harness.model import Gate as TicketGate
 from super_harness.ops import agents, records
+from super_harness.ops import changes as changes_ops
 from super_harness.ops import projects as project_ops
 from super_harness.ops import skills as skill_ops
 from super_harness.ops.workspace import GATES
@@ -258,6 +260,68 @@ class WorkflowsView:
     roles: dict[str, str | None] = field(default_factory=lambda: dict(STEP_ROLES))
     set_here: list[str] = field(default_factory=list)
     problem: str = ""
+
+
+@dataclass
+class TicketLink:
+    id: str
+    title: str
+    status: str
+
+
+@dataclass
+class PlanRef:
+    id: str
+    title: str
+    prompt: str
+    found: bool
+
+
+@dataclass
+class TimelineStep:
+    """One row of a ticket's timeline: a step that ended, or a status change."""
+
+    ts: datetime
+    kind: str
+    step: str = ""
+    role: str = ""
+    provider: str = ""
+    model: str = ""
+    verdict: str = ""
+    loop: int | None = None
+    tokens: int = 0
+    duration_s: float | None = None
+    note: str = ""
+
+
+@dataclass
+class ChainStep:
+    step: str
+    role: str | None
+    runs: int
+    state: Literal["done", "running", "waiting", "needs you", "pending"]
+
+
+@dataclass
+class TicketView:
+    """Ticket detail: the file, its plan and neighbours, what it changed, and its history."""
+
+    project: str
+    meta: dict[str, Any]
+    sections: dict[str, str]
+    file: str
+    store_path: str
+    repo_path: str
+    plan: PlanRef
+    siblings: list[TicketLink] = field(default_factory=list)
+    depends_on: list[TicketLink] = field(default_factory=list)
+    blocks: list[TicketLink] = field(default_factory=list)
+    changes: list[changes_ops.Change] = field(default_factory=list)
+    timeline: list[TimelineStep] = field(default_factory=list)
+    memory_writes: list[dict[str, Any]] = field(default_factory=list)
+    chain: list[ChainStep] = field(default_factory=list)
+    attach: str = ""
+    grant: int = 2  # loops one approval adds (`loop_grant`)
 
 
 def overview(paths: StorePaths | None = None, *, window: Window = "today") -> Overview:
@@ -534,6 +598,56 @@ def workflows_view(paths: StorePaths | None = None, *, project: str | None) -> W
     return found
 
 
+def ticket_view(
+    paths: StorePaths | None = None, ticket_id: str = "", *, project: str | None
+) -> TicketView:
+    """Ticket detail; anything the ticket has not produced yet comes back empty."""
+    paths = paths or StorePaths.default()
+    slug, path = records.locate_ticket(paths, ticket_id, project)
+    doc = records.load_ticket(path)
+    ticket = doc.meta
+    root = paths.project(slug).root
+    repo = load_registry(paths).projects[slug].path
+    found = TicketView(
+        slug,
+        ticket.model_dump(mode="json"),
+        doc.sections,
+        path.read_text(encoding="utf-8"),
+        str(path),
+        str(repo / store_links.LINK / path.relative_to(root)),
+        _plan_ref(paths, slug, ticket.plan),
+    )
+    others = records.project_tickets(paths, slug)
+    found.siblings = [
+        _link(o.meta)
+        for o in others.values()
+        if o.meta.plan == ticket.plan and o.meta.id != ticket.id
+    ]
+    found.depends_on = [
+        _link(others[dep].meta) if dep in others else TicketLink(dep, "(not found)", "")
+        for dep in ticket.depends_on
+    ]
+    found.blocks = [_link(o.meta) for o in others.values() if ticket.id in o.meta.depends_on]
+    try:
+        found.changes = changes_ops.ticket_changes(ticket.id, diff=False, project=slug).changes
+    except (HarnessError, OSError):
+        found.changes = []
+    try:
+        found.attach = changes_ops.attach_command(ticket.id, role=None, project=slug).command
+    except (HarnessError, OSError):
+        found.attach = ""
+    events = [event for event in _events(paths) if _about(event, ticket.id)]
+    found.timeline = [row for event in events if (row := _timeline_row(event, ticket.id))]
+    found.memory_writes = [
+        event.model_dump(mode="json", exclude_none=True)
+        for event in events
+        if event.type == "memory.write"
+    ]
+    found.chain = _chain(paths, slug, ticket, found.timeline)
+    found.grant = _grant(paths, slug)
+    return found
+
+
 def version() -> str:
     return __version__
 
@@ -689,6 +803,103 @@ def _role_tokens(events: list[Event], window: Window) -> dict[str, int]:
             used = extra.get("tokens") or {}
             tokens[str(extra["role"])] += int(used.get("in", 0)) + int(used.get("out", 0))
     return dict(tokens)
+
+
+STATUS_EVENTS = frozenset(
+    {
+        "ticket.needs_approval",
+        "ticket.approved",
+        "ticket.stalled",
+        "ticket.failed",
+        "ticket.awaiting_merge",
+        "ticket.merged",
+        "ticket.moved",
+        "ticket.recirculated",
+        "ticket.paused",
+        "ticket.stopped",
+    }
+)
+
+
+def _about(event: Event, ticket_id: str) -> bool:
+    """The event concerns the ticket: it names it, or a memory write cites it."""
+    if event.ticket == ticket_id:
+        return True
+    extra = event.model_extra or {}
+    return event.type == "memory.write" and any(
+        ticket_id in str(extra.get(key, "")) for key in ("why", "line")
+    )
+
+
+def _timeline_row(event: Event, ticket_id: str) -> TimelineStep | None:
+    extra = event.model_extra or {}
+    if event.ticket != ticket_id:
+        return None
+    if event.type == "step.end":
+        used = extra.get("tokens") or {}
+        return TimelineStep(
+            event.ts,
+            event.type,
+            str(extra.get("step", "")),
+            str(extra.get("role", "")),
+            str(extra.get("provider", "")),
+            str(extra.get("model", "")),
+            str(extra.get("verdict", "")),
+            extra.get("loop"),
+            int(used.get("in", 0)) + int(used.get("out", 0)),
+            extra.get("duration_s"),
+        )
+    if event.type in STATUS_EVENTS:
+        note = extra.get("reason") or extra.get("why") or extra.get("to") or ""
+        return TimelineStep(event.ts, event.type, note=str(note))
+    return None
+
+
+def _grant(paths: StorePaths, slug: str) -> int:
+    try:
+        return settings.load(paths, slug).loop_grant
+    except HarnessError:
+        return 2
+
+
+def _chain(
+    paths: StorePaths, slug: str, ticket: Ticket, rows: list[TimelineStep]
+) -> list[ChainStep]:
+    """The workflow's steps for this ticket and how far it got through them."""
+    try:
+        resolved = settings.load(paths, slug)
+        steps = workflow.steps_for(resolved, ticket.workflow, hitl=ticket.gate is TicketGate.hitl)
+    except (HarnessError, KeyError):
+        return []
+    current = steps.index(ticket.step) if ticket.step in steps else -1
+    here: Literal["running", "waiting", "needs you"] = "running"
+    if ticket.sub_status in GATES:
+        here = "needs you"
+    elif ticket.folder is not Folder.in_process or ticket.sub_status in WAITING:
+        here = "waiting"
+    chain = []
+    for index, step in enumerate(steps):
+        runs = sum(1 for row in rows if row.kind == "step.end" and row.step == step)
+        state: Literal["done", "running", "waiting", "needs you", "pending"] = "pending"
+        if ticket.folder is Folder.done or (current >= 0 and index < current):
+            state = "done"
+        elif index == current:
+            state = here
+        chain.append(ChainStep(step, STEP_ROLES.get(step), runs, state))
+    return chain
+
+
+def _link(ticket: Ticket) -> TicketLink:
+    return TicketLink(ticket.id, ticket.title, ticket.status)
+
+
+def _plan_ref(paths: StorePaths, slug: str, plan_id: str) -> PlanRef:
+    try:
+        _, path = records.locate_plan(paths, plan_id, slug)
+        plan = records.load_plan(path)
+    except HarnessError:
+        return PlanRef(plan_id, "", "", False)
+    return PlanRef(plan_id, plan.meta.title, plan.sections.get("Prompt", ""), True)
 
 
 def _slots(paths: StorePaths) -> list[Slot]:
