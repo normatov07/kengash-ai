@@ -43,12 +43,13 @@ Endpoints (all JSON; `POST` bodies are JSON):
 |---|---|
 | `GET /api/overview?window=today\|7d\|all` | `views.overview`: projects, live sessions (workers and their steps), queue counts, gates, CLI pool (slots per provider), token spend, conductors, journal tail |
 | `GET /api/board?project=` | `views.board`: tickets grouped by column (in_queue, each in_process step, gates, done) |
-| `GET /api/tickets/{id}` | `views.ticket`: frontmatter, sections, plan prompt and acceptance, changes, step timeline (journal), sessions, dependencies, memory writes |
+| `GET /api/tickets/{id}` · `GET /api/tickets/{id}/diff` | `views.ticket_view`: frontmatter, sections, plan prompt and acceptance, changes, step timeline (journal), sessions, dependencies, memory writes, agent chain · `changes.ticket_changes(diff=True)` |
 | `POST /api/tickets/{id}/{run\|approve\|park\|stop\|merge\|move}` | `controls`, `merging`, `tickets.move_ticket` |
 | `GET /api/plans/{id}` | `plans.show_plan` |
-| `GET /api/settings?project=` · `POST /api/settings?project=` | `views.settings` (resolved values, which scope set each, the raw file) · `settings.set_values` |
-| `GET /api/providers` | `views.providers`: detection, sign-in, slots, spend |
-| `GET /api/memory` · `POST /api/memory/compact` · `POST /api/links/repair` | `views.memory` (files, caps, links, ticket index, memory writes) · `compaction.compact_memory` · `projects.doctor(fix=True)` |
+| `GET /api/settings?project=` · `POST /api/settings?project=` | `views.settings_view` (resolved values, the scope's overrides, the raw file) · `configure.save_settings` (`settings.set_values`, journaled) |
+| `GET /api/workflows?project=` | `views.workflows_view`: workflows as written, the steps that would run, loop caps, each role's CLI |
+| `GET /api/agents?project=&window=&refresh=` | `views.agents_view`: providers (detection, sign-in, slots, spend), the role roster, limits, routing |
+| `GET /api/memory?project=` · `POST /api/memory/compact` · `GET /api/links` · `POST /api/links/repair\|relink\|adopt` | `views.memory_view` (files, caps, links, ticket index, memory writes) · `compaction.start_checked` · `views.links` · `projects.doctor(fix=True)`, `projects.relink`, `projects.adopt` |
 | `POST /api/pause` · `POST /api/resume` | `controls.pause`, `controls.resume` |
 | `GET /api/events` | journal tail as SSE |
 
@@ -58,14 +59,14 @@ Each canvas element is built, built differently because the system spec says oth
 
 | Screen | Built | Built differently | Left out |
 |---|---|---|---|
-| all | sidebar (Overview, Task board, Workflow, Agents, Memory, Settings) with counts; CLI pool; search (`ticket find`); `/to-ticket` and `/to-loop` hints | "loop engine running" → live conductors (system spec §9) | — |
+| all | sidebar (Overview, Task board, Workflow, Agents, Memory, Settings) with counts (Agents "n/m" enabled: M3); CLI pool; search (`ticket find`); `/to-ticket` and `/to-loop` hints | "loop engine running" → live conductors (system spec §9) | — |
 | Overview | stat tiles, live sessions table, approvals with Grant loops / Park, token spend, journal tail with follow; window Today · 7 days · All; Pause all | "PLAN STALLED: read both plans" → links to the ticket's plan and Findings | "avg skill read" (not measured) |
 | Task board | columns per status with counts, cards (importance, parallel or serial, loop, provider, diff size, findings), group by status | "wip cap" → the step's slot use | "Add ticket" (tickets come from `/to-ticket`) |
-| Ticket detail | header with actions, changes table and diff, findings, prompt, acceptance, dependencies, step timeline, ticket file, memory writes, agent chain, metadata, attach command, send back, force move | "Reveal hard link" → both paths of the ticket file: the store's and the repo's through its folder link | — |
-| Workflow editor | per-importance tabs, graph, selected step panel (agent, model, skill, on_fail target), node library, loop guard rails, save to SETTINGS.md | free node positions → automatic layout; "Dry run" → shows the effective steps | "Drag from a port" (retarget from the panel instead) |
-| Agents | providers with sign-in, slots, spend; roster with on/off, CLI and model, skill, used in, tokens; limits; importance routing | "Sign in" → the command to run (harness never signs in for you) | "Kill the session when a ticket stalls over 30 minutes" (no such setting) |
-| Settings | loop limits, token discipline, status flow, SETTINGS.md view with set-here highlighting, memory links summary with Re-link and Adopt (decision 12) | "hard-linked" → "linked by one folder link" (system spec §4.2) | — |
-| Memory | store stats, memory files table, MEMORY.md view with compact, link health per project (folder link, memory link, exclude entry) with Repair, Re-link and Adopt, stores found nearby, ticket index, memory writes | "HARD LINKS n/m" → "FOLDER LINKS n/m"; "Adopt by hard link" → Adopt (`harness adopt`); backend "sqlite index", "vector recall" shown as planned | "Retention" options (no such settings) |
+| Ticket detail | header with actions, changes table and diff, findings, prompt, acceptance, dependencies, step timeline, ticket file, memory writes, agent chain, metadata, attach command, send back, force move | "Reveal hard link" → both paths of the ticket file: the store's and the repo's through its folder link; "Memory file" tab → "Ticket file"; the prompt panel shows the whole plan on demand | — |
+| Workflow editor | per-importance tabs, graph, selected step panel (agent, model, skill, on_fail target), node library, loop guard rails, save to SETTINGS.md | free node positions → automatic layout ("Auto-layout" always on); "Add node" → the step library adds after the selected step; "Dry run" → shows the effective steps | "Drag from a port" (retarget from the panel instead); zoom control |
+| Agents | providers with sign-in, slots, spend; roster with on/off, CLI and model, skill, used in, tokens; limits; importance routing | "Sign in" → the command to run (harness never signs in for you), "Install" when the CLI is missing; "Manage session" → "Check sign-in again"; "Hold serial tickets until the module is free" → a note (the scheduler always does it) | "Kill the session when a ticket stalls over 30 minutes" (no such setting); "New agent" (roles are fixed by the workflow steps); the per-role "PARALLEL" column (limits are per provider) |
+| Settings | loop limits, token discipline, project commands (`project.test_cmd`, `project.lint_cmd`), status flow, SETTINGS.md view with set-here highlighting, memory links summary with Re-link and Adopt (decision 12) | "hard-linked" → "linked by one folder link" (system spec §4.2); "Park the ticket instead of asking" → the off state of "Ask me when a ticket hits its cap" (one setting); "Reuse one CLI session per provider" → per ticket and role (`sessions.reuse`); status flow read-only | "Prefer shell commands over prose in skills" (a skill-writing rule, not a setting); status flow "add" (sub-statuses follow the steps) |
+| Memory | store stats, memory files table, MEMORY.md view with compact, link health per project (folder link, memory link, exclude entry) with Repair, Re-link and Adopt, stores found nearby, ticket index, memory writes | "HARD LINKS n/m" → "FOLDER LINKS n/m"; "Adopt by hard link" → Adopt (`harness adopt`); backend "sqlite index", "vector recall" shown as planned; "READ COST" → MEMORY.md characters ÷ 4; "Find a ticket or memory entry" → finds tickets; "Verify links" → link health is checked on every load | "Retention" options (no such settings); "Ignore" on a found store (no ignore list); MEMORY.md "History" |
 
 ## 5. Acceptance (SP5 exit)
 

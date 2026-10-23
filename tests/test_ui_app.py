@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from super_harness import journal
 from super_harness.model import Doc, Event, ProviderStatus, Ticket
-from super_harness.ops import agents, compaction, views
+from super_harness.ops import agents, jobs, views
 from super_harness.store import StorePaths, documents
 from super_harness.ui import app as ui_app
 
@@ -230,13 +230,14 @@ def test_compaction_starts_once_from_the_ui(
     def detector(paths: StorePaths) -> Callable[[str], ProviderStatus]:
         return lambda name: ProviderStatus(name=name, installed=True, signed_in=True)
 
+    def start(paths: StorePaths, job: str, job_id: str, project: str, args: list[str]) -> int:
+        started.append(job)
+        running.append(True)
+        return 1
+
     monkeypatch.setattr(agents, "detector", detector)
-    monkeypatch.setattr(compaction.jobs, "alive", lambda paths, job_id: True if running else None)
-    monkeypatch.setattr(
-        compaction.jobs,
-        "start",
-        lambda paths, job, job_id, project, args: started.append(job) or running.append(True) or 1,
-    )
+    monkeypatch.setattr(jobs, "alive", lambda paths, job_id: True if running else None)
+    monkeypatch.setattr(jobs, "start", start)
     signed_in(client)
     assert client.post("/api/memory/compact", headers=POST).json() == {"started": True}
     assert client.post("/api/memory/compact", headers=POST).json() == {"started": True}
