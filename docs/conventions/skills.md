@@ -62,3 +62,7 @@ Skills are built like code, test first (superpowers `writing-skills`):
 | Claude and Codex plugin marketplaces | managed by the agent, with auto-update |
 
 Role skills are never installed into agents: `harness` injects them into worker sessions.
+
+- Format: `src/super_harness/roles/<role>/SKILL.md` with `name` and `description`; workers get the body without the frontmatter.
+- Lookup: `projects/<slug>/roles/<role>/SKILL.md`, then `defaults/roles/` (seeded by `harness init`, never overwritten), then the package.
+- Install folders: claude `.claude/skills/`, codex and antigravity `.agents/skills/` in a repo; with `--global`, `~/.claude/skills/`, `~/.agents/skills/` and `~/.gemini/config/skills/`. Antigravity reads its plugin manifest from `.antigravity-plugin/plugin.json`.
