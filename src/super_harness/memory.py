@@ -16,6 +16,11 @@ from super_harness.store.redact import redact
 
 SECTIONS = ("Working style", "Goals", "Preferences", "Turned down")
 DECISIONS_CAP = 300
+ARCHIVE_HEADER = (
+    "# DECISIONS archive\n\n"
+    "Entries moved out of DECISIONS.md once it passed 300 lines, oldest first. "
+    "Never loaded automatically.\n\n"
+)
 MAX_WORDS = 30
 
 
@@ -67,8 +72,13 @@ def add(
         if entry in lines:
             return AddResult(name, entry, len(lines), cap, added=False)
         lines = [*lines, entry] if decision else _insert(lines, section, entry)
+        moved: list[str] = []
+        if decision:
+            lines, moved = archive_oldest(lines, cap)
+            if moved:
+                _archive(paths, moved)
         atomic_write(path, "\n".join(lines) + "\n")
-    detail = {
+    detail: dict[str, Any] = {
         "type": "memory.write",
         "project": project,
         "file": name,
@@ -78,6 +88,8 @@ def add(
     }
     if not decision:
         detail["section"] = section
+    if moved:
+        detail["archived"] = len(moved)
     journal.append(paths, Event.model_validate(detail))
     storegit.commit_store(paths, f"harness: memory add {name}")
     return AddResult(name, entry, len(lines), cap, added=True)
@@ -168,6 +180,27 @@ def show(paths: StorePaths, *, decisions: bool = False, project: str | None = No
         if not line.startswith("- ") or any(tag in line for tag in tags)
     ]
     return "\n".join(kept) + "\n"
+
+
+def archive_oldest(lines: list[str], cap: int) -> tuple[list[str], list[str]]:
+    """Split off the oldest `- ` entries that take `lines` past `cap`: (kept, moved)."""
+    excess = len(lines) - cap
+    kept: list[str] = []
+    moved: list[str] = []
+    for line in lines:
+        if len(moved) < excess and line.startswith("- "):
+            moved.append(line)
+        else:
+            kept.append(line)
+    return kept, moved
+
+
+def _archive(paths: StorePaths, entries: list[str]) -> None:
+    """Append `entries` to memory/archive/DECISIONS.md (caller holds memory.lock)."""
+    path = paths.memory / "archive" / "DECISIONS.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = path.read_text(encoding="utf-8") if path.exists() else ARCHIVE_HEADER
+    atomic_write(path, text + "".join(f"{entry}\n" for entry in entries))
 
 
 def _pinned(line: str) -> bool:

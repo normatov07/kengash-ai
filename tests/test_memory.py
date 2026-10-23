@@ -217,3 +217,21 @@ def test_a_rejected_compaction_leaves_memory_alone(store: StorePaths) -> None:
 def test_only_entries_marked_pin_are_pinned() -> None:
     intro = "Lines marked (pin) survive compaction."
     assert memory.compaction_problem([intro, *CURRENT], GOOD, cap=20) is None
+
+
+def test_decisions_past_300_lines_move_their_oldest_to_the_archive(store: StorePaths) -> None:
+    path = store.memory / "DECISIONS.md"
+    header = path.read_text(encoding="utf-8").splitlines()
+    old = [f"- 2026-01-01 [global] decision {n:03d}. why: test." for n in range(300 - len(header))]
+    path.write_text("\n".join([*header, *old]) + "\n", encoding="utf-8")
+    first = memory.add(store, "keyring", "rotation", decision=True)
+    memory.add(store, "short ids", "readable", decision=True)
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert (first.lines, len(lines), first.over_cap) == (300, 300, False)
+    assert lines[: len(header)] == header and lines[len(header)] == old[2]
+    archive = (store.memory / "archive" / "DECISIONS.md").read_text(encoding="utf-8")
+    assert archive == memory.ARCHIVE_HEADER + f"{old[0]}\n{old[1]}\n"
+    events = [
+        json.loads(line) for line in next(store.journal.glob("*.jsonl")).read_text().splitlines()
+    ]
+    assert events[-1]["archived"] == 1
