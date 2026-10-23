@@ -832,3 +832,46 @@ def skills_lint(
             typer.echo(f"{problem.path}: {problem.message}")
     if problems:
         raise typer.Exit(1)
+
+
+@skills_app.command("install")
+def skills_install(
+    agent: Annotated[
+        str, typer.Option("--agent", help="claude, codex, antigravity (agy); comma-separated.")
+    ],
+    global_: Annotated[
+        bool, typer.Option("--global", help="Install for every project, in your home folder.")
+    ] = False,
+    path: Annotated[
+        Path | None, typer.Option("--path", help="A folder in the repo; default: this folder.")
+    ] = None,
+    cli_name: Annotated[
+        str, typer.Option("--cli-name", help="The command the skills call, e.g. hrn.")
+    ] = "harness",
+    yes: Annotated[bool, typer.Option("--yes", help="Replace skills that differ.")] = False,
+    as_json: AsJson = False,
+) -> None:
+    """Install the skills into your agents' skills folders; never replaces an edited one
+    without --yes."""
+    with _errors():
+        result = skills.install_skills(
+            agent.split(","), global_=global_, path=path or Path.cwd(), cli_name=cli_name, yes=yes
+        )
+    if as_json:
+        typer.echo(
+            json.dumps(
+                {**dataclasses.asdict(result), "needs_yes": result.needs_yes}, default=str, indent=2
+            )
+        )
+    else:
+        lines = [f"{e.agent} {e.name}: {e.state} → {e.folder}" for e in result.entries]
+        for line in _capped(lines, "harness skills install --json"):
+            typer.echo(line)
+        for diff in result.diffs.values():
+            typer.echo(diff, nl=False)
+    if result.needs_yes:
+        count = _plural(len(result.diffs), "skill")
+        typer.echo(
+            f"{count} differ from the installed copies; rerun with --yes to replace them", err=True
+        )
+        raise typer.Exit(5)

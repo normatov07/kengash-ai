@@ -1,11 +1,15 @@
 """Skills (SP4 spec decisions 2 to 7): role skills for worker prompts; lint and install of
 the installed skills."""
 
+import difflib
+import os
 import re
+import shutil
 from collections.abc import Collection, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
+from typing import Literal
 
 from pydantic import ValidationError
 
@@ -14,6 +18,7 @@ from super_harness import settings
 from super_harness.model import HarnessError, SkillMeta, UserError
 from super_harness.model.settings import SkillCaps
 from super_harness.model.skills import DESCRIPTION_MAX, NAME_MAX, NAME_PATTERN
+from super_harness.ops import records
 from super_harness.store.frontmatter import split_frontmatter
 from super_harness.store.paths import StorePaths
 
@@ -45,6 +50,17 @@ def role_text(paths: StorePaths, slug: str, skill: str) -> str | None:
     return None
 
 
+AGENT_DIRS = {
+    "claude": ".claude/skills",
+    "codex": ".agents/skills",
+    "antigravity": ".agents/skills",
+}
+GLOBAL_DIRS = {
+    "claude": ".claude/skills",
+    "codex": ".agents/skills",
+    "antigravity": ".gemini/config/skills",
+}
+ALIASES = {"agy": "antigravity"}
 SPAN = re.compile(r"`([^`\n]+)`")
 FENCE = "```"
 REFERENCE = re.compile(r"references/([\w.-]+)")
@@ -176,3 +192,138 @@ def _unknown(words: list[str], commands: Collection[str]) -> str | None:
     if group and len(words) > 1 and f"{first} {words[1]}" not in commands:
         return f"{first} {words[1]}"
     return None
+
+
+State = Literal["installed", "updated", "unchanged", "differs"]
+
+
+@dataclass
+class Installed:
+    agent: str
+    name: str
+    state: State
+    folder: Path
+
+
+@dataclass
+class InstallResult:
+    entries: list[Installed] = field(default_factory=list)
+    diffs: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def needs_yes(self) -> bool:
+        """Some installed skill differs from the package and was left alone."""
+        return any(entry.state == "differs" for entry in self.entries)
+
+
+def install_skills(
+    agents: Sequence[str], *, global_: bool, path: Path, cli_name: str, yes: bool
+) -> InstallResult:
+    """`harness skills install`: into the repo containing `path`, or the home folder."""
+    root = Path.home() if global_ else records.repo_root(path)
+    return install(agents, root=root, home=global_, cli_name=cli_name, yes=yes)
+
+
+def install(
+    agents: Sequence[str],
+    *,
+    root: Path,
+    home: bool = False,
+    cli_name: str = "harness",
+    yes: bool = False,
+    source: Path | None = None,
+) -> InstallResult:
+    """Copy every installed skill into each agent's skills folder under `root` (SP4 spec
+    decisions 4 to 6); a skill that differs is replaced only with `yes`."""
+    source = source or packaged()
+    dirs = GLOBAL_DIRS if home else AGENT_DIRS
+    folders: dict[Path, list[str]] = {}
+    for agent in agents:
+        name = ALIASES.get(agent.strip(), agent.strip())
+        if name not in dirs:
+            raise UserError(f"unknown agent {name}; use claude, codex or antigravity")
+        owners = folders.setdefault(root / dirs[name], [])
+        if name not in owners:
+            owners.append(name)
+    result = InstallResult()
+    for folder, owners in folders.items():
+        for skill in sorted(child for child in source.iterdir() if (child / "SKILL.md").is_file()):
+            files = _render(skill, cli_name)
+            target = folder / skill.name
+            installed = _files(target)
+            state: State = "installed" if installed is None else "unchanged"
+            if installed is not None and installed != files:
+                state = "updated" if yes else "differs"
+                if not yes:
+                    result.diffs[str(target)] = _diff(target, installed, files)
+            if state in ("installed", "updated"):
+                _swap(target, files)
+            result.entries.append(Installed(",".join(owners), skill.name, state, target))
+    return result
+
+
+def rename_cli(text: str, name: str) -> str:
+    """`text` with `harness` replaced by `name` where it starts a command: in code spans
+    and at the start of fenced lines; prose keeps the word."""
+    if name == "harness":
+        return text
+    lines: list[str] = []
+    fenced = False
+    for line in text.splitlines(keepends=True):
+        if line.strip().startswith(FENCE):
+            fenced = not fenced
+        elif fenced:
+            line = re.sub(r"^(\s*(?:\$ )?)harness(?= |$)", rf"\g<1>{name}", line)
+        else:
+            line = re.sub(r"`harness(?=[ `])", f"`{name}", line)
+        lines.append(line)
+    return "".join(lines)
+
+
+def _render(skill: Path, cli_name: str) -> dict[str, bytes]:
+    files: dict[str, bytes] = {}
+    for path in sorted(skill.rglob("*")):
+        if path.is_file():
+            data = path.read_bytes()
+            if path.suffix == ".md":
+                data = rename_cli(data.decode("utf-8"), cli_name).encode("utf-8")
+            files[path.relative_to(skill).as_posix()] = data
+    return files
+
+
+def _files(folder: Path) -> dict[str, bytes] | None:
+    if not folder.is_dir():
+        return None
+    return {
+        path.relative_to(folder).as_posix(): path.read_bytes()
+        for path in sorted(folder.rglob("*"))
+        if path.is_file()
+    }
+
+
+def _diff(target: Path, installed: dict[str, bytes], files: dict[str, bytes]) -> str:
+    parts: list[str] = []
+    for name in sorted(set(installed) | set(files)):
+        old = installed.get(name, b"").decode("utf-8", "replace").splitlines(keepends=True)
+        new = files.get(name, b"").decode("utf-8", "replace").splitlines(keepends=True)
+        parts += difflib.unified_diff(
+            old, new, fromfile=f"{target / name} (installed)", tofile=f"{name} (super-harness)"
+        )
+    return "".join(parts)
+
+
+def _swap(target: Path, files: dict[str, bytes]) -> None:
+    """Write the skill beside `target`, then swap it in, so a reader never sees half of it."""
+    fresh = target.parent / f".{target.name}.new-{os.getpid()}"
+    shutil.rmtree(fresh, ignore_errors=True)
+    for name, data in files.items():
+        path = fresh / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    if target.exists():
+        old = target.parent / f".{target.name}.old-{os.getpid()}"
+        target.rename(old)
+        fresh.rename(target)
+        shutil.rmtree(old)
+    else:
+        fresh.rename(target)

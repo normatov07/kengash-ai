@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from super_harness.model import SkillMeta
+from super_harness.model import SkillMeta, UserError
 from super_harness.model.settings import SkillCaps
 from super_harness.ops import skills
 from super_harness.store import StorePaths
@@ -137,3 +137,73 @@ def test_mentions_reads_code_spans_and_fenced_commands() -> None:
         ["memory", "add"],
     ]
     assert skills.mentions("Load `harness-memory` and the `harness store`.") == [["store"]]
+
+
+ALPHA = "---\nname: alpha\ndescription: Use when alpha.\n---\n0. Run `harness --version`.\n"
+BETA = (
+    "---\nname: beta\ndescription: Use when beta.\n---\n"
+    "The harness store keeps plans.\n\n```\nharness plan new --title T\n$ harness wait\n```\n"
+    "Then `harness plan review <id>`.\n"
+)
+
+
+@pytest.fixture
+def source(tmp_path: Path) -> Path:
+    folder = tmp_path / "source"
+    skill(folder, "alpha", ALPHA)
+    skill(folder, "beta", BETA)
+    (folder / "beta" / "references").mkdir()
+    (folder / "beta" / "references" / "notes.md").write_text("notes\n")
+    return folder
+
+
+def test_install_writes_each_agents_folder_once(tmp_path: Path, source: Path) -> None:
+    root = tmp_path / "repo"
+    result = skills.install(["claude", "codex", "agy"], root=root, source=source)
+    assert [(e.agent, e.name, e.state) for e in result.entries] == [
+        ("claude", "alpha", "installed"),
+        ("claude", "beta", "installed"),
+        ("codex,antigravity", "alpha", "installed"),
+        ("codex,antigravity", "beta", "installed"),
+    ]
+    assert (root / ".claude/skills/beta/references/notes.md").read_text() == "notes\n"
+    assert (root / ".agents/skills/alpha/SKILL.md").read_text() == ALPHA
+
+
+def test_install_twice_is_unchanged(tmp_path: Path, source: Path) -> None:
+    skills.install(["claude"], root=tmp_path, source=source)
+    again = skills.install(["claude"], root=tmp_path, source=source)
+    assert {e.state for e in again.entries} == {"unchanged"} and not again.needs_yes
+
+
+def test_a_hand_edited_skill_needs_yes_and_shows_a_diff(tmp_path: Path, source: Path) -> None:
+    skills.install(["claude"], root=tmp_path, source=source)
+    edited = tmp_path / ".claude/skills/alpha/SKILL.md"
+    edited.write_text(ALPHA + "My own line.\n")
+    held = skills.install(["claude"], root=tmp_path, source=source)
+    assert held.needs_yes and edited.read_text().endswith("My own line.\n")
+    (diff,) = held.diffs.values()
+    assert "-My own line." in diff
+    replaced = skills.install(["claude"], root=tmp_path, source=source, yes=True)
+    assert [e.state for e in replaced.entries] == ["updated", "unchanged"]
+    assert edited.read_text() == ALPHA
+
+
+def test_cli_name_rewrites_commands_not_prose() -> None:
+    renamed = skills.rename_cli(BETA, "hrn")
+    assert "The harness store keeps plans." in renamed
+    assert "\nhrn plan new --title T\n$ hrn wait\n" in renamed
+    assert "`hrn plan review <id>`" in renamed and "`harness" not in renamed
+
+
+def test_global_install_uses_each_agents_home_folder(tmp_path: Path, source: Path) -> None:
+    result = skills.install(
+        ["claude", "codex", "antigravity"], root=tmp_path, home=True, source=source
+    )
+    folders = sorted({str(e.folder.parent.relative_to(tmp_path)) for e in result.entries})
+    assert folders == [".agents/skills", ".claude/skills", ".gemini/config/skills"]
+
+
+def test_unknown_agents_are_refused(tmp_path: Path, source: Path) -> None:
+    with pytest.raises(UserError, match="unknown agent gemini"):
+        skills.install(["gemini"], root=tmp_path, source=source)

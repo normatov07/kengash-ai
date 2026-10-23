@@ -52,7 +52,7 @@ Each milestone is planned just before it is built, ends green on `make check`, a
 | Command | Output (default) | Exit codes |
 |---|---|---|
 | `harness skills lint [PATH…]` | one `<path>: <problem>` line per problem; nothing when clean | 0 · 1 problems |
-| `harness skills install --agent A,… [--global] [--path DIR] [--cli-name N] [--yes]` | `<agent> <name>: installed\|updated\|unchanged → <folder>` per skill (capped), diffs for skills that differ without `--yes` | 0 · 4 no such agent folder root · 5 a skill differs and `--yes` is missing |
+| `harness skills install --agent A,… [--global] [--path DIR] [--cli-name N] [--yes]` | `<agent> <name>: installed\|updated\|unchanged → <folder>` per skill (capped), diffs for skills that differ without `--yes` | 0 · 1 unknown agent · 5 a skill differs and `--yes` is missing |
 | `harness skills eval <skill>\|--all [--agent A,…] [--model M]` | `<skill>/<scenario> <agent>: pass\|fail: <first failed expectation>` per run | 0 · 1 · 4 |
 
 ## 5. Live facts (filled in during the build)

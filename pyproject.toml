@@ -37,6 +37,9 @@ path = "src/super_harness/__init__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/super_harness"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"skills" = "super_harness/skills"
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
