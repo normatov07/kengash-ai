@@ -1,0 +1,32 @@
+skill: to-ticket
+description: an approved plan is sliced into tickets the user checks before they are added
+notes: >-
+  RED 2026-10-23: claude (haiku) added no tickets; agy found `harness ticket add` on its own
+  and added two simple tickets after showing the list.
+files:
+  calc.py: "\"\"\"Small arithmetic helpers.\"\"\"\n\n\ndef sub(a: int, b: int) -> int:\n    return a - b\n"
+setup:
+  - args: [plan, new, --mode, direct, --title, "Calculator basics"]
+    stdin: "Add add(a, b) and mul(a, b) to calc.py, each with a test."
+    save: plan
+  - args: [plan, save, "{plan}"]
+    stdin: |
+      ## Goal
+      calc.py gains add(a, b) and mul(a, b), each tested.
+      ## Scope
+      add and mul in calc.py; tests in test_calc.py.
+      ## Design
+      Two pure functions beside sub; pytest tests.
+      ## Acceptance
+      - [ ] calc.add(2, 3) == 5
+      - [ ] calc.mul(2, 3) == 6
+  - args: [plan, approve, "{plan}", --skip-review]
+turns:
+  - "/to-ticket {plan}"
+  - "Looks good, add them."
+expect:
+  journal: [ticket.created]
+  tickets: {min: 1}
+  plans: {count: 1, fields: {status: ticketed}}
+  clean: true
+timeout_s: 900
