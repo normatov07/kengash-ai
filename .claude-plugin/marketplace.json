@@ -1,6 +1,9 @@
 {
   "name": "super-harness",
-  "owner": { "name": "normatov13" },
+  "description": "super-harness: plan, ticket and run many projects with your coding-agent subscriptions.",
+  "owner": {
+    "name": "normatov13"
+  },
   "plugins": [
     {
       "name": "super-harness",
