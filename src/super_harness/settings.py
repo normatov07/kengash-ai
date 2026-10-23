@@ -3,12 +3,15 @@
 import difflib
 from collections.abc import Mapping
 from functools import cache
+from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
 from pydantic_core import ErrorDetails
 
 from super_harness.model import Settings, UserError
+from super_harness.store import yamledit
+from super_harness.store.files import atomic_write
 from super_harness.store.paths import StorePaths
 from super_harness.store.seed import package_default
 from super_harness.store.yamlio import load_yaml
@@ -89,6 +92,45 @@ def problems(paths: StorePaths, slug: str | None = None) -> list[str]:
     return []
 
 
+def set_values(paths: StorePaths, slug: str | None, changes: Mapping[str, Any]) -> list[str]:
+    """Write `changes` (dotted key → value; None removes the key) into one scope's
+    SETTINGS.md, touching only their lines; nothing is written unless the result is valid.
+    Returns the keys that changed."""
+    path, source = _scope_file(paths, slug)
+    before = path.read_text(encoding="utf-8") if path.is_file() else ""
+    text, done = before, []
+    for key, value in changes.items():
+        head, _, rest = key.partition(".")
+        if head in ATOMIC and "." in rest:
+            raise UserError(f"settings: set {head}.{rest.split('.')[0]} whole, not {key}")
+        after = yamledit.set_key(text, key, value, source=source)
+        if after != text:
+            text = after
+            done.append(key)
+    if not done:
+        return []
+    found = layers(paths, slug)
+    found[-1 if path.is_file() else len(found)] = _parse(text, source)
+    resolved: dict[str, Any] = {}
+    for layer in found[: 2 if slug is None else 3]:
+        resolved = merge(resolved, layer)
+    try:
+        Settings.model_validate(resolved)
+    except ValidationError as exc:
+        raise UserError(f"settings: {_describe(exc.errors()[0])}") from exc
+    atomic_write(path, text)
+    return done
+
+
+def scope_keys(paths: StorePaths, slug: str | None) -> list[str]:
+    """The dotted leaf keys one scope's SETTINGS.md sets, in file order; a workflow counts
+    as one leaf."""
+    path, source = _scope_file(paths, slug)
+    if not path.is_file():
+        return []
+    return _leaves(_parse(path.read_text(encoding="utf-8"), source))
+
+
 def get(resolved: Settings, key: str) -> Any:
     """The value at a dotted key, e.g. `loop_max.critical` or `agents.planner`."""
     data = resolved.model_dump(mode="json")
@@ -101,6 +143,23 @@ def get(resolved: Settings, key: str) -> Any:
             )
         node = node[part]
     return node
+
+
+def _scope_file(paths: StorePaths, slug: str | None) -> tuple[Path, str]:
+    if slug is None:
+        return paths.defaults / "SETTINGS.md", "defaults/SETTINGS.md"
+    return paths.project(slug).settings, f"projects/{slug}/SETTINGS.md"
+
+
+def _leaves(data: Mapping[str, Any], prefix: str = "") -> list[str]:
+    keys: list[str] = []
+    for key, value in data.items():
+        dotted = f"{prefix}{key}"
+        if isinstance(value, Mapping) and prefix.rstrip(".") not in ATOMIC:
+            keys += _leaves(value, f"{dotted}.")
+        else:
+            keys.append(dotted)
+    return keys
 
 
 def _resolve(paths: StorePaths, slug: str | None) -> Settings:

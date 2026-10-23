@@ -10,6 +10,7 @@ Everything under `~/.harness`: paths, atomic writes, frontmatter documents, ids,
 - `seed.ensure_store`, `seed.ensure_project`: create folders and copy default files only when missing; `ensure_store` also seeds each package role skill missing from `defaults/roles/`; `seed.link_memory(paths, project)` points a project's `memory` at `../../memory`, replacing a missing or stale link but never a real file or folder.
 - `documents`: `load_plan`, `load_ticket`, `load_any`, `save_plan`, `save_ticket` (a ticket lands in the folder its status names), `save_any`, `find_ticket`, `iter_documents`, `check_document`.
 - `frontmatter.parse`, `frontmatter.split_frontmatter` (mapping and the text after it), `frontmatter.render`, `files.atomic_write`, `ids.new_id`, `locks.locked`, `yamlio.load_yaml`, `yamlio.dump_yaml`.
+- `yamledit.set_key(text, key, value, source=)`: one dotted key set (None removes it) with every other line byte-identical; the longest dotted prefix present wins at each mapping; a one-line scalar is swapped in place, anything else rewrites the nearest block-mapping entry on one line in flow style (trailing comment kept); a removal that empties a block drops the block. `yamledit.flow(value)`: one-line flow YAML, quoting strings that would not read back as themselves.
 - `frontmatter.read_sections`: `## ` sections typed by an agent; unknown or repeated headings and text before the first heading are refused, and ``` fences are respected.
 - `registry`: `load_registry`, `save_registry`, `slugify`, `unique_slug`, `slug_for_path`.
 - `links`: `link_state`, `state_of` (any folder link, e.g. a project's `memory`), `obstruction`, `make_link`, `ensure_excluded`, `is_excluded`.
@@ -28,6 +29,7 @@ Everything under `~/.harness`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
+- 2026-10-23: `yamledit` (SP5 M2 settings writes).
 - 2026-10-23: `links.state_of` (any folder link), `seed.link_memory` (system spec §4.2).
 - 2026-10-23: `runtime.load_pings`; `runtime/ui.json` (`load_ui`, `save_ui` at mode 0600, `drop_ui`) (SP5 M1).
 - 2026-10-23: role skills seeded into `defaults/roles/`; `split_frontmatter` (SP4 M1).

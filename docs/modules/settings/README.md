@@ -10,14 +10,16 @@ Resolve SETTINGS.md into a validated `Settings` model so agents never parse the 
 - `problems(paths, slug=None)` → one line per problem, empty when valid (`harness settings check`).
 - `get(settings, key)` → the value at a dotted key, with a "did you mean" hint for unknown keys.
 - `unflatten`, `merge`: the YAML rules below, usable on any mapping.
+- `set_values(paths, slug|None, changes)` → the keys changed: writes dotted keys (None removes one) into `defaults/SETTINGS.md` or the project's file through `store.yamledit`, validates the resolved result first and writes nothing on a problem (`UserError` naming it); `workflows.<name>` is set whole. `scope_keys(paths, slug)` → the dotted leaves that file sets, a workflow counting as one.
 
 ## Invariants
 
 - Dotted keys nest (`loop_max.simple: 3`); the same key set twice is an error.
 - Mappings deep-merge, so a project can override one field of one agent; each `workflows.<name>` is replaced whole, so steps and `on_fail` never mix across files.
 - Unknown keys fail with the closest known key as a hint.
-- Reading never writes: comment-preserving edits arrive with the UI (SP5).
+- Reading never writes. Writes (`set_values`) keep comments and every line they do not change; `ops.configure` locks, journals and commits them.
 
 ## Changes
 
+- 2026-10-23: comment-preserving writes, `scope_keys` (SP5 M2).
 - 2026-10-22: layered load, validation with hints, dotted-key get (SP2 M2).
