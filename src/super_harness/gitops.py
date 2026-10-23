@@ -1,0 +1,142 @@
+"""Git commands for ticket worktrees, commits, diffs, rebase and merge (SP3 spec §9).
+
+Runs plain `git` in the user's repo, so the user's identity, signing and hooks apply.
+"""
+
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+
+from super_harness.model import UserError
+
+
+class GitError(UserError):
+    """A git command failed; the message ends with git's own last line."""
+
+
+class CommitFailed(GitError):
+    """`git commit` failed, usually in a hook; `output` holds everything git printed."""
+
+    def __init__(self, message: str, output: str) -> None:
+        super().__init__(message)
+        self.output = output
+
+
+@dataclass(frozen=True)
+class Worktree:
+    path: Path
+    branch: str
+    created: bool
+
+
+@dataclass(frozen=True)
+class FileChange:
+    path: str
+    added: int | None
+    removed: int | None
+
+
+def ensure_worktree(repo: Path, path: Path, branch: str, base: str) -> Worktree:
+    """Reuse the ticket's worktree, re-attach its branch, or create both from `base`."""
+    _git(repo, "worktree", "prune")
+    if path.exists():
+        if _toplevel(path) == path.resolve() and current_branch(path) == branch:
+            return Worktree(path, branch, created=False)
+        raise GitError(f"{path} exists and is not the worktree of {branch}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if _run(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}").returncode == 0:
+        _git(repo, "worktree", "add", "--quiet", str(path), branch)
+    else:
+        _git(repo, "worktree", "add", "--quiet", "-b", branch, str(path), base)
+    return Worktree(path, branch, created=True)
+
+
+def head(cwd: Path) -> str:
+    return _git(cwd, "rev-parse", "HEAD").strip()
+
+
+def current_branch(cwd: Path) -> str | None:
+    """The checked-out branch; None on a detached HEAD."""
+    result = _run(cwd, "symbolic-ref", "--short", "--quiet", "HEAD")
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def is_clean(cwd: Path) -> bool:
+    """No staged or unstaged changes to tracked files; untracked files do not count."""
+    return _git(cwd, "status", "--porcelain", "--untracked-files=no") == ""
+
+
+def reset_soft(cwd: Path, commit: str) -> None:
+    _git(cwd, "reset", "--quiet", "--soft", commit)
+
+
+def commit_all(cwd: Path, subject: str, trailers: dict[str, str]) -> str | None:
+    """Commit every change with `trailers`; None when there is nothing to commit.
+
+    Only the subject's first line is kept, so text from an agent cannot forge trailers.
+    """
+    _git(cwd, "add", "-A")
+    if _run(cwd, "diff", "--cached", "--quiet").returncode == 0:
+        return None
+    lines = subject.strip().splitlines()
+    message = lines[0].strip() if lines else ""
+    if trailers:
+        message += "\n\n" + "\n".join(f"{key}: {value}" for key, value in trailers.items())
+    result = _run(cwd, "commit", "--quiet", "-F", "-", input=message + "\n")
+    if result.returncode != 0:
+        raise CommitFailed(_failure("commit", result), (result.stdout + result.stderr).strip())
+    return head(cwd)
+
+
+def diff(cwd: Path, base: str, *, stat: bool = False) -> str:
+    """`git diff [--stat] <base>...HEAD`: what the branch changed since it left `base`."""
+    return _git(cwd, "diff", *(["--stat"] if stat else []), f"{base}...HEAD")
+
+
+def numstat(cwd: Path, base: str) -> list[FileChange]:
+    return _numstat(_git(cwd, "diff", "--numstat", f"{base}...HEAD"))
+
+
+def _numstat(text: str) -> list[FileChange]:
+    """Parse `--numstat` lines; binary files show `-` and become None."""
+    changes: list[FileChange] = []
+    for line in text.splitlines():
+        added, removed, path = line.split("\t", 2)
+        changes.append(
+            FileChange(
+                path,
+                None if added == "-" else int(added),
+                None if removed == "-" else int(removed),
+            )
+        )
+    return changes
+
+
+def _toplevel(path: Path) -> Path | None:
+    result = _run(path, "rev-parse", "--show-toplevel")
+    return Path(result.stdout.strip()).resolve() if result.returncode == 0 else None
+
+
+def _run(cwd: Path, *args: str, input: str | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        input=input,
+        capture_output=True,
+        text=True,
+        errors="replace",
+        check=False,
+    )
+
+
+def _git(cwd: Path, *args: str) -> str:
+    """Run git and return its stdout; GitError on failure."""
+    result = _run(cwd, *args)
+    if result.returncode != 0:
+        raise GitError(_failure(args[0], result))
+    return result.stdout
+
+
+def _failure(subcommand: str, result: subprocess.CompletedProcess[str]) -> str:
+    lines = (result.stderr or result.stdout).strip().splitlines()
+    return f"git {subcommand} failed: {lines[-1] if lines else f'exit {result.returncode}'}"

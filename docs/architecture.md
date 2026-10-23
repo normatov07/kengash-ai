@@ -31,7 +31,7 @@ UI: harness ui → FastAPI + SSE on 127.0.0.1, through the same `ops` layer as t
 | `scheduler` | Runnable set: dependencies, `touches` overlap, provider slots, fairness | `model` | built (SP3 M1) |
 | `workflow` | Step graph per importance, routing, loop and budget caps, stalls | `model` | built (SP3 M1) |
 | `adapters` | One driver per provider CLI behind the `Provider` protocol | `model` | core and shell (SP3 M2) |
-| `gitops` | Worktrees, commits with trailers, diffs, rebase, merge | `model` | planned, SP3 |
+| `gitops` | Worktrees, commits with trailers, diffs, rebase, merge | `model` | worktrees, commits, diffs (SP3 M2) |
 | `worker` | Runs one job through `ops`; heartbeats; handles signals | `ops`, `model` | planned, SP3 |
 | `roles` | Packaged role skill files (data only) | — | planned, SP4 |
 | `ui` | FastAPI app, SSE, static assets | `ops`, `model` | planned, SP5 |

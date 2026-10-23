@@ -99,7 +99,7 @@ forbidden_modules = [
 [[tool.importlinter.contracts]]
 name = "Adapters and gitops never touch the store: they import only model"
 type = "forbidden"
-source_modules = ["super_harness.adapters"]
+source_modules = ["super_harness.adapters", "super_harness.gitops"]
 forbidden_modules = [
     "super_harness.cli",
     "super_harness.ops",
