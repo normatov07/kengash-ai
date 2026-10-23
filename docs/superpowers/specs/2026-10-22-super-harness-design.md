@@ -117,6 +117,18 @@ Settings values and role skills resolve project → defaults → package built-i
 | `harness link <slug> <new-path>` | Re-points a moved project. |
 | `harness adopt <path>` | Imports a real `.harness/` folder: plans and tickets merge by uuid (on conflict the newer `updated` wins and the other copy goes to `archive/`), then the folder is replaced by the symlink. |
 
+**Why one directory symlink, not hard links.** The original request asks for memory and tasks "hard linked" into each project "so we may work in both places at once", and for a broken link, or a project folder that kept its own copy, to be linked back "both sides". Those goals are the contract; the mechanism is chosen to meet them:
+
+| Goal | Per-file hard links | One directory symlink per project |
+|---|---|---|
+| One canonical store the OS can reach | yes | yes |
+| Both paths show the same files, new ones included | no: directories cannot be hard-linked, so new plans and tickets never reach the repo | yes: the repo path is the store directory |
+| Edits from either side survive | no: atomic saves (write, then rename) and status moves (`in_queue/` → `in_process/`) give the store file a new inode while the repo keeps the old one | yes: both paths resolve to the same file |
+| Repos on another disk | no: hard links cannot cross filesystems | yes |
+| Repair and recovery both ways | relink every file by hand | `doctor --fix` re-creates the link, `harness link` follows a moved repo, `adopt` merges a project's own `.harness/` folder into the store and links it |
+
+Also rejected: bind mounts (root, not persistent), a two-way sync daemon (hard rule 7; two copies drift), and a store that points into the repos (moving a repo would break the store). Two links make the whole view: `<repo>/.harness -> <store>/projects/<slug>` and, inside it, `memory -> ../../memory` for the global MEMORY.md and DECISIONS.md; `doctor` checks and repairs both. `git clean -x` removes the repo link, never the store's files. Windows needs symlink rights (developer mode) or a directory junction; it is not a supported host yet. User-facing text calls them folder links.
+
 ### 4.3 Write discipline
 
 - Only harness writes store files. Agents change state through harness commands, or by returning JSON that harness records.

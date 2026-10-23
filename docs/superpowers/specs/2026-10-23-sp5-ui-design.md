@@ -26,7 +26,8 @@
 9. **Token spend** is summed from `step.end` journal events (`tokens.in + tokens.out`) per provider for the chosen window (today, 7 days, all).
 10. **Workflow editor.** The graph is drawn from `workflows.<name>` (`steps` in order, `on_fail` edges dashed). Edits are structural, not free-form: reorder or remove steps, add a step from the library, retarget a step's `on_fail`, change `loop_max.<importance>`, and pick each step's agent. The canvas's free node positions are not stored (system spec settings have none): layout is automatic, left to right.
 11. **Chrome checks.** Each milestone ends with a pass in the user's Chrome through the Claude in Chrome extension against a seeded demo store (`harness ui open` with `HARNESS_HOME` pointing at a store built by `scripts/demo_store.py`); findings become tests where they can.
-12. **`open-ui`** runs `harness ui open`; on exit 4 it asks the user to install the UI extra, installs it on yes, and opens again.
+12. **Link health** (system spec §4.2). The Memory screen shows, per project, the repo's folder link, the project's memory link and the exclude entry, each `ok` or what is wrong, with the one action that fixes it: Repair (`doctor --fix`), Re-link a moved repo to a path the user types (`harness link`), or Adopt the repo's own `.harness/` folder (`harness adopt`, confirmed by a second click). It also lists real `.harness/` folders found beside registered repos ("stores found nearby") with Adopt. The Overview shows a banner while any link is broken; the Settings and Ticket screens say "folder link" and show both paths of a file.
+13. **`open-ui`** runs `harness ui open`; on exit 4 it asks the user to install the UI extra, installs it on yes, and opens again.
 
 ## 3. Units and API
 
@@ -60,11 +61,11 @@ Each canvas element is built, built differently because the system spec says oth
 | all | sidebar (Overview, Task board, Workflow, Agents, Memory, Settings) with counts; CLI pool; search (`ticket find`); `/to-ticket` and `/to-loop` hints | "loop engine running" → live conductors (system spec §9) | — |
 | Overview | stat tiles, live sessions table, approvals with Grant loops / Park, token spend, journal tail with follow; window Today · 7 days · All; Pause all | "PLAN STALLED: read both plans" → links to the ticket's plan and Findings | "avg skill read" (not measured) |
 | Task board | columns per status with counts, cards (importance, parallel or serial, loop, provider, diff size, findings), group by status | "wip cap" → the step's slot use | "Add ticket" (tickets come from `/to-ticket`) |
-| Ticket detail | header with actions, changes table and diff, findings, prompt, acceptance, dependencies, step timeline, ticket file, memory writes, agent chain, metadata, attach command, send back, force move | "Reveal hard link" → the file's path (directory symlink, hard rule 3) | — |
+| Ticket detail | header with actions, changes table and diff, findings, prompt, acceptance, dependencies, step timeline, ticket file, memory writes, agent chain, metadata, attach command, send back, force move | "Reveal hard link" → both paths of the ticket file: the store's and the repo's through its folder link | — |
 | Workflow editor | per-importance tabs, graph, selected step panel (agent, model, skill, on_fail target), node library, loop guard rails, save to SETTINGS.md | free node positions → automatic layout; "Dry run" → shows the effective steps | "Drag from a port" (retarget from the panel instead) |
 | Agents | providers with sign-in, slots, spend; roster with on/off, CLI and model, skill, used in, tokens; limits; importance routing | "Sign in" → the command to run (harness never signs in for you) | "Kill the session when a ticket stalls over 30 minutes" (no such setting) |
-| Settings | loop limits, token discipline, status flow, SETTINGS.md view with set-here highlighting, memory links | "hard-linked" → directory symlink; "Adopt a found store" → `harness adopt` command | — |
-| Memory | store stats, memory files table, MEMORY.md view with compact, link health with re-link, ticket index, memory writes | backend "sqlite index", "vector recall" shown as planned; "Adopt by hard link" → `harness adopt` | "Retention" options (no such settings) |
+| Settings | loop limits, token discipline, status flow, SETTINGS.md view with set-here highlighting, memory links summary with Re-link and Adopt (decision 12) | "hard-linked" → "linked by one folder link" (system spec §4.2) | — |
+| Memory | store stats, memory files table, MEMORY.md view with compact, link health per project (folder link, memory link, exclude entry) with Repair, Re-link and Adopt, stores found nearby, ticket index, memory writes | "HARD LINKS n/m" → "FOLDER LINKS n/m"; "Adopt by hard link" → Adopt (`harness adopt`); backend "sqlite index", "vector recall" shown as planned | "Retention" options (no such settings) |
 
 ## 5. Acceptance (SP5 exit)
 
