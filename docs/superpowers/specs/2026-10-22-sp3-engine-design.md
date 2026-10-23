@@ -39,6 +39,13 @@ Each milestone is planned just before it is built (`docs/superpowers/plans/`), e
 18. **Sandboxed conductors.** `harness run` exits 4 when `CODEX_SANDBOX_NETWORK_DISABLED=1`, because workers started from a network-less codex sandbox cannot reach any provider. SP4 documents conductor setup.
 19. **Permission bypass** is per agent: `agents.<role>.bypass_permissions: true` adds the CLI's bypass flag (system spec §10); default false.
 20. **Commits after every editing step** (`implement`, `docs`), each with its own `Harness-Step` trailer.
+21. **Claims count queued slots.** `run` re-checks overlap and slots under the locks, counting held and queued slots, and queues the claimed ticket's first slot, so two conductors cannot overbook a provider.
+22. **Stopping.** `run` writes `workers/<id>.json` before it returns. A worker never writes a stopped state: `stop` waits for it to exit, then marks the ticket `failed` "stopped" and frees its slots.
+23. **Merge conflicts** send the ticket to `in_queue/ready` at `implement` with loop + 1 (at the loop cap: `needs_approval`), with a finding listing the conflicted files; the conductor runs it again.
+24. **`wait` events** are the journal events `ticket.needs_approval`, `ticket.stalled`, `ticket.failed`, `ticket.awaiting_merge`, `ticket.merged`, and `ticket.moved` into `done/`; each carries `status`, `loop`, `loop_max` and `reason`. The cursor is a journal position (day file and line).
+25. **Resumed sessions** get the open Findings on work steps, and the latest Handoff plus the diff stat on review steps. `## Findings` holds the latest review step's findings; a pass clears it.
+26. **The user wins.** When a ticket leaves `in_process` (or changes step) while its worker runs, the worker drops the step's result, frees its slot and exits.
+27. **Deferred park.** `park` on a running ticket prints `ticket <id> → in_queue/parked after its step`; the worker parks it before its next step.
 
 ## 3. Units
 
