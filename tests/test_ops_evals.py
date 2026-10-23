@@ -212,3 +212,15 @@ def test_parse_turn_reads_each_agent() -> None:
     )
     assert evals.parse_turn("codex", codex) == ("t-1", "Hi.")
     assert evals.parse_turn("claude", "not json") == (None, "not json")
+
+
+def test_settings_and_turns_get_the_agent_placeholders(
+    work: Path, source: Path, fake_clis: FakeClis
+) -> None:
+    fake_clis.queue("claude", stdout=claude_reply(), shell=PLAN_NEW)
+    case = scenario(settings="plan.reviewer: {cli}\n", turns=["/to-plan on {agent} {model}"])
+    assert run(work, source, case).passed
+    settings = (work / "home" / ".harness" / "defaults" / "SETTINGS.md").read_text()
+    assert settings == "plan.reviewer: claude/haiku\n"
+    assert fake_clis.calls("claude")[0]["argv"][1] == "/to-plan on claude haiku"
+    assert evals.agent_values("codex", None) == {"agent": "codex", "model": "", "cli": "codex"}

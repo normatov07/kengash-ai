@@ -122,6 +122,12 @@ def _agents(named: Sequence[str] | None) -> list[str]:
         return chosen
 
 
+def agent_values(agent: str, model: str | None) -> dict[str, str]:
+    """`{agent}`, `{model}` and `{cli}` (`<agent>/<model>`, or the agent alone), so a
+    scenario can put workers and reviewers on the conductor's own CLI and model."""
+    return {"agent": agent, "model": model or "", "cli": f"{agent}/{model}" if model else agent}
+
+
 def conductor_argv(agent: str, turn: str, *, model: str | None, session: str | None) -> list[str]:
     """One headless conductor turn (SP4 spec §5): a new session, or `session` resumed."""
     text = positional(turn)
@@ -186,14 +192,14 @@ def run_scenario(
         return EvalRun(name, agent, False, reason, work)
 
     _scratch_repo(repo, scenario.files, env)
-    values: dict[str, str] = {}
+    values = agent_values(agent, model)
     init = _harness(["init", str(repo)], env, repo)
     if init.returncode != 0:
         return failed(f"harness init failed: {_tail(init.stderr)}")
     slug = next(iter(load_registry(paths).projects))
     if scenario.settings:
         for target in (paths.defaults / "SETTINGS.md", paths.project(slug).settings):
-            target.write_text(scenario.settings, encoding="utf-8")
+            target.write_text(fill(scenario.settings, values), encoding="utf-8")
     for number, step in enumerate(scenario.setup, 1):
         args = [fill(arg, values) for arg in step.args]
         done = _harness(args, env, repo, stdin=fill(step.stdin, values))

@@ -9,7 +9,7 @@ skill: to-plan                        # the skill under test
 description: one line
 notes: how it failed without the skill (RED)
 files: {calc.py: "def sub(a, b): ..."}   # the scratch repo
-settings: "plan.review_max: 0\n"      # SETTINGS.md for the defaults and the project
+settings: "plan.reviewer: {cli}\n"   # SETTINGS.md for the defaults and the project
 setup:                                # harness commands run before the conductor
   - {args: [plan, new, --mode, quick, --title, T], stdin: "prompt", save: plan}
 turns:                                # what the user types; {plan} is a saved id
@@ -24,5 +24,7 @@ expect:
   reply: ["text the last reply must hold"]
 timeout_s: 900                        # per turn
 ```
+
+`{agent}`, `{model}` and `{cli}` (`<agent>/<model>`) name the run's own conductor, so workers and reviewers can run on it too; `save:` adds more names.
 
 Each run gets its own store and scratch repo, installs the skills for its agent (none with `--baseline`), runs every turn headless on the agent's cheapest model, resuming its session, then checks `expect`; the first miss is the failure.
