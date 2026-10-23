@@ -340,7 +340,7 @@ One JSON object per line in `journal/YYYY-MM-DD.jsonl`:
 {"ts":"2026-10-22T12:04:11Z","type":"step.end","project":"payments-api","ticket":"4f2a1b7c","step":"implement","role":"implementer","provider":"codex","model":"default","session":"019a…","loop":2,"verdict":"pass","tokens":{"in":12000,"out":3400,"cache_read":80000},"duration_s":252,"files":3,"added":128,"removed":14,"commit":"abc1234"}
 ```
 
-Types: `plan.created`, `plan.saved`, `plan.reviewed`, `plan.approved`, `plan.rejected`, `ticket.created`, `ticket.claimed`, `step.start`, `step.end`, `ticket.recirculated`, `ticket.needs_approval`, `ticket.approved`, `ticket.stalled`, `ticket.failed`, `ticket.awaiting_merge`, `ticket.merged`, `ticket.moved`, `ticket.updated`, `ticket.paused`, `ticket.resumed`, `ticket.stopped`, `memory.write`, `session.created`, `session.resumed`, `worker.started`, `worker.exited`, `settings.changed`, `link.broken`, `link.repaired`, `link.adopted`. Secrets are redacted before writing.
+Types: `plan.created`, `plan.saved`, `plan.reviewed`, `plan.approved`, `plan.rejected`, `ticket.created`, `ticket.claimed`, `step.start`, `step.end`, `ticket.recirculated`, `ticket.needs_approval`, `ticket.approved`, `ticket.stalled`, `ticket.failed`, `ticket.awaiting_merge`, `ticket.merged`, `ticket.moved`, `ticket.updated`, `ticket.paused`, `ticket.resumed`, `ticket.stopped`, `memory.write`, `memory.compacted`, `session.created`, `session.resumed`, `worker.started`, `worker.exited`, `settings.changed`, `link.broken`, `link.repaired`, `link.adopted`. Secrets are redacted before writing.
 
 ## 7. Workers and provider adapters
 
