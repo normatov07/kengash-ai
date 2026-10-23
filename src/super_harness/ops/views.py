@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
-from super_harness import journal, settings
+from super_harness import __version__, journal, settings
 from super_harness.model import (
     STEP_ROLES,
     ConductorPing,
@@ -209,6 +209,10 @@ def board(paths: StorePaths | None = None, *, project: str | None = None) -> Boa
     for column in columns.values():
         column.cards.sort(key=lambda card: (card.updated, card.id), reverse=column.key == "done")
     return Board(list(columns.values()))
+
+
+def version() -> str:
+    return __version__
 
 
 def journal_end() -> JournalCursor:

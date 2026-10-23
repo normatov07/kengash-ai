@@ -90,6 +90,10 @@ def create_app(*, token: str, port: int) -> FastAPI:
 
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
+    @app.get("/api/meta")
+    def meta() -> dict[str, str]:
+        return {"version": views.version()}
+
     @app.get("/api/overview")
     def overview(window: Literal["today", "7d", "all"] = "today") -> views.Overview:
         return views.overview(window=window)
