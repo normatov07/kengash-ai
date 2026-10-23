@@ -28,6 +28,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Changes
 
+- 2026-10-23: `SkillMeta`, skill frontmatter (SP4 M1).
 - 2026-10-23: `plan.reviewer` is validated (SP3 M4).
 - 2026-10-23: `WorkerRecord.job` names plan-review and compaction jobs (SP3 M4).
 - 2026-10-23: `WaitTimeout` (exit 3) (SP3 M4).

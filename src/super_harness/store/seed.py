@@ -8,6 +8,7 @@ from super_harness.store import storegit
 from super_harness.store.paths import ProjectPaths, StorePaths
 
 _PACKAGE_DEFAULTS = resources.files("super_harness.store") / "defaults"
+_PACKAGE_ROLES = resources.files("super_harness") / "roles"
 
 
 def package_default(name: str) -> str:
@@ -30,6 +31,7 @@ def ensure_store(paths: StorePaths) -> None:
     _seed("DECISIONS.md", paths.memory / "DECISIONS.md")
     _seed("SETTINGS.md", paths.defaults / "SETTINGS.md")
     _seed("PROCESS.md", paths.defaults / "PROCESS.md")
+    _seed_roles(paths.defaults / "roles")
     storegit.ensure_repo(paths.home)
 
 
@@ -46,3 +48,15 @@ def ensure_project(paths: StorePaths, slug: str) -> ProjectPaths:
             source = paths.defaults / target.name
             target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     return project
+
+
+def _seed_roles(target: Path) -> None:
+    """Copy each package role skill whose folder is missing; edited ones stay as they are."""
+    for role in _PACKAGE_ROLES.iterdir():
+        if not role.is_dir() or (target / role.name).exists():
+            continue
+        folder = target / role.name
+        folder.mkdir(parents=True)
+        for item in role.iterdir():
+            if item.is_file():
+                (folder / item.name).write_bytes(item.read_bytes())

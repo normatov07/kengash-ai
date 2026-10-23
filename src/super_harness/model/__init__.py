@@ -37,6 +37,7 @@ from super_harness.model.settings import (
     Workflow,
     split_cli,
 )
+from super_harness.model.skills import SkillMeta
 from super_harness.model.steps import (
     OUTPUT_SCHEMAS,
     CompactOutput,
@@ -91,6 +92,7 @@ __all__ = [
     "SessionRef",
     "Settings",
     "ShortId",
+    "SkillMeta",
     "SlotEntry",
     "SlotTable",
     "StepOutput",

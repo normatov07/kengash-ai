@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 
 from super_harness.model import Doc, Finding, Ticket
 from super_harness.ops import prompts
+from super_harness.store import StorePaths
+from super_harness.store.seed import ensure_project, ensure_store
 
 Make = Callable[..., Doc[Ticket]]
 
@@ -59,3 +61,10 @@ def test_sections_and_log_lines() -> None:
         "review",
         "edit_worktree",
     )
+
+
+def test_role_skills_come_from_the_package_by_default(store_paths: StorePaths) -> None:
+    ensure_store(store_paths)
+    ensure_project(store_paths, "payments-api")
+    text = prompts.role_skill(store_paths, "payments-api", "review-code")
+    assert text is not None and text.strip() and not text.startswith("---")

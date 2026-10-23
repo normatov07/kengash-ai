@@ -12,6 +12,7 @@ from super_harness.model import (
     ReviewOutput,
     Ticket,
 )
+from super_harness.ops import skills
 from super_harness.store.paths import StorePaths
 from super_harness.store.redact import redact
 
@@ -159,12 +160,8 @@ def log_line(
 
 
 def role_skill(paths: StorePaths, slug: str, skill: str) -> str | None:
-    """The role skill: the project's `roles/`, then `defaults/roles/` (package roles: SP4)."""
-    for folder in (paths.project(slug).root / "roles", paths.defaults / "roles"):
-        path = folder / f"{skill}.md"
-        if path.is_file():
-            return path.read_text(encoding="utf-8")
-    return None
+    """The role skill's body: project `roles/`, then `defaults/roles/`, then the package."""
+    return skills.role_text(paths, slug, skill)
 
 
 def _flat(text: str) -> str:

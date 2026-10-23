@@ -7,9 +7,9 @@ Everything under `~/.harness`: paths, atomic writes, frontmatter documents, ids,
 ## Interface
 
 - `StorePaths.default()` and `ProjectPaths`: the layout of system spec §4.1, plus `StorePaths.slots`, `claims`, `trust`, `flags`, `workers`, `ticket_states`, `conductors` and `logs` under `runtime/`, and `worktrees` with `worktree(slug, id)` (`worktrees/<slug>/hrn-<id>`); `HARNESS_HOME` overrides `~/.harness`.
-- `seed.ensure_store`, `seed.ensure_project`: create folders and copy default files only when missing.
+- `seed.ensure_store`, `seed.ensure_project`: create folders and copy default files only when missing; `ensure_store` also seeds each package role skill missing from `defaults/roles/`.
 - `documents`: `load_plan`, `load_ticket`, `load_any`, `save_plan`, `save_ticket` (a ticket lands in the folder its status names), `save_any`, `find_ticket`, `iter_documents`, `check_document`.
-- `frontmatter.parse`, `frontmatter.render`, `files.atomic_write`, `ids.new_id`, `locks.locked`, `yamlio.load_yaml`, `yamlio.dump_yaml`.
+- `frontmatter.parse`, `frontmatter.split_frontmatter` (mapping and the text after it), `frontmatter.render`, `files.atomic_write`, `ids.new_id`, `locks.locked`, `yamlio.load_yaml`, `yamlio.dump_yaml`.
 - `frontmatter.read_sections`: `## ` sections typed by an agent; unknown or repeated headings and text before the first heading are refused, and ``` fences are respected.
 - `registry`: `load_registry`, `save_registry`, `slugify`, `unique_slug`, `slug_for_path`.
 - `links`: `link_state`, `obstruction`, `make_link`, `ensure_excluded`, `is_excluded`.
@@ -28,6 +28,7 @@ Everything under `~/.harness`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
+- 2026-10-23: role skills seeded into `defaults/roles/`; `split_frontmatter` (SP4 M1).
 - 2026-10-23: worker records, ticket state, park flags, conductor pings and wait cursors (SP3 M3).
 - 2026-10-23: `runtime/trust.json` (SP3 M2).
 - 2026-10-22: runtime slots, claims and pause flags (SP3 M1).
