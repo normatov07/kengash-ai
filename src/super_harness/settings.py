@@ -110,9 +110,12 @@ def set_values(paths: StorePaths, slug: str | None, changes: Mapping[str, Any]) 
     if not done:
         return []
     found = layers(paths, slug)
-    found[-1 if path.is_file() else len(found)] = _parse(text, source)
+    if path.is_file():
+        found[-1] = _parse(text, source)
+    else:
+        found.append(_parse(text, source))
     resolved: dict[str, Any] = {}
-    for layer in found[: 2 if slug is None else 3]:
+    for layer in found:
         resolved = merge(resolved, layer)
     try:
         Settings.model_validate(resolved)
@@ -131,6 +134,21 @@ def scope_keys(paths: StorePaths, slug: str | None) -> list[str]:
     return _leaves(_parse(path.read_text(encoding="utf-8"), source))
 
 
+def overrides(paths: StorePaths, slug: str | None) -> list[str]:
+    """The keys one scope's file sets to a value other than what it would inherit: the
+    package defaults for the user's defaults, the user's defaults for a project."""
+    path, _ = _scope_file(paths, slug)
+    found = layers(paths, slug)
+    if not path.is_file():
+        return []
+    inherited: dict[str, Any] = {}
+    for layer in found[:-1]:
+        inherited = merge(inherited, layer)
+    parent = Settings.model_validate(inherited).model_dump(mode="json")
+    own = load(paths, slug).model_dump(mode="json")
+    return [key for key in scope_keys(paths, slug) if _at(own, key) != _at(parent, key)]
+
+
 def get(resolved: Settings, key: str) -> Any:
     """The value at a dotted key, e.g. `loop_max.critical` or `agents.planner`."""
     data = resolved.model_dump(mode="json")
@@ -141,6 +159,15 @@ def get(resolved: Settings, key: str) -> Any:
             raise UserError(
                 f"unknown setting {key}" + (f"; did you mean {hint[0]}?" if hint else "")
             )
+        node = node[part]
+    return node
+
+
+def _at(data: Mapping[str, Any], key: str) -> Any:
+    node: Any = data
+    for part in key.split("."):
+        if not isinstance(node, Mapping) or part not in node:
+            return None
         node = node[part]
     return node
 

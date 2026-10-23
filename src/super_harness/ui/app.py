@@ -6,7 +6,7 @@ import hmac
 import json
 from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import (
@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from super_harness.model import HarnessError, JournalCursor, NeedsSetup, NeedsUser
-from super_harness.ops import controls, merging, projects, tickets, views
+from super_harness.ops import configure, controls, merging, projects, tickets, views
 
 STATIC = Path(__file__).parent / "static"
 COOKIE = "harness_token"
@@ -47,6 +47,12 @@ class LinkAction(BaseModel):
 
     project: str = ""
     path: str = ""
+
+
+class SettingsChange(BaseModel):
+    """The body of a settings save: dotted key → value; null removes the key from the scope."""
+
+    changes: dict[str, Any]
 
 
 class Connection(Protocol):
@@ -157,6 +163,15 @@ def create_app(*, token: str, port: int) -> FastAPI:
     def adopt(body: LinkAction) -> views.Links:
         projects.adopt(Path(body.path).expanduser())
         return views.links()
+
+    @app.get("/api/settings")
+    def settings_view(project: str = "") -> views.SettingsView:
+        return views.settings_view(project=project or None)
+
+    @app.post("/api/settings")
+    def save_settings(body: SettingsChange, project: str = "") -> views.SettingsView:
+        configure.save_settings(body.changes, project=project or None, by=BY)
+        return views.settings_view(project=project or None)
 
     @app.get("/api/events")
     def events(request: Request) -> StreamingResponse:

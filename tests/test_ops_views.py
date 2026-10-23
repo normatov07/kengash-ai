@@ -9,7 +9,7 @@ import pytest
 
 from super_harness import journal
 from super_harness.model import ConductorPing, Doc, Event, SlotEntry, SlotTable, Ticket, utc_now
-from super_harness.ops import views
+from super_harness.ops import configure, views
 from super_harness.store import StorePaths, documents, runtime
 
 Make = Callable[..., Doc[Ticket]]
@@ -161,3 +161,25 @@ def test_past_journal_days_are_parsed_once(
     past = (utc_now() - timedelta(days=3)).date().isoformat()
     assert parsed.count(past) == 1
     assert tail[-1]["type"] == "ticket.moved" and tail[-1]["ticket"] == "aaaaaaa2"
+
+
+def test_settings_mark_only_the_projects_overrides(
+    registered_repo: Path, store_paths: StorePaths
+) -> None:
+    configure.save_settings({"loop_max.critical": 8}, project="payments-api", by="ui")
+    found = views.settings_view(store_paths, project="payments-api")
+    assert found.set_here == ["loop_max.critical"]
+    assert found.values["loop_max"]["critical"] == 8 and found.problem == ""
+    assert found.repo_path == str(registered_repo / ".harness" / "SETTINGS.md")
+    assert "loop_max.critical: 8" in found.file
+    defaults = views.settings_view(store_paths, project=None)
+    assert defaults.set_here == [] and defaults.repo_path is None
+
+
+def test_a_broken_settings_file_is_shown_with_its_problem(
+    registered_repo: Path, store_paths: StorePaths
+) -> None:
+    store_paths.project("payments-api").settings.write_text("loop_maxx.simple: 3\n")
+    found = views.settings_view(store_paths, project="payments-api")
+    assert "loop_maxx" in found.problem and found.values == {}
+    assert found.file == "loop_maxx.simple: 3\n"

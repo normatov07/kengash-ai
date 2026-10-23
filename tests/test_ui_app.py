@@ -163,3 +163,31 @@ def test_adopt_merges_a_found_store(client: TestClient, registered_repo: Path) -
     adopted = client.post("/api/links/adopt", json={"path": str(other)}, headers=POST).json()
     assert adopted["nearby"] == [] and adopted["total"] == 2
     assert (other / ".harness").is_symlink()
+
+
+def test_settings_saves_and_refuses_invalid_values(
+    client: TestClient, store_paths: StorePaths
+) -> None:
+    signed_in(client)
+    shown = client.get("/api/settings?project=payments-api").json()
+    assert shown["scope"] == "payments-api" and shown["set_here"] == []
+    saved = client.post(
+        "/api/settings?project=payments-api",
+        json={"changes": {"loop_max.simple": 5}},
+        headers=POST,
+    )
+    assert saved.status_code == 200 and saved.json()["set_here"] == ["loop_max.simple"]
+    before = store_paths.project("payments-api").settings.read_text()
+    bad = client.post(
+        "/api/settings?project=payments-api",
+        json={"changes": {"loop_max.simple": 0}},
+        headers=POST,
+    )
+    assert bad.status_code == 400 and "loop_max.simple" in bad.json()["error"]
+    assert store_paths.project("payments-api").settings.read_text() == before
+    reset = client.post(
+        "/api/settings?project=payments-api",
+        json={"changes": {"loop_max.simple": None}},
+        headers=POST,
+    )
+    assert reset.json()["set_here"] == []

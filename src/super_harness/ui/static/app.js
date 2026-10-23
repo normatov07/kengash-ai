@@ -4,6 +4,7 @@ import { html, mount, raw } from "./html.js";
 import * as board from "./views/board.js";
 import * as memory from "./views/memory.js";
 import * as overview from "./views/overview.js";
+import * as settings from "./views/settings.js";
 
 const ICONS = {
   overview: '<rect x="2.3" y="2.3" width="5" height="5" rx="1"/><rect x="8.7" y="2.3" width="5" height="5" rx="1"/><rect x="2.3" y="8.7" width="5" height="5" rx="1"/><rect x="8.7" y="8.7" width="5" height="5" rx="1"/>',
@@ -18,10 +19,12 @@ const NAV = [
   ["ORCHESTRATE", [["workflow", "Workflow"], ["agents", "Agents"]]],
   ["PROJECT", [["memory", "Memory"], ["settings", "Settings"]]],
 ];
-const SCREENS = { overview, board, memory };
+const SCREENS = { overview, board, memory, settings };
 
 export const app = {
   project: "",
+  scope: undefined, // the configure screens' scope: "" is the defaults, else a project
+  dirty: false, // a configure screen holds unsaved edits; live refresh waits
   query: "",
   window: "today",
   live: false,
@@ -97,15 +100,25 @@ async function show() {
   try {
     app.overview = await get(`/api/overview?window=${app.window}`);
     const screen = SCREENS[name];
-    const body = screen ? screen.view(await screen.load(app, arg), app) : placeholder(name);
+    const data = screen ? await screen.load(app, arg) : null;
+    const body = screen ? screen.view(data, app) : placeholder(name);
     if (ticket !== showing) return;
     nav(name);
     if (!document.getElementById("q") || document.activeElement?.id !== "q") top();
-    mount(document.getElementById("view"), body);
-    screen?.bind?.(document.getElementById("view"), app);
+    const root = fresh();
+    mount(root, body);
+    screen?.bind?.(root, app, data);
   } catch (error) {
     mount(document.getElementById("view"), html`<div class="page"><div class="panel"><div class="empty">${error.message}</div></div></div>`);
   }
+}
+
+// A new view element per render, so listeners bound to the last one go with it.
+function fresh() {
+  const old = document.getElementById("view");
+  const root = old.cloneNode(false);
+  old.replaceWith(root);
+  return root;
 }
 
 let toastTimer = 0;
@@ -148,7 +161,7 @@ let pending = 0;
 subscribe(
   () => {
     clearTimeout(pending);
-    pending = setTimeout(show, 300);
+    pending = setTimeout(() => app.dirty || show(), 300);
   },
   (live) => {
     if (app.live !== live) {
@@ -157,7 +170,10 @@ subscribe(
     }
   },
 );
-window.addEventListener("hashchange", show);
+window.addEventListener("hashchange", () => {
+  app.dirty = false;
+  show();
+});
 get("/api/meta").then((meta) => {
   app.version = meta.version;
   show();

@@ -23,7 +23,7 @@ function action(item) {
   return "";
 }
 
-function project(item) {
+export function project(item) {
   return html`<div class="link-row">
     <div class="link-name"><b>${item.project}</b><span class="faint mono">${item.tickets} tickets</span></div>
     <div class="link-paths mono">
@@ -64,6 +64,10 @@ export function view(data) {
 }
 
 export function bind(root, app) {
+  bindLinks(root, app);
+}
+
+export function bindLinks(root, app) {
   root.querySelectorAll("[data-link]").forEach((button) =>
     button.addEventListener("click", async () => {
       const kind = button.dataset.link;

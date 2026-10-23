@@ -157,3 +157,11 @@ def test_removing_the_last_entry_of_a_block_drops_the_block(
     project_file.write_text("version: 1\nloop_max:\n  simple: 5\nmerge.mode: ask\n")
     settings.set_values(store_paths, "app", {"loop_max.simple": None})
     assert project_file.read_text() == "version: 1\nmerge.mode: ask\n"
+
+
+def test_a_missing_scope_file_is_created_with_the_change(
+    store_paths: StorePaths, project_file: Path
+) -> None:
+    project_file.unlink()
+    settings.set_values(store_paths, "app", {"loop_max.simple": 5})
+    assert project_file.read_text() == "loop_max.simple: 5\n"

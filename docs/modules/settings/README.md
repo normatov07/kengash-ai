@@ -10,7 +10,7 @@ Resolve SETTINGS.md into a validated `Settings` model so agents never parse the 
 - `problems(paths, slug=None)` → one line per problem, empty when valid (`harness settings check`).
 - `get(settings, key)` → the value at a dotted key, with a "did you mean" hint for unknown keys.
 - `unflatten`, `merge`: the YAML rules below, usable on any mapping.
-- `set_values(paths, slug|None, changes)` → the keys changed: writes dotted keys (None removes one) into `defaults/SETTINGS.md` or the project's file through `store.yamledit`, validates the resolved result first and writes nothing on a problem (`UserError` naming it); `workflows.<name>` is set whole. `scope_keys(paths, slug)` → the dotted leaves that file sets, a workflow counting as one.
+- `set_values(paths, slug|None, changes)` → the keys changed: writes dotted keys (None removes one) into `defaults/SETTINGS.md` or the project's file through `store.yamledit`, validates the resolved result first and writes nothing on a problem (`UserError` naming it); `workflows.<name>` is set whole. `scope_keys(paths, slug)` → the dotted leaves that file sets, a workflow counting as one; `overrides(paths, slug)` → those whose resolved value differs from what the scope inherits (package defaults for the user's defaults, the user's defaults for a project), since a project's file starts as a full copy.
 
 ## Invariants
 
@@ -21,5 +21,5 @@ Resolve SETTINGS.md into a validated `Settings` model so agents never parse the 
 
 ## Changes
 
-- 2026-10-23: comment-preserving writes, `scope_keys` (SP5 M2).
+- 2026-10-23: comment-preserving writes, `scope_keys`, `overrides` (SP5 M2).
 - 2026-10-22: layered load, validation with hints, dotted-key get (SP2 M2).

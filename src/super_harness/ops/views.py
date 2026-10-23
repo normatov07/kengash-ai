@@ -170,6 +170,21 @@ class Links:
     total: int = 0
 
 
+@dataclass
+class SettingsView:
+    """One scope's settings (SP5 spec decision 8): resolved values, the keys this scope
+    overrides, and its SETTINGS.md as written."""
+
+    scope: str | None
+    projects: list[str]
+    values: dict[str, Any]
+    set_here: list[str]
+    file: str
+    path: str
+    repo_path: str | None
+    problem: str = ""
+
+
 def overview(paths: StorePaths | None = None, *, window: Window = "today") -> Overview:
     """The Overview screen: what runs, what waits, what needs the user, what it cost."""
     paths = paths or StorePaths.default()
@@ -316,6 +331,34 @@ def _project_link(paths: StorePaths, slug: str, repo: Path) -> ProjectLink:
     return ProjectLink(
         slug, str(repo), link, str(project.root), state.value, memory, excluded, tickets, fix, hint
     )
+
+
+def settings_view(paths: StorePaths | None = None, *, project: str | None) -> SettingsView:
+    """The Settings screen for the defaults (`project=None`) or one project."""
+    paths = paths or StorePaths.default()
+    if project is None:
+        path, repo_path = paths.defaults / "SETTINGS.md", None
+    else:
+        repo = load_registry(paths).projects[records.scope(paths, project)[0]].path
+        path, repo_path = (
+            paths.project(project).settings,
+            str(repo / store_links.LINK / "SETTINGS.md"),
+        )
+    found = SettingsView(
+        project,
+        _projects(paths),
+        {},
+        [],
+        path.read_text(encoding="utf-8") if path.is_file() else "",
+        str(path),
+        repo_path,
+    )
+    try:
+        found.values = settings.load(paths, project).model_dump(mode="json")
+        found.set_here = settings.overrides(paths, project)
+    except HarnessError as exc:
+        found.problem = str(exc)
+    return found
 
 
 def version() -> str:
