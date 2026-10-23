@@ -1,6 +1,7 @@
 // The app shell: sidebar, top bar, hash routes, and live refresh from the journal stream.
 import { get, post, subscribe } from "./api.js";
 import { html, mount, raw } from "./html.js";
+import * as agents from "./views/agents.js";
 import * as board from "./views/board.js";
 import * as memory from "./views/memory.js";
 import * as overview from "./views/overview.js";
@@ -19,7 +20,7 @@ const NAV = [
   ["ORCHESTRATE", [["workflow", "Workflow"], ["agents", "Agents"]]],
   ["PROJECT", [["memory", "Memory"], ["settings", "Settings"]]],
 ];
-const SCREENS = { overview, board, memory, settings };
+const SCREENS = { overview, board, agents, memory, settings };
 
 export const app = {
   project: "",
@@ -94,9 +95,13 @@ function placeholder(name) {
 }
 
 let showing = 0;
+let shown = ""; // the route on screen; a slow load of another one shows Loading
 async function show() {
   const ticket = ++showing;
   const { name, arg } = route();
+  const slow = setTimeout(() => {
+    if (ticket === showing && name !== shown) mount(fresh(), html`<div class="page"><div class="panel"><div class="empty">Loading…</div></div></div>`);
+  }, 400);
   try {
     app.overview = await get(`/api/overview?window=${app.window}`);
     const screen = SCREENS[name];
@@ -108,8 +113,12 @@ async function show() {
     const root = fresh();
     mount(root, body);
     screen?.bind?.(root, app, data);
+    shown = name;
   } catch (error) {
+    shown = "";
     mount(document.getElementById("view"), html`<div class="page"><div class="panel"><div class="empty">${error.message}</div></div></div>`);
+  } finally {
+    clearTimeout(slow);
   }
 }
 
@@ -153,7 +162,7 @@ document.addEventListener("click", async (event) => {
   if (copy) {
     const command = copy.dataset.copy;
     await navigator.clipboard?.writeText(command).catch(() => {});
-    toast(`Run ${command} in your agent; it is copied.`);
+    toast(copy.dataset.note || `Run ${command} in your agent; it is copied.`);
   }
 });
 

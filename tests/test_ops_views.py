@@ -8,8 +8,17 @@ from typing import Any
 import pytest
 
 from super_harness import journal
-from super_harness.model import ConductorPing, Doc, Event, SlotEntry, SlotTable, Ticket, utc_now
-from super_harness.ops import configure, views
+from super_harness.model import (
+    ConductorPing,
+    Doc,
+    Event,
+    ProviderStatus,
+    SlotEntry,
+    SlotTable,
+    Ticket,
+    utc_now,
+)
+from super_harness.ops import agents, configure, views
 from super_harness.store import StorePaths, documents, runtime
 
 Make = Callable[..., Doc[Ticket]]
@@ -183,3 +192,48 @@ def test_a_broken_settings_file_is_shown_with_its_problem(
     found = views.settings_view(store_paths, project="payments-api")
     assert "loop_maxx" in found.problem and found.values == {}
     assert found.file == "loop_maxx.simple: 3\n"
+
+
+@pytest.fixture
+def detected(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Provider detection without running any CLI: claude signed in, the rest signed out."""
+    calls: list[str] = []
+
+    def detector(paths: StorePaths) -> Callable[[str], ProviderStatus]:
+        def detect(name: str) -> ProviderStatus:
+            calls.append(name)
+            signed = name == "claude"
+            return ProviderStatus(
+                name=name, installed=True, signed_in=signed, hint=f"run: {name} login"
+            )
+
+        return detect
+
+    monkeypatch.setattr(agents, "detector", detector)
+    monkeypatch.setattr(views, "_detected", {})
+    return calls
+
+
+def test_agents_sum_tokens_per_role_and_list_their_workflows(
+    seeded: StorePaths, detected: list[str]
+) -> None:
+    event = step_end("aaaaaaa3", "codex", 700)
+    journal.append(seeded, Event.model_validate({**event.model_dump(), "role": "implementer"}))
+    found = views.agents_view(seeded, project="payments-api", window="all")
+    roles = {role.role: role for role in found.roster}
+    assert roles["implementer"].tokens == 700 and roles["planner"].tokens == 0
+    assert roles["implementer"].used_in == ["simple", "standard", "critical"]
+    assert roles["test-runner"].used_in == [] and roles["test-runner"].on is False
+    assert roles["planner"].skill_file.endswith("roles/plan/SKILL.md")
+    cards = {card.name: card for card in found.providers}
+    assert cards["claude"].signed_in and cards["codex"].hint == "run: codex login"
+    assert (cards["codex"].slots_used, cards["codex"].slots_total) == (1, 3)
+    assert found.routing["simple"] == ["plan", "implement", "review_code"]
+
+
+def test_provider_detection_is_reused_for_a_minute(seeded: StorePaths, detected: list[str]) -> None:
+    views.agents_view(seeded, project=None, window="today")
+    views.agents_view(seeded, project=None, window="today")
+    assert detected.count("claude") == 1
+    views.agents_view(seeded, project=None, window="today", refresh=True)
+    assert detected.count("claude") == 2

@@ -10,8 +10,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from super_harness import journal
-from super_harness.model import Doc, Event, Ticket
-from super_harness.ops import views
+from super_harness.model import Doc, Event, ProviderStatus, Ticket
+from super_harness.ops import agents, views
 from super_harness.store import StorePaths, documents
 from super_harness.ui import app as ui_app
 
@@ -191,3 +191,18 @@ def test_settings_saves_and_refuses_invalid_values(
         headers=POST,
     )
     assert reset.json()["set_here"] == []
+
+
+def test_the_agents_screen_reads_one_scope(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def detector(paths: StorePaths) -> Callable[[str], ProviderStatus]:
+        return lambda name: ProviderStatus(name=name, installed=False, hint="install it")
+
+    monkeypatch.setattr(agents, "detector", detector)
+    monkeypatch.setattr(views, "_detected", {})
+    signed_in(client)
+    shown = client.get("/api/agents?project=payments-api&window=7d").json()
+    assert shown["scope"] == "payments-api"
+    assert {role["role"] for role in shown["roster"]} >= {"planner", "implementer"}
+    assert all(card["hint"] == "install it" for card in shown["providers"])

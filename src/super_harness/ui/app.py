@@ -164,6 +164,12 @@ def create_app(*, token: str, port: int) -> FastAPI:
         projects.adopt(Path(body.path).expanduser())
         return views.links()
 
+    @app.get("/api/agents")
+    def agents_view(
+        project: str = "", window: Literal["today", "7d", "all"] = "today", refresh: bool = False
+    ) -> views.AgentsView:
+        return views.agents_view(project=project or None, window=window, refresh=refresh)
+
     @app.get("/api/settings")
     def settings_view(project: str = "") -> views.SettingsView:
         return views.settings_view(project=project or None)

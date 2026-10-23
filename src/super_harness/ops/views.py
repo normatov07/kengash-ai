@@ -1,6 +1,7 @@
 """Read models for the UI screens (SP5 spec §3): plain dataclasses built from the store,
 the runtime files and the journal. Nothing here writes."""
 
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -9,6 +10,7 @@ from typing import Any, Literal
 
 from super_harness import __version__, journal, settings
 from super_harness.model import (
+    PROVIDERS,
     STEP_ROLES,
     ConductorPing,
     Doc,
@@ -16,12 +18,14 @@ from super_harness.model import (
     Folder,
     HarnessError,
     JournalCursor,
+    ProviderStatus,
     Ticket,
     split_cli,
     utc_now,
 )
+from super_harness.ops import agents, records
 from super_harness.ops import projects as project_ops
-from super_harness.ops import records
+from super_harness.ops import skills as skill_ops
 from super_harness.ops.workspace import GATES
 from super_harness.store import links as store_links
 from super_harness.store import runtime
@@ -34,6 +38,8 @@ TAIL = 30
 NEARBY_DEPTH = 2  # levels below each registered repo's parent folder
 FRESH_PING = timedelta(minutes=10)
 _parsed: dict[Path, tuple[tuple[int, int], list[Event]]] = {}  # day file → (stat, events)
+DETECT_S = 60.0
+_detected: dict[str, tuple[float, ProviderStatus]] = {}  # provider → (when, status)
 COLUMNS = (
     ("in_queue", "In queue"),
     ("plan", "Planning"),
@@ -182,6 +188,51 @@ class SettingsView:
     file: str
     path: str
     repo_path: str | None
+    problem: str = ""
+
+
+@dataclass
+class ProviderCard:
+    name: str
+    installed: bool
+    signed_in: bool
+    supported: bool
+    version: str | None
+    hint: str
+    slots_used: int
+    slots_total: int
+    spend: int
+
+
+@dataclass
+class Role:
+    role: str
+    on: bool
+    cli: str
+    provider: str
+    model: str
+    skill: str
+    skill_file: str
+    blocking: bool
+    fallback: list[str]
+    used_in: list[str]
+    tokens: int
+
+
+@dataclass
+class AgentsView:
+    """The Agents screen for one scope: providers, the role roster, limits and routing."""
+
+    scope: str | None
+    projects: list[str]
+    providers: list[ProviderCard] = field(default_factory=list)
+    roster: list[Role] = field(default_factory=list)
+    sessions_max: int = 0
+    tokens_per_ticket: int = 0
+    fallback_on_rate_limit: bool = True
+    per_provider: dict[str, int] = field(default_factory=dict)
+    routing: dict[str, list[str]] = field(default_factory=dict)
+    set_here: list[str] = field(default_factory=list)
     problem: str = ""
 
 
@@ -361,6 +412,76 @@ def settings_view(paths: StorePaths | None = None, *, project: str | None) -> Se
     return found
 
 
+def agents_view(
+    paths: StorePaths | None = None,
+    *,
+    project: str | None,
+    window: Window = "today",
+    refresh: bool = False,
+) -> AgentsView:
+    """The Agents screen; provider detection runs each CLI's sign-in check, so it is kept
+    for DETECT_S unless `refresh`."""
+    paths = paths or StorePaths.default()
+    if project is not None:
+        records.scope(paths, project)
+    found = AgentsView(project, _projects(paths))
+    try:
+        resolved = settings.load(paths, project)
+        found.set_here = settings.overrides(paths, project)
+    except HarnessError as exc:
+        found.problem = str(exc)
+        return found
+    events = _events(paths)
+    spend = _spend(events, window)
+    held: dict[str, int] = defaultdict(int)
+    for entry in runtime.load_slots(paths).held:
+        held[entry.provider] += 1
+    for name, status in _statuses(paths, refresh).items():
+        found.providers.append(
+            ProviderCard(
+                name,
+                status.installed,
+                status.signed_in,
+                name not in agents.UNSUPPORTED,
+                status.version,
+                status.hint,
+                held[name],
+                resolved.sessions.per_provider.get(name, 0),
+                spend.get(name, 0),
+            )
+        )
+    tokens = _role_tokens(events, window)
+    for role, agent in resolved.agents.items():
+        provider, model = split_cli(agent.cli)
+        used_in = [
+            name
+            for name, flow in resolved.workflows.items()
+            if any(STEP_ROLES.get(step) == role for step in flow.steps)
+        ]
+        skill_file = skill_ops.role_file(paths, project, agent.skill)
+        found.roster.append(
+            Role(
+                role,
+                agent.on,
+                agent.cli,
+                provider,
+                model or "default",
+                agent.skill,
+                str(skill_file) if skill_file else "",
+                agent.blocking,
+                agent.fallback,
+                used_in,
+                tokens.get(role, 0),
+            )
+        )
+    found.sessions_max = resolved.sessions.max
+    found.tokens_per_ticket = resolved.tokens.per_ticket_max
+    found.fallback_on_rate_limit = resolved.fallback_on_rate_limit
+    found.per_provider = dict(resolved.sessions.per_provider)
+    found.routing = {name: list(flow.steps) for name, flow in resolved.workflows.items()}
+    return found
+
+
 def version() -> str:
     return __version__
 
@@ -437,13 +558,17 @@ def _done(event: Event) -> bool:
     )
 
 
-def _spend(events: list[Event], window: Window) -> dict[str, int]:
+def _since(window: Window) -> datetime:
     now = utc_now()
-    since = {
+    return {
         "today": datetime.combine(now.date(), datetime.min.time(), now.tzinfo),
         "7d": now - timedelta(days=7),
         "all": datetime.min.replace(tzinfo=now.tzinfo),
     }[window]
+
+
+def _spend(events: list[Event], window: Window) -> dict[str, int]:
+    since = _since(window)
     spend: dict[str, int] = defaultdict(int)
     for event in events:
         extra = event.model_extra or {}
@@ -489,6 +614,29 @@ def _agent(paths: StorePaths, slug: str, ticket: Ticket) -> tuple[str, str]:
     except (HarnessError, KeyError):
         return "", ""
     return provider, model or "default"
+
+
+def _statuses(paths: StorePaths, refresh: bool) -> dict[str, ProviderStatus]:
+    detect = agents.detector(paths)
+    now = time.monotonic()
+    found: dict[str, ProviderStatus] = {}
+    for name in PROVIDERS:
+        cached = _detected.get(name)
+        if refresh or cached is None or now - cached[0] > DETECT_S:
+            cached = _detected[name] = (now, detect(name))
+        found[name] = cached[1]
+    return found
+
+
+def _role_tokens(events: list[Event], window: Window) -> dict[str, int]:
+    since = _since(window)
+    tokens: dict[str, int] = defaultdict(int)
+    for event in events:
+        extra = event.model_extra or {}
+        if event.type == "step.end" and event.ts >= since and extra.get("role"):
+            used = extra.get("tokens") or {}
+            tokens[str(extra["role"])] += int(used.get("in", 0)) + int(used.get("out", 0))
+    return dict(tokens)
 
 
 def _slots(paths: StorePaths) -> list[Slot]:

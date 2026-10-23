@@ -38,16 +38,27 @@ def roles_dir() -> Path:
     return Path(str(resources.files("super_harness") / "roles"))
 
 
-def role_text(paths: StorePaths, slug: str, skill: str) -> str | None:
-    """The body of a role skill: the project's, else the defaults', else the package's."""
-    for folder in (paths.project(slug).root / "roles", paths.defaults / "roles", roles_dir()):
+def role_file(paths: StorePaths, slug: str | None, skill: str) -> Path | None:
+    """A role skill's file: the project's, else the defaults', else the package's."""
+    folders = [paths.defaults / "roles", roles_dir()]
+    if slug is not None:
+        folders.insert(0, paths.project(slug).root / "roles")
+    for folder in folders:
         path = folder / skill / "SKILL.md"
         if path.is_file():
-            try:
-                return split_frontmatter(path.read_text(encoding="utf-8"))[1]
-            except UserError:
-                return path.read_text(encoding="utf-8")  # a hand-written file without frontmatter
+            return path
     return None
+
+
+def role_text(paths: StorePaths, slug: str, skill: str) -> str | None:
+    """The body of a role skill: the project's, else the defaults', else the package's."""
+    path = role_file(paths, slug, skill)
+    if path is None:
+        return None
+    try:
+        return split_frontmatter(path.read_text(encoding="utf-8"))[1]
+    except UserError:
+        return path.read_text(encoding="utf-8")  # a hand-written file without frontmatter
 
 
 AGENT_DIRS = {
