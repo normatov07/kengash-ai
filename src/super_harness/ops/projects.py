@@ -126,6 +126,9 @@ def doctor(
         Problem(check.message, warning=not check.blocking)
         for check in providers.check_providers(paths)
     ]
+    clash = providers.cli_clash()
+    if clash is not None:
+        problems.append(Problem(clash, warning=True))
     return DoctorReport(len(registry.projects), problems)
 
 

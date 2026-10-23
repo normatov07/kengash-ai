@@ -2,6 +2,9 @@
 
 import hashlib
 import json
+import shutil
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -79,6 +82,29 @@ def check_providers(paths: StorePaths) -> list[ProviderCheck]:
         ]
         checks.append(ProviderCheck(name, users, bool(stuck), message))
     return checks
+
+
+def cli_clash() -> str | None:
+    """A warning when the first `harness` on PATH is another tool (system spec §12): skills
+    then need `--cli-name hrn`. None when it is super-harness's own, or there is none."""
+    found = shutil.which("harness")
+    if found is None:
+        return None
+    if Path(found).resolve().parent == Path(sys.executable).resolve().parent:
+        return None  # the environment running this harness: ours
+    try:
+        result = subprocess.run(
+            [found, "--version"], capture_output=True, text=True, timeout=10, check=False
+        )
+        output = result.stdout
+    except (OSError, subprocess.TimeoutExpired):
+        output = ""
+    if output.startswith("super-harness "):
+        return None
+    return (
+        f"the first harness on PATH ({found}) is not super-harness; "
+        "run hrn instead, and install skills with --cli-name hrn"
+    )
 
 
 def trust_notice(paths: StorePaths, slug: str, repo: Path) -> str | None:

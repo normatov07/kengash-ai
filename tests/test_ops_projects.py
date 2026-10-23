@@ -1,3 +1,4 @@
+import os
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -6,7 +7,7 @@ from uuid import uuid4
 import pytest
 
 from super_harness.model import Doc, Folder, NeedsSetup, Ticket, UserError
-from super_harness.ops import projects
+from super_harness.ops import projects, providers
 from super_harness.store import StorePaths, documents, links
 from super_harness.store.paths import ProjectPaths
 from super_harness.store.registry import load_registry
@@ -164,3 +165,26 @@ def test_relink_refuses_a_path_registered_under_another_slug(
     projects.init_project(other)
     with pytest.raises(UserError, match="already registered as web"):
         projects.relink("payments-api", other)
+
+
+def test_doctor_warns_about_a_foreign_harness(
+    registered_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    foreign = tmp_path / "foreign-bin"
+    foreign.mkdir()
+    script = foreign / "harness"
+    script.write_text("#!/bin/sh\necho 'harness 2.1.0'\n")
+    script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{foreign}{os.pathsep}{os.environ['PATH']}")
+    assert providers.cli_clash() == (
+        f"the first harness on PATH ({script}) is not super-harness; "
+        "run hrn instead, and install skills with --cli-name hrn"
+    )
+    report = projects.doctor(fix=False, scan=None)
+    assert any(p.warning and "not super-harness" in p.message for p in report.problems)
+
+
+def test_our_own_harness_or_none_is_fine(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert providers.cli_clash() is None  # the venv's harness comes first in tests
+    monkeypatch.setenv("PATH", "/nonexistent")
+    assert providers.cli_clash() is None

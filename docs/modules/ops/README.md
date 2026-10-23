@@ -28,6 +28,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - `compaction` (SP3 spec decision 31): `compact_memory(timeout=)` → `memory.Compaction` (start the `compact` job or join it, then wait for `memory.compacted`; `NeedsSetup` when the compactor cannot run, `UserError` when the job fails, `WaitTimeout`), `start_background(paths)` (from `workspace.remember` once MEMORY.md passes its cap), `run_compaction()` (the worker's job: `memory.compactor`, read-only in `memory/`, a new session, a slot; `memory.apply_compaction` checks and writes), `fail_compaction`.
 - `agents.pick(settings, role, status, skip=)` → `Pick(role, provider, model, fallback)`: the role's `cli`, then each fallback, first usable; `NeedsSetup` naming the install or sign-in step when none is. `agents.detector(paths)` detects each provider once; `agents.problem(provider, status)` says why one cannot run.
 - `providers.check_providers(paths)` → `ProviderCheck(provider, users, blocking, message)` for each provider that enabled agents, their fallbacks or the compactor need (all scopes) and that is missing, signed out or unsupported (`blocking` when a role or the compactor is left with no usable provider), plus a warning for a claude login other than claude.ai unless `providers.claude.allow_api_key`; scopes with invalid settings are skipped. Detection goes through `adapters`.
+- `providers.cli_clash()`: a warning when the first `harness` on PATH is not super-harness (its `--version`), naming `hrn` and `--cli-name hrn`; `doctor` reports it.
 - `providers.trust_notice(paths, slug, repo)`: a warning when the repo ships `.claude/settings.json` hooks or `.mcp.json`, once until those files change (digest in `runtime/trust.json`).
 - `projects.adopt(path)` → `AdoptResult`: merges a real `.harness/` folder by uuid and archives the original.
 - `workspace`: `resolve_slug` (the named project, else the registered project containing the current folder), settings `settings_yaml`/`setting`/`settings_problems`, memory `remember` (starts compaction once MEMORY.md passes its cap)/`recall`, `context` → `Context(memory, project, process, gates)` (MEMORY.md, PROCESS.md headings, open gates) and `open_gates` → `OpenGate(id, sub_status, title)` items.
@@ -50,6 +51,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-23: doctor reports a foreign `harness` on PATH (SP4 M1).
 - 2026-10-23: `skills.install` (SP4 M1).
 - 2026-10-23: `skills.lint` (SP4 M1).
 - 2026-10-23: `skills.role_text`; role skills come from `roles/<role>/SKILL.md` (SP4 M1).
