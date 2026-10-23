@@ -30,7 +30,7 @@ UI: harness ui → FastAPI + SSE on 127.0.0.1, through the same `ops` layer as t
 | `ops` | Use cases shared by CLI, UI and workers | all units above; starts workers as processes | `projects`, `workspace`, `records`, `plans`, `tickets`, `status` (SP2 M1–M3); `queue` (SP3 M1); grows in SP3, SP5 |
 | `scheduler` | Runnable set: dependencies, `touches` overlap, provider slots, fairness | `model` | built (SP3 M1) |
 | `workflow` | Step graph per importance, routing, loop and budget caps, stalls | `model` | built (SP3 M1) |
-| `adapters` | One driver per provider CLI behind the `Provider` protocol | `model` | planned, SP3 |
+| `adapters` | One driver per provider CLI behind the `Provider` protocol | `model` | core and shell (SP3 M2) |
 | `gitops` | Worktrees, commits with trailers, diffs, rebase, merge | `model` | planned, SP3 |
 | `worker` | Runs one job through `ops`; heartbeats; handles signals | `ops`, `model` | planned, SP3 |
 | `roles` | Packaged role skill files (data only) | — | planned, SP4 |

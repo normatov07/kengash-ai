@@ -1,0 +1,29 @@
+# adapters
+
+## Purpose
+
+Run one step as one call to a provider CLI (SP3 spec §8): build the command line, run it in the ticket's worktree under the user's own login, and turn its output into a `StepResult`. Never touches the store.
+
+## Interface
+
+- `get(name, runtime=)` → `Provider`: `shell` today; `gemini` raises `NeedsSetup` (exit 4), unknown names `UserError`. `runtime` holds files a CLI needs on disk.
+- `Provider` protocol: `name`, `detect()` → `ProviderStatus`, `run(StepRequest)` → `StepResult`, `attach_command(session_id)` (the caller runs it in the worktree), `recover_session(log)` (a killed step's session id, when the CLI printed it).
+- `base.CliProvider`: shared `run` and `detect`; subclasses give `command(req)` (pure argv), `parse(req, proc)`, `signed_in()` and `attach_command`.
+- `process.run_process(argv, cwd=, env=, timeout_s=, log=, grace_s=10)` → `ProcessResult(exit_code, stdout, stderr, timed_out, duration_s)`.
+- `env.worker_env(environ, provider, role, allow_api_key=)`: the worker environment.
+- Helpers: `positional` (argv text never starts with `-`), `classify` (`auth`, `rate_limit` or `crash` from an error message), `tail`, `schema_json`, `checked`.
+- `shell.Shell`: `sh -c <project.test_cmd>`; exit 0 passes, otherwise one `high` finding holding the last 20 output lines; an empty command fails with "set project.test_cmd".
+
+## Invariants
+
+- Imports only `model`.
+- Every CLI runs in its own process group (`start_new_session`); at the timeout the group gets SIGTERM, then SIGKILL after the grace period; background children left after a normal exit are ended too.
+- stdout goes to the request's log, stderr next to it as `.err`; output is decoded as UTF-8 with replacement characters.
+- Worker environments drop `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CODEX_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY` (except the running provider's own with `allow_api_key`), `CLAUDECODE` and `CLAUDE_CODE_ENTRYPOINT`, and set `HARNESS_AGENT=<role>`.
+- A prompt plus skill over 120 KiB fails as `crash` before any CLI starts; a missing binary is a `crash` naming it.
+- One call per `run`: retries, fallbacks and quota waits belong to `ops`.
+- Never used: claude `--bare` and `--no-session-persistence`, codex `--ephemeral`; token files are never read.
+
+## Changes
+
+- 2026-10-23: process runner, worker environment, shell provider, registry (SP3 M2).
