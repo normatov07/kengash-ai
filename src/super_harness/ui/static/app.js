@@ -2,6 +2,7 @@
 import { get, post, subscribe } from "./api.js";
 import { html, mount, raw } from "./html.js";
 import * as board from "./views/board.js";
+import * as memory from "./views/memory.js";
 import * as overview from "./views/overview.js";
 
 const ICONS = {
@@ -17,7 +18,7 @@ const NAV = [
   ["ORCHESTRATE", [["workflow", "Workflow"], ["agents", "Agents"]]],
   ["PROJECT", [["memory", "Memory"], ["settings", "Settings"]]],
 ];
-const SCREENS = { overview, board };
+const SCREENS = { overview, board, memory };
 
 export const app = {
   project: "",
@@ -52,7 +53,8 @@ function icon(name) {
 function nav(current) {
   const data = app.overview;
   const open = data ? data.sessions.length + data.gates.length + data.queue.ready + data.queue.blocked + data.queue.parked : "";
-  const counts = { board: open };
+  const counts = { board: open, memory: data?.links_broken || undefined };
+  const alarms = { memory: Boolean(data?.links_broken) };
   const pool = (data?.slots ?? []).map(
     (slot) => html`<div class="pool-row"><span class="dot ${slot.total === 0 ? "" : slot.used ? "busy" : "on"}"></span>${slot.provider}<span>${slot.total === 0 ? "off" : `${slot.used}/${slot.total}`}</span></div>`,
   );
@@ -61,7 +63,7 @@ function nav(current) {
     html`<div class="brand">${raw('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F0883E" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.6 20.4 7.3v9.4L12 21.4 3.6 16.7V7.3z"/><path d="M12 21.4v-9.2M3.6 7.3 12 12.2l8.4-4.9"/></svg>')}<b>harness</b><span>${app.version}</span></div>
       ${NAV.map(
         ([title, links]) => html`<div class="nav-group"><div class="nav-title">${title}</div>${links.map(
-          ([name, label]) => html`<a class="nav-link" href="#/${name}" ${current === name ? raw('aria-current="page"') : ""}>${icon(name)}${label}${counts[name] !== undefined && counts[name] !== "" ? html`<span class="nav-count">${counts[name]}</span>` : ""}</a>`,
+          ([name, label]) => html`<a class="nav-link" href="#/${name}" ${current === name ? raw('aria-current="page"') : ""}>${icon(name)}${label}${counts[name] !== undefined && counts[name] !== "" ? html`<span class="nav-count ${alarms[name] ? "alarm" : ""}" ${alarms[name] ? raw('title="links need a fix"') : ""}>${counts[name]}</span>` : ""}</a>`,
         )}</div>`,
       )}
       <div class="nav-group"><div class="nav-title">CLI POOL</div><div class="pool">${pool.length ? pool : html`<span class="faint">no store yet</span>`}</div></div>

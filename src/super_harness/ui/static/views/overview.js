@@ -133,6 +133,7 @@ export function view(data, app) {
           : html`<button class="btn danger" type="button" data-act="pause">Pause all loops</button>`}
       </div>
     </div>
+    ${data.links_broken ? html`<div class="banner"><span class="badge danger">links</span>${data.links_broken} ${data.links_broken === 1 ? "project's folder link needs" : "projects' folder links need"} a fix; until then the repo does not show the store.<a href="#/memory">Open link health</a></div>` : ""}
     ${tiles(data, app)}
     <div class="split">${sessions(data, app)}${side(data, app)}</div>
     ${journal(data, app)}
