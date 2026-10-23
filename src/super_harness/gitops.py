@@ -36,6 +36,14 @@ class FileChange:
     removed: int | None
 
 
+@dataclass(frozen=True)
+class Commit:
+    sha: str
+    subject: str
+    trailers: dict[str, str]
+    files: list[FileChange]
+
+
 def ensure_worktree(repo: Path, path: Path, branch: str, base: str) -> Worktree:
     """Reuse the ticket's worktree, re-attach its branch, or create both from `base`."""
     _git(repo, "worktree", "prune")
@@ -97,10 +105,59 @@ def numstat(cwd: Path, base: str) -> list[FileChange]:
     return _numstat(_git(cwd, "diff", "--numstat", f"{base}...HEAD"))
 
 
+def rebase(cwd: Path, base: str) -> list[str]:
+    """Rebase the branch onto `base`: [] on success, else the conflicted paths after an abort."""
+    result = _run(cwd, "rebase", "--quiet", base)
+    if result.returncode == 0:
+        return []
+    conflicted = sorted(_git(cwd, "diff", "--name-only", "--diff-filter=U").splitlines())
+    _run(cwd, "rebase", "--abort")
+    if not conflicted:
+        raise GitError(_failure("rebase", result))
+    return conflicted
+
+
+def merge_ff(repo: Path, branch: str, base: str) -> int:
+    """Fast-forward `base` to `branch` in the main working tree; returns the commits merged."""
+    current = current_branch(repo)
+    if current != base:
+        raise GitError(f"main working tree is on {current or 'a detached HEAD'}, not {base}")
+    if not is_clean(repo):
+        raise GitError("main working tree has uncommitted changes")
+    count = int(_git(repo, "rev-list", "--count", f"{base}..{branch}").strip())
+    _git(repo, "merge", "--ff-only", "--quiet", branch)
+    return count
+
+
+def remove_worktree(repo: Path, path: Path, branch: str) -> None:
+    """Remove the ticket's worktree and delete its branch, whichever of them still exist."""
+    if path.exists():
+        _git(repo, "worktree", "remove", "--force", str(path))
+    _git(repo, "worktree", "prune")
+    if _run(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}").returncode == 0:
+        _git(repo, "branch", "-D", branch)
+
+
+def ticket_commits(repo: Path, ticket_uuid: str, ref: str) -> list[Commit]:
+    """Commits on `ref` that carry `Harness-Ticket: <uuid>`, oldest first."""
+    grep = f"--grep=Harness-Ticket: {ticket_uuid}"
+    shas = _git(repo, "log", "--reverse", "--fixed-strings", grep, "--format=%H", ref).split()
+    commits: list[Commit] = []
+    for sha in shas:
+        subject = _git(repo, "show", "-s", "--format=%s", sha).strip()
+        raw = _git(repo, "show", "-s", "--format=%(trailers:only,unfold)", sha)
+        trailers = dict(line.split(": ", 1) for line in raw.splitlines() if ": " in line)
+        files = _numstat(_git(repo, "show", "--numstat", "--format=", sha))
+        commits.append(Commit(sha, subject, trailers, files))
+    return commits
+
+
 def _numstat(text: str) -> list[FileChange]:
     """Parse `--numstat` lines; binary files show `-` and become None."""
     changes: list[FileChange] = []
     for line in text.splitlines():
+        if not line.strip():
+            continue
         added, removed, path = line.split("\t", 2)
         changes.append(
             FileChange(

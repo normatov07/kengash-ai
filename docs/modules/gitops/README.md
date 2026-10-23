@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The git commands harness runs in the user's repo (SP3 spec §9): ticket worktrees, commits with `Harness-*` trailers, diffs, and later rebase and fast-forward merge. Never touches the store.
+The git commands harness runs in the user's repo (SP3 spec §9): ticket worktrees, commits with `Harness-*` trailers, diffs, rebase, fast-forward merge and a ticket's history. Never touches the store.
 
 ## Interface
 
@@ -10,6 +10,10 @@ The git commands harness runs in the user's repo (SP3 spec §9): ticket worktree
 - `commit_all(cwd, subject, trailers)` → new sha, or None when nothing changed: `git add -A`, then one commit whose message is the subject's first line and the trailers as `Key: value` lines.
 - `head`, `current_branch` (None when detached), `is_clean` (tracked files only), `reset_soft(cwd, commit)`.
 - `diff(cwd, base, stat=)` and `numstat(cwd, base)` → `FileChange(path, added, removed)` (None for binary files), both over `<base>...HEAD`.
+- `rebase(cwd, base)` → `[]`, or the conflicted paths after `git rebase --abort` (the branch is left as it was).
+- `merge_ff(repo, branch, base)` → commits merged: refused unless the main working tree is on `base` with no tracked changes; `git merge --ff-only`.
+- `remove_worktree(repo, path, branch)`: removes the worktree and deletes the branch, whichever still exist.
+- `ticket_commits(repo, uuid, ref)` → `Commit(sha, subject, trailers, files)`, oldest first, found by `Harness-Ticket: <uuid>`; works on the base branch after the merge.
 - Errors: `GitError` (a `UserError`, exit 1) ends with git's last output line; `CommitFailed.output` holds everything a failing commit printed, hook output included.
 
 ## Invariants
@@ -21,4 +25,5 @@ The git commands harness runs in the user's repo (SP3 spec §9): ticket worktree
 
 ## Changes
 
+- 2026-10-23: rebase, fast-forward merge, cleanup, ticket history (SP3 M2).
 - 2026-10-23: worktrees, commits with trailers, diffs (SP3 M2).

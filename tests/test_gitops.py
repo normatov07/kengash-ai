@@ -17,8 +17,12 @@ from super_harness.gitops import (
     ensure_worktree,
     head,
     is_clean,
+    merge_ff,
     numstat,
+    rebase,
+    remove_worktree,
     reset_soft,
+    ticket_commits,
 )
 
 
@@ -107,3 +111,50 @@ def test_reset_soft_and_diffs(repo: Path, tmp_path: Path) -> None:
         FileChange("blob.bin", None, None),
     ]
     assert "a.py" in diff(wt, "main", stat=True) and "+b = 2" in diff(wt, "main")
+
+
+def test_rebase_onto_a_moved_base(repo: Path, tmp_path: Path) -> None:
+    wt = _worktree(repo, tmp_path).path
+    (wt / "a.py").write_text("a = 1\n")
+    commit_all(wt, "add a", TRAILERS)
+    (repo / "b.py").write_text("b = 1\n")
+    commit_all(repo, "add b on main", {})
+    assert rebase(wt, "main") == []
+    assert (wt / "b.py").exists()
+
+
+def test_a_rebase_conflict_aborts_and_names_files(repo: Path, tmp_path: Path) -> None:
+    wt = _worktree(repo, tmp_path).path
+    (wt / "README.md").write_text("ticket\n")
+    commit_all(wt, "edit readme", TRAILERS)
+    (repo / "README.md").write_text("main\n")
+    commit_all(repo, "edit readme on main", {})
+    before = head(wt)
+    assert rebase(wt, "main") == ["README.md"]
+    assert head(wt) == before and current_branch(wt) == "hrn/7b55e0c1"
+
+
+def test_merge_fast_forwards_then_cleanup(repo: Path, tmp_path: Path) -> None:
+    worktree = _worktree(repo, tmp_path)
+    for name in ("a.py", "b.py"):
+        (worktree.path / name).write_text("x = 1\n")
+        commit_all(worktree.path, f"add {name}", TRAILERS)
+    assert merge_ff(repo, "hrn/7b55e0c1", "main") == 2
+    remove_worktree(repo, worktree.path, "hrn/7b55e0c1")
+    assert not worktree.path.exists() and (repo / "b.py").exists()
+    commits = ticket_commits(repo, TRAILERS["Harness-Ticket"], "main")
+    assert [c.subject for c in commits] == ["add a.py", "add b.py"]
+    assert commits[0].trailers == TRAILERS and commits[0].files == [FileChange("a.py", 1, 0)]
+
+
+def test_merge_refuses_a_dirty_or_moved_main_tree(
+    repo: Path, tmp_path: Path, run_git: Callable[..., str]
+) -> None:
+    _worktree(repo, tmp_path)
+    (repo / "README.md").write_text("local edit\n")
+    with pytest.raises(GitError, match="main working tree has uncommitted changes"):
+        merge_ff(repo, "hrn/7b55e0c1", "main")
+    run_git(repo, "checkout", "-q", "README.md")
+    run_git(repo, "checkout", "-q", "-b", "spike")
+    with pytest.raises(GitError, match="main working tree is on spike, not main"):
+        merge_ff(repo, "hrn/7b55e0c1", "main")
