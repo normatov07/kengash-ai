@@ -269,7 +269,8 @@ def _claim(
             return _Skip(f"settings have no workflow {ticket.workflow!r}")
         state = runtime.load_ticket_state(paths, ticket_id)
         if ticket.status == workflow.STALLED:
-            state.streaks = {}  # resuming a stalled ticket restarts its stall counting
+            # resuming a stalled ticket restarts its stall counting (SP3 spec decision 34)
+            state.streaks, state.plan_rounds = {}, 0
         decision = workflow.before(resolved, lifecycle.progress_for(resolved, ticket, state))
         if isinstance(decision.decision, workflow.Run):
             step = decision.decision.step
