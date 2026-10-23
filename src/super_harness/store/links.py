@@ -19,18 +19,26 @@ class LinkState(StrEnum):
 
 def obstruction(repo: Path) -> LinkState | None:
     """`real_dir` or `blocked` when something other than a symlink sits at `.harness`."""
-    link = repo / LINK
-    if link.is_symlink() or not link.exists():
-        return None
-    return LinkState.real_dir if link.is_dir() else LinkState.blocked
+    return _obstruction(repo / LINK)
 
 
 def link_state(repo: Path, target: Path) -> LinkState:
-    link = repo / LINK
+    """The state of the repo's folder link to `target`."""
+    return state_of(repo / LINK, target)
+
+
+def state_of(link: Path, target: Path) -> LinkState:
+    """The state of any folder link: `ok` when it is a symlink that reaches `target`."""
     if link.is_symlink():
         same = Path(os.readlink(link)) == target or link.resolve() == target.resolve()
         return LinkState.ok if same else LinkState.wrong
-    return obstruction(repo) or LinkState.missing
+    return _obstruction(link) or LinkState.missing
+
+
+def _obstruction(link: Path) -> LinkState | None:
+    if link.is_symlink() or not link.exists():
+        return None
+    return LinkState.real_dir if link.is_dir() else LinkState.blocked
 
 
 def make_link(repo: Path, target: Path) -> None:

@@ -188,3 +188,30 @@ def test_our_own_harness_or_none_is_fine(monkeypatch: pytest.MonkeyPatch) -> Non
     assert providers.cli_clash() is None  # the venv's harness comes first in tests
     monkeypatch.setenv("PATH", "/nonexistent")
     assert providers.cli_clash() is None
+
+
+def test_doctor_checks_and_repairs_the_projects_memory_link(
+    store_paths: StorePaths, registered_repo: Path
+) -> None:
+    link = store_paths.project("payments-api").memory_link
+    link.unlink()
+    report = projects.doctor(fix=False, scan=None)
+    assert any(
+        p.message == "memory link missing; run: harness doctor --fix" for p in report.problems
+    )
+    fixed = projects.doctor(fix=True, scan=None)
+    assert any(p.message == "memory link missing; repaired" for p in fixed.problems)
+    assert link.is_symlink() and link.resolve() == store_paths.memory.resolve()
+    assert (registered_repo / ".harness" / "memory" / "MEMORY.md").is_file()
+
+
+def test_a_real_memory_folder_in_a_project_is_reported_not_replaced(
+    store_paths: StorePaths, registered_repo: Path
+) -> None:
+    link = store_paths.project("payments-api").memory_link
+    link.unlink()
+    link.mkdir()
+    (link / "notes.md").write_text("mine\n")
+    report = projects.doctor(fix=True, scan=None)
+    assert any("memory is a real folder" in p.message for p in report.problems)
+    assert (link / "notes.md").read_text() == "mine\n"

@@ -8,7 +8,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 - `projects.init_project(path)` → `InitResult`: registers the repo containing `path`, seeds its store folder, links `<repo>/.harness`, adds the exclude entry. Idempotent.
 - `projects.relink(slug, new_path)` → `InitResult`: re-points a moved project.
-- `projects.doctor(fix, scan)` → `DoctorReport`: one `Problem` per repo, link, exclude or document issue, then repo trust and provider checks; `fix` repairs links and exclude entries only. `Problem.warning` marks findings that never fail `doctor`.
+- `projects.doctor(fix, scan)` → `DoctorReport`: one `Problem` per repo, folder link, memory link (`projects/<slug>/memory -> ../../memory`; a real folder there is reported, never replaced), exclude or document issue, then repo trust and provider checks; `fix` repairs links and exclude entries only. `Problem.warning` marks findings that never fail `doctor`.
 - `slots`: `queue_slot` (a claim queues its first slot), `acquire` (a worker's waiter is granted once every earlier waiter that fits has been), `release`, `occupied` (held plus queued, for claims), `limits` (defaults scope and each project), all under `slots.lock`.
 - `ui_server` (SP5 spec decisions 2 and 3): `open_ui(browser=)` → `UiServer(url, pid, port, reused)` (reuses a live server from `runtime/ui.json`, else starts `python -m super_harness.ui` detached on a free port with a fresh token and waits up to 10 s; `NeedsSetup` naming the install line without the `[ui]` extra), `stop_ui()` (SIGTERM to its group), `has_extra()`.
 - `views` (SP5 spec §3): read models for the UI, built from the store, runtime and journal, writing nothing. `overview(paths, window=)` → `Overview(projects, paused, sessions, queue, gates, done_today, slots, spend, conductors, tail)` (sessions are in_process tickets running a step; parallel-safe tickets name `touches`; spend sums `step.end` tokens per provider in the window); `board(paths, project=)` → `Board(columns)` with one `Column` per status group and `Card`s carrying loop, provider, diff size and finding count; both default to the user's store. `journal_end()`, `events_after(cursor)` feed the UI's event stream; `version()`.
@@ -54,6 +54,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-23: doctor checks and repairs each project's memory link (system spec §4.2).
 - 2026-10-23: `ui_server` (SP5 M1).
 - 2026-10-23: `views.overview`, `views.board` (SP5 M1).
 - 2026-10-23: denied actions get one repair turn, in ticket steps too (SP4 M3 evals).

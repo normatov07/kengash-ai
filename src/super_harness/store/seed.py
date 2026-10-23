@@ -4,7 +4,7 @@ from importlib import resources
 from pathlib import Path
 
 from super_harness.model import Folder
-from super_harness.store import storegit
+from super_harness.store import links, storegit
 from super_harness.store.paths import ProjectPaths, StorePaths
 
 _PACKAGE_DEFAULTS = resources.files("super_harness.store") / "defaults"
@@ -41,13 +41,26 @@ def ensure_project(paths: StorePaths, slug: str) -> ProjectPaths:
     project.plans.mkdir(parents=True, exist_ok=True)
     for folder in Folder:
         project.folder(folder).mkdir(parents=True, exist_ok=True)
-    if not project.memory_link.is_symlink():
-        project.memory_link.symlink_to(Path("..") / ".." / "memory", target_is_directory=True)
+    link_memory(paths, project)
     for target in (project.settings, project.process):
         if not target.exists():
             source = paths.defaults / target.name
             target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     return project
+
+
+def link_memory(paths: StorePaths, project: ProjectPaths) -> bool:
+    """Point the project's `memory` at the store's (`../../memory`), replacing a missing or
+    stale link; False when a real file or folder sits there (never replaced)."""
+    link = project.memory_link
+    if links.state_of(link, paths.memory) is links.LinkState.ok:
+        return True
+    if link.exists() and not link.is_symlink():
+        return False
+    if link.is_symlink():
+        link.unlink()
+    link.symlink_to(Path("..") / ".." / "memory", target_is_directory=True)
+    return True
 
 
 def _seed_roles(target: Path) -> None:

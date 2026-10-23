@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from super_harness.model import NeedsSetup, Plan, ProjectEntry, Ticket, UserError, utc_now
 from super_harness.ops import providers, waiting
 from super_harness.ops.records import repo_root
-from super_harness.store import documents, links, storegit
+from super_harness.store import documents, links, seed, storegit
 from super_harness.store.locks import locked
 from super_harness.store.paths import ProjectPaths, StorePaths
 from super_harness.store.registry import (
@@ -217,6 +217,19 @@ def _check_project(paths: StorePaths, slug: str, repo: Path, fix: bool) -> list[
         if fix:
             links.ensure_excluded(repo)
         problems.append(_fixable(".harness missing from .git/info/exclude", slug, fix))
+    memory = links.state_of(project.memory_link, paths.memory)
+    if memory in (links.LinkState.real_dir, links.LinkState.blocked):
+        where = project.memory_link.relative_to(paths.home)
+        kind = "folder" if memory is links.LinkState.real_dir else "file"
+        message = (
+            f"{where} is a real {kind}: move what it holds into {paths.memory} "
+            "(harness memory add), remove it, then run: harness doctor --fix"
+        )
+        problems.append(Problem(message, slug))
+    elif memory is not links.LinkState.ok:
+        if fix:
+            seed.link_memory(paths, project)
+        problems.append(_fixable(f"memory link {memory.value}", slug, fix))
     for path, kind in documents.iter_documents(project):
         problem = documents.check_document(path, kind)
         if problem is not None:
