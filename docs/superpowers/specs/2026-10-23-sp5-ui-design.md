@@ -54,7 +54,7 @@ Endpoints (all JSON; `POST` bodies are JSON):
 
 ## 4. Parity checklist (canvas → build)
 
-Each canvas element is built, built differently because the system spec says otherwise, or left out because nothing in the system backs it. M3 closes the list.
+Each canvas element is built, built differently because the system spec says otherwise, or left out because nothing in the system backs it. M3 closes the list. On 2026-10-23 the canvas itself (version 23) was reworded to folder links on the Settings, Memory, Ticket and Board boards, with the real store layout (`memory/`, `projects/<slug>/tasks/`), so the link rows below now match it.
 
 | Screen | Built | Built differently | Left out |
 |---|---|---|---|
