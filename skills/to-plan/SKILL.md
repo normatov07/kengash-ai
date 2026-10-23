@@ -6,7 +6,7 @@ metadata: {source: super-harness}
 ---
 # Plan it without questions
 
-You write the plan; harness stores it and has another agent review it. Read with your file tools (read, search, list); use the shell only for the `harness` commands below. Never edit the repo's files or the `.harness` store yourself.
+You write the plan; harness stores it and has another agent review it. Read with your file tools (read, search, list); use the shell only for the `harness` commands below, each as its own call with nothing chained before or after it. Never edit the repo's files or the `.harness` store yourself.
 
 0. Run `harness --version`. If it does not print `super-harness <version>`, say "Install super-harness first: uv tool install git+https://github.com/normatov07/super-harness" and stop.
 1. Run `harness context` and keep what it says about the user and the project.

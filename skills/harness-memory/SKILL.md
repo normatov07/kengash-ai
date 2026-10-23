@@ -5,7 +5,7 @@ metadata: {source: super-harness}
 ---
 # Remember it through harness
 
-Memory lives in the harness store, shared by every agent and session. Record it only with `harness memory add`; never edit memory files, AGENTS.md or other instruction files yourself.
+Memory lives in the harness store, shared by every agent and session. Record it only with `harness memory add`, run as its own shell call with nothing chained; never edit memory files, AGENTS.md or other instruction files yourself.
 
 0. Run `harness --version`. If it does not print `super-harness <version>`, say "Install super-harness first: uv tool install git+https://github.com/normatov07/super-harness" and stop.
 1. Write the fact as one line of about 20 words, in the user's terms.
