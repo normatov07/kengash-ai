@@ -12,7 +12,7 @@ import typer
 
 from super_harness import __version__
 from super_harness.model import Folder, HarnessError, PlanMode, UserError
-from super_harness.ops import plans, projects, queue, status, tickets, workspace
+from super_harness.ops import controls, plans, projects, queue, status, tickets, workspace
 
 app = typer.Typer(
     name="harness",
@@ -549,3 +549,104 @@ def _nothing_runnable(found: queue.Queue) -> str:
         if count
     ]
     return f"nothing runnable: {', '.join(counts) or 'the queue is empty'}"
+
+
+Ids = Annotated[list[str], typer.Argument(help="Ticket ids, 8 hex digits each.")]
+
+
+@app.command("run")
+def run_tickets(
+    ticket_ids: Ids,
+    steps: Annotated[
+        int | None, typer.Option("--steps", min=1, help="Pause after this many steps.")
+    ] = None,
+    project: Only = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Claim tickets and start a detached worker for each; returns at once."""
+    with _errors():
+        result = controls.run_tickets(ticket_ids, steps=steps, project=project, by=by)
+    if as_json:
+        _emit_json(result)
+    else:
+        lines = [f"started {s.id} {s.step}→{s.provider}" for s in result.started]
+        lines += [f"skipped {tid}: {reason}" for tid, reason in result.skipped.items()]
+        for line in _capped(lines, "harness run --json"):
+            typer.echo(line)
+    if not result.started:
+        raise typer.Exit(1)
+
+
+@app.command("approve")
+def approve_ticket(
+    ticket_id: TicketId,
+    loops: Annotated[int | None, typer.Option("--loops", min=1, help="Loops to add.")] = None,
+    tokens: Annotated[int | None, typer.Option("--tokens", min=1, help="Tokens to add.")] = None,
+    project: Only = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Open an approval gate: the approve step, a loop cap or a token cap."""
+    with _errors():
+        approved = controls.approve_ticket(
+            ticket_id, loops=loops, tokens=tokens, project=project, by=by
+        )
+    if as_json:
+        _emit_json(approved)
+        return
+    running = approved.status.split("/", 1)[1] not in workspace.GATES
+    typer.echo(f"ticket {approved.id} approved; {'running' if running else approved.status}")
+
+
+@app.command("park")
+def park_ticket(
+    ticket_id: TicketId,
+    why: Annotated[str, typer.Option("--why", help="One line: why it waits.")],
+    project: Only = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Park a ticket; a running one parks after its step."""
+    with _errors():
+        parked = controls.park_ticket(ticket_id, why, project=project, by=by)
+    if as_json:
+        _emit_json(parked)
+        return
+    later = " after its step" if parked.deferred else ""
+    typer.echo(f"ticket {parked.id} → in_queue/parked{later}")
+
+
+@app.command("stop")
+def stop_ticket(
+    ticket_id: TicketId, project: Only = None, by: By = "unknown", as_json: AsJson = False
+) -> None:
+    """Kill a ticket's worker now; the ticket fails as stopped."""
+    with _errors():
+        status_now = controls.stop_ticket(ticket_id, project=project, by=by)
+    if as_json:
+        typer.echo(json.dumps({"id": ticket_id, "status": status_now}))
+        return
+    typer.echo(f"ticket {ticket_id} stopped")
+
+
+@app.command("pause")
+def pause(project: Every = None, by: By = "unknown", as_json: AsJson = False) -> None:
+    """Start nothing new; running workers finish their step, then pause."""
+    with _errors():
+        paused = controls.pause(project, by=by)
+    if as_json:
+        _emit_json(paused)
+        return
+    typer.echo(f"paused: {paused.running} running finish their step")
+
+
+@app.command("resume")
+def resume(project: Every = None, by: By = "unknown", as_json: AsJson = False) -> None:
+    """Clear the pause and restart paused tickets."""
+    with _errors():
+        resumed = controls.resume(project, by=by)
+    if as_json:
+        _emit_json(resumed)
+        return
+    typer.echo(f"resumed {len(resumed.started)}")

@@ -42,6 +42,22 @@ def queue_slot(paths: StorePaths, entry: SlotEntry) -> None:
         runtime.save_slots(paths, table)
 
 
+def reserve(paths: StorePaths, entry: SlotEntry) -> bool:
+    """Queue `entry` when one more session fits beside every held and queued one (a claim's
+    check and queueing happen under one lock, so two conductors cannot overbook)."""
+    with locked(paths.locks / "slots.lock"):
+        table = runtime.load_slots(paths)
+        others = [s for s in (*table.held, *table.waiting) if s.ticket != entry.ticket]
+        used = [scheduler.Held(slot.project, slot.provider) for slot in others]
+        machine, projects = limits(paths)
+        if not scheduler.fits(entry.provider, entry.project, used, machine, projects):
+            return False
+        if not any(slot.ticket == entry.ticket for slot in (*table.held, *table.waiting)):
+            table.waiting.append(entry)
+            runtime.save_slots(paths, table)
+        return True
+
+
 def acquire(paths: StorePaths, entry: SlotEntry) -> bool:
     """True when `entry.ticket` holds a slot after the call.
 

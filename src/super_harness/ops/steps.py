@@ -7,7 +7,7 @@ Ticket and state writes happen under the project lock; CLI calls happen outside 
 import os
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -35,7 +35,7 @@ from super_harness.model import (
     WorkOutput,
     utc_now,
 )
-from super_harness.ops import agents, lifecycle, prompts, queue, records, slots
+from super_harness.ops import agents, lifecycle, prompts, records, slots
 from super_harness.ops.workspace import GATES
 from super_harness.store import documents, runtime
 from super_harness.store.locks import locked
@@ -153,8 +153,8 @@ def _begin(job: _Job, *, budget_left: bool) -> _Ready | JobEnd:
         if not budget_left:
             return _halt(job, doc, "in_process/paused", "step budget spent")
         state = runtime.load_ticket_state(paths, job.ticket_id)
-        routed = workflow.before(resolved, _progress(resolved, ticket, state))
-        _apply(resolved, doc, state, routed.progress)
+        routed = workflow.before(resolved, lifecycle.progress_for(resolved, ticket, state))
+        lifecycle.apply_progress(resolved, doc, state, routed.progress)
         decision = routed.decision
         if isinstance(decision, workflow.Halt):
             state.approval = decision.approval
@@ -469,10 +469,10 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
         events = [_step_end(job, step, ran, verdict, fingerprints)]
         routed = workflow.after(
             resolved,
-            _progress(resolved, ticket, state),
+            lifecycle.progress_for(resolved, ticket, state),
             workflow.Outcome(verdict, fingerprints),
         )
-        _apply(resolved, doc, state, routed.progress)
+        lifecycle.apply_progress(resolved, doc, state, routed.progress)
         decision = routed.decision
         end: JobEnd | None = None
         if isinstance(decision, workflow.Run):
@@ -577,26 +577,6 @@ def _plus(a: Usage, b: Usage) -> Usage:
         cache_write=a.cache_write + b.cache_write,
         cost_usd=cost,
     )
-
-
-def _progress(resolved: Settings, ticket: Ticket, state: TicketState) -> workflow.Progress:
-    return replace(
-        queue.progress_of(resolved, ticket), streaks=state.streaks, plan_rounds=state.plan_rounds
-    )
-
-
-def _apply(
-    resolved: Settings, doc: Doc[Ticket], state: TicketState, progress: workflow.Progress
-) -> None:
-    """Store a routed progress on the ticket and its engine state."""
-    ticket = doc.meta
-    ticket.step = progress.step
-    ticket.loop = progress.loop
-    ticket.loop_max = progress.loop_max
-    if progress.tokens_max != (ticket.tokens_max or resolved.tokens.per_ticket_max):
-        ticket.tokens_max = progress.tokens_max
-    state.streaks = {step: dict(counts) for step, counts in progress.streaks.items()}
-    state.plan_rounds = progress.plan_rounds
 
 
 def _goal(job: _Job, ticket: Ticket) -> str:
