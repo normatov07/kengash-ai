@@ -4,6 +4,7 @@ from pathlib import Path
 
 from super_harness.adapters.base import Provider
 from super_harness.adapters.claude import Claude
+from super_harness.adapters.codex import Codex
 from super_harness.adapters.shell import Shell
 from super_harness.model import NeedsSetup, UserError
 
@@ -14,6 +15,8 @@ def get(name: str, *, runtime: Path) -> Provider:
     """The driver for a provider (or `shell`); `runtime` holds files a CLI needs on disk."""
     if name == "claude":
         return Claude()
+    if name == "codex":
+        return Codex(runtime / "schemas")
     if name == "shell":
         return Shell()
     if name == "gemini":

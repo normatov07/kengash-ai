@@ -6,13 +6,14 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 
 ## Interface
 
-- `get(name, runtime=)` → `Provider`: `claude`, `shell`; `gemini` raises `NeedsSetup` (exit 4), unknown names `UserError`. `runtime` holds files a CLI needs on disk.
+- `get(name, runtime=)` → `Provider`: `claude`, `codex` (schema files in `runtime/schemas/`), `shell`; `gemini` raises `NeedsSetup` (exit 4), unknown names `UserError`. `runtime` holds files a CLI needs on disk.
 - `Provider` protocol: `name`, `detect()` → `ProviderStatus`, `run(StepRequest)` → `StepResult`, `attach_command(session_id)` (the caller runs it in the worktree), `recover_session(log)` (a killed step's session id, when the CLI printed it).
 - `base.CliProvider`: shared `run` and `detect`; subclasses give `command(req)` (pure argv), `parse(req, proc)`, `signed_in()` and `attach_command`.
 - `process.run_process(argv, cwd=, env=, timeout_s=, log=, grace_s=10)` → `ProcessResult(exit_code, stdout, stderr, timed_out, duration_s)`.
 - `env.worker_env(environ, provider, role, allow_api_key=)`: the worker environment.
 - Helpers: `positional` (argv text never starts with `-`), `classify` (`auth`, `rate_limit` or `crash` from an error message), `tail`, `schema_json`, `checked`.
 - `claude.Claude`: `claude -p` with `--output-format json --json-schema`; new sessions take `--session-id` (harness picks it) and the role skill through `--append-system-prompt`, resumes `--resume`; isolation `--setting-sources project,local --strict-mcp-config` unless `user_config`; `read_only` → `--permission-mode dontAsk` with `READ_TOOLS`, `edit_worktree` → `acceptEdits --permission-prompts none` plus the test and lint commands; bypass replaces the profile. Errors: `api_error_status` 401/403 `auth`, 429 `rate_limit` (reset time from `…|<epoch>`), else `classify(result)`. Signed in: `claude auth status --json` (`loggedIn`, `authMethod`).
+- `codex.Codex(schemas)`: `codex exec --json --output-schema <file>`; new sessions `-s <sandbox>`, resumes `exec resume … -c sandbox_mode="…" <id>`; `read_only` → `read-only`, `edit_worktree` → `workspace-write`; isolation `--ignore-user-config` unless `user_config`; bypass replaces the sandbox; the skill is prepended to a new session's prompt. Events: `thread.started` gives the session (also `recover_session` from a killed step's log), the last `agent_message` holds the output JSON, `turn.completed` the usage (cached tokens move from input to cache read), `error`/`turn.failed` are classified. Signed in: `codex login status` exits 0.
 - `shell.Shell`: `sh -c <project.test_cmd>`; exit 0 passes, otherwise one `high` finding holding the last 20 output lines; an empty command fails with "set project.test_cmd".
 
 ## Invariants
@@ -27,5 +28,6 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 
 ## Changes
 
+- 2026-10-23: codex provider (SP3 M2).
 - 2026-10-23: claude provider (SP3 M2).
 - 2026-10-23: process runner, worker environment, shell provider, registry (SP3 M2).
