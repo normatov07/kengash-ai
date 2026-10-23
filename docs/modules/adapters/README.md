@@ -20,7 +20,7 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 ## Invariants
 
 - Imports only `model`.
-- Every CLI runs in its own process group (`start_new_session`); at the timeout the group gets SIGTERM, then SIGKILL after the grace period; background children left after a normal exit are ended too.
+- Every CLI runs in its own process group (`start_new_session`); at the timeout the group gets SIGTERM, then SIGKILL after the grace period; background children left after a normal exit are ended too, and an interrupted wait (a stopped worker) ends the group within 3 s before re-raising.
 - stdout goes to the request's log, stderr next to it as `.err`; output is decoded as UTF-8 with replacement characters.
 - Worker environments drop `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CODEX_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY` (except the running provider's own with `allow_api_key`), `CLAUDECODE` and `CLAUDE_CODE_ENTRYPOINT`, and set `HARNESS_AGENT=<role>`.
 - A prompt plus skill over 120 KiB fails as `crash` before any CLI starts; a missing binary is a `crash` naming it.
@@ -29,6 +29,7 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 
 ## Changes
 
+- 2026-10-23: an interrupted wait ends the CLI's process group (SP3 M3).
 - 2026-10-23: codex `error` events followed by a completed turn are retries, not failures (SP3 M2 review).
 - 2026-10-23: antigravity provider (SP3 M2).
 - 2026-10-23: codex provider (SP3 M2).

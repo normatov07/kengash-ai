@@ -113,6 +113,26 @@ def run_job(ticket_id: str, *, project: str | None = None, steps: int | None = N
             return ended
 
 
+def heartbeat(ticket_id: str) -> None:
+    """Refresh the ticket's worker heartbeat (the worker's beat thread calls this)."""
+    runtime.beat(StorePaths.default(), ticket_id)
+
+
+def forget_worker(ticket_id: str) -> None:
+    """Drop the worker record when it is this process's, so a newer worker's survives."""
+    paths = StorePaths.default()
+    record = runtime.load_worker(paths, ticket_id)
+    if record is not None and record.pid == os.getpid():
+        runtime.drop_worker(paths, ticket_id)
+
+
+def fail_job(ticket_id: str, *, project: str | None, reason: str) -> str:
+    """Fail a ticket whose worker hit an unexpected error."""
+    paths = StorePaths.default()
+    slug, _ = records.locate_ticket(paths, ticket_id, project)
+    return fail_ticket(paths, slug, ticket_id, reason)
+
+
 def fail_ticket(
     paths: StorePaths,
     slug: str,

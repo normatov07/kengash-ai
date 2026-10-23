@@ -1,6 +1,7 @@
 """Adapter core: process runner, worker environment, shell provider, registry (SP3 spec §8)."""
 
 import os
+import signal
 import time
 from pathlib import Path
 from typing import Any
@@ -156,3 +157,24 @@ def test_get_knows_the_providers(tmp_path: Path) -> None:
         get("gemini", runtime=tmp_path)
     with pytest.raises(UserError, match="unknown provider: cursor"):
         get("cursor", runtime=tmp_path)
+
+
+def test_an_interrupted_wait_ends_the_cli_group(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pid_file = tmp_path / "cli.pid"
+
+    def interrupt(signum: int, frame: object) -> None:
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGALRM, interrupt)
+    signal.alarm(1)
+    with pytest.raises(KeyboardInterrupt):
+        run_process(
+            ["sh", "-c", f"echo $$ > {pid_file}; sleep 30"],
+            cwd=tmp_path,
+            env=dict(os.environ),
+            timeout_s=30,
+            log=tmp_path / "i.out",
+        )
+    assert _gone(int(pid_file.read_text()))

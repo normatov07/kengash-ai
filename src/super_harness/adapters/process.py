@@ -7,6 +7,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+INTERRUPT_GRACE_S = 3.0
+
 
 @dataclass(frozen=True)
 class ProcessResult:
@@ -29,7 +31,8 @@ def run_process(
     """Run `argv`; at the timeout, SIGTERM its group, then SIGKILL after `grace_s`.
 
     stdout goes to `log` and stderr to `log` with suffix `.err`. Background children
-    left behind after a normal exit are ended the same way.
+    left behind after a normal exit are ended the same way, and so is the whole group when
+    the wait is interrupted (a stopped worker), with at most INTERRUPT_GRACE_S.
     """
     log.parent.mkdir(parents=True, exist_ok=True)
     errors = log.with_suffix(".err")
@@ -49,6 +52,9 @@ def run_process(
             process.wait(timeout=timeout_s)
         except subprocess.TimeoutExpired:
             timed_out = True
+        except BaseException:  # the caller is being stopped: take the CLI down with it
+            _end_group(process, min(grace_s, INTERRUPT_GRACE_S))
+            raise
         _end_group(process, grace_s)
     return ProcessResult(
         exit_code=process.returncode,
