@@ -200,7 +200,7 @@ def move_ticket(ticket_id: str, target: str, why: str, *, project: str | None, b
             ticket.step = None  # a done ticket runs no step; parked or requeued ones resume
         ticket.updated = utc_now()
         documents.save_ticket(project_paths, doc)
-        ready, blocked = _refresh_queue(project_paths, tickets)
+        ready, blocked = refresh_queue(project_paths, tickets)
     note = f"{ticket.id} moved to {after}"
     events = [_moved(slug, ticket.id, before, after, reason, by)]
     events += [_moved(slug, tid, QUEUED[1], QUEUED[0], note, "harness") for tid in ready]
@@ -238,7 +238,7 @@ def set_fields(ticket_id: str, pairs: Sequence[str], *, project: str | None, by:
                 raise UserError(f"dependency cycle: {' -> '.join(cycle)}")
         ticket.updated = utc_now()
         documents.save_ticket(project_paths, doc)
-        _refresh_queue(project_paths, tickets)
+        refresh_queue(project_paths, tickets)
     values = ticket.model_dump(mode="json")
     fields = {key: values[key] for key in changes}
     updated = Event(
@@ -353,7 +353,7 @@ def _target(
     return f"{folder.value}/{sub}"
 
 
-def _refresh_queue(
+def refresh_queue(
     project: ProjectPaths, tickets: Mapping[str, Doc[Ticket]]
 ) -> tuple[list[str], list[str]]:
     """Turn each ready or blocked ticket ready or blocked to match its dependencies."""

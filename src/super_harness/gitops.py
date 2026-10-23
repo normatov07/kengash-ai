@@ -147,9 +147,13 @@ def ticket_commits(repo: Path, ticket_uuid: str, ref: str) -> list[Commit]:
         subject = _git(repo, "show", "-s", "--format=%s", sha).strip()
         raw = _git(repo, "show", "-s", "--format=%(trailers:only,unfold)", sha)
         trailers = dict(line.split(": ", 1) for line in raw.splitlines() if ": " in line)
-        files = _numstat(_git(repo, "show", "--numstat", "--format=", sha))
-        commits.append(Commit(sha, subject, trailers, files))
+        commits.append(Commit(sha, subject, trailers, commit_files(repo, sha)))
     return commits
+
+
+def commit_files(cwd: Path, sha: str) -> list[FileChange]:
+    """What one commit changed, per file."""
+    return _numstat(_git(cwd, "show", "--numstat", "--format=", sha))
 
 
 def _numstat(text: str) -> list[FileChange]:

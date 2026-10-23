@@ -2,11 +2,13 @@
 
 State lives in $HARNESS_FAKE_DIR/<cli>/: `queue/NNNN.json` replies (lowest first),
 `calls.jsonl`, a `signed_out` flag and claude's optional `auth_method` file. Status
-commands answer from that state; every other call pops the next queued reply.
+commands answer from that state; every other call pops the next queued reply, which may
+write `edits`, run a `shell` command and `sleep` before printing its stdout.
 """
 
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -48,6 +50,10 @@ def _status(cli: str, args: list[str], state: Path) -> tuple[str, int] | None:
 def main(cli: str, args: list[str]) -> int:
     state = Path(os.environ["HARNESS_FAKE_DIR"]) / cli
     state.mkdir(parents=True, exist_ok=True)
+    status = _status(cli, args, state)
+    if status is not None:  # version and sign-in checks are answered, not recorded
+        sys.stdout.write(status[0])
+        return status[1]
     call = {
         "argv": args,
         "cwd": os.getcwd(),
@@ -55,10 +61,6 @@ def main(cli: str, args: list[str]) -> int:
     }
     with (state / "calls.jsonl").open("a", encoding="utf-8") as calls:
         calls.write(json.dumps(call) + "\n")
-    status = _status(cli, args, state)
-    if status is not None:
-        sys.stdout.write(status[0])
-        return status[1]
     queued = sorted((state / "queue").glob("*.json"))
     if not queued:
         sys.stderr.write(f"fake {cli}: no reply queued\n")
@@ -69,6 +71,8 @@ def main(cli: str, args: list[str]) -> int:
         target = Path.cwd() / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
+    if reply.get("shell"):  # e.g. an agent that commits, or a user acting mid-step
+        subprocess.run(["sh", "-c", reply["shell"]], capture_output=True, check=False)
     time.sleep(reply.get("sleep", 0))
     fixture = reply.get("fixture")
     stdout = (FIXTURES / fixture).read_text(encoding="utf-8") if fixture else reply["stdout"]

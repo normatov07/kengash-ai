@@ -14,12 +14,14 @@ from uuid import uuid4
 
 import pytest
 
-from super_harness.model import Doc, Ticket
+from super_harness import gitops
+from super_harness.model import Doc, Plan, Ticket, TicketState
 from super_harness.ops import projects
-from super_harness.store import StorePaths
+from super_harness.store import StorePaths, documents, runtime
 
 NOW = datetime(2026, 10, 22, 9, 41, tzinfo=UTC)
 FAKES = Path(__file__).parent / "fakes"
+Events = Callable[[], list[dict[str, Any]]]
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -132,6 +134,7 @@ class FakeClis:
         exit: int = 0,
         edits: dict[str, str] | None = None,
         sleep: float = 0,
+        shell: str | None = None,
     ) -> None:
         """Queue the next reply of `cli` (claude, codex or agy) to a non-status call."""
         queue = self.state / cli / "queue"
@@ -140,6 +143,8 @@ class FakeClis:
         if fixture is not None:
             reply["fixture"] = fixture
         reply["edits"] = edits or {}
+        if shell is not None:
+            reply["shell"] = shell
         number = self.queued.get(cli, 0)
         self.queued[cli] = number + 1
         (queue / f"{number:04d}.json").write_text(json.dumps(reply), encoding="utf-8")
@@ -156,6 +161,21 @@ class FakeClis:
 
     def fixture_json(self, name: str) -> Any:
         return json.loads(self.fixture(name))
+
+    def claude_output(self, structured: dict[str, Any]) -> str:
+        """The recorded claude reply with `structured` as its output."""
+        data = self.fixture_json("claude/review_new.json")
+        data["structured_output"] = structured
+        data["result"] = json.dumps(structured)
+        return json.dumps(data)
+
+    def codex_output(self, structured: dict[str, Any]) -> str:
+        """The recorded codex resume events with `structured` as the agent message."""
+        lines = [json.loads(line) for line in self.fixture("codex/work_resume.jsonl").splitlines()]
+        for event in lines:
+            if event.get("type") == "item.completed":
+                event["item"]["text"] = json.dumps(structured)
+        return "".join(json.dumps(event) + "\n" for event in lines)
 
     def hide(self, cli: str) -> None:
         (self.bin / cli).unlink()
@@ -185,3 +205,67 @@ def fake_clis(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FakeClis:
     dirs = [str(fake_bin), venv, *([str(Path(git).parent)] if git else []), "/usr/bin", "/bin"]
     monkeypatch.setenv("PATH", os.pathsep.join(dict.fromkeys(dirs)))
     return FakeClis(state, fake_bin)
+
+
+@dataclass
+class Engine:
+    """A registered repo with plan a1b2c3d4 and ticket 7b55e0c1 claimed at its first step."""
+
+    paths: StorePaths
+    repo: Path
+    slug: str = "payments-api"
+    ticket_id: str = "7b55e0c1"
+
+    @property
+    def worktree(self) -> Path:
+        return self.paths.worktree(self.slug, self.ticket_id)
+
+    def ticket(self) -> Doc[Ticket]:
+        path = documents.find_ticket(self.paths.project(self.slug), self.ticket_id)
+        assert path is not None
+        return documents.load_ticket(path)
+
+    def state(self) -> TicketState:
+        return runtime.load_ticket_state(self.paths, self.ticket_id)
+
+
+@pytest.fixture
+def engine(
+    registered_repo: Path,
+    store_paths: StorePaths,
+    make_ticket: Callable[..., Doc[Ticket]],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Engine:
+    config = tmp_path / "gitconfig"
+    config.write_text("[user]\n\tname = Dev\n\temail = dev@example.com\n", encoding="utf-8")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(config))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    project = store_paths.project("payments-api")
+    plan = Plan.model_validate(
+        {
+            "id": "a1b2c3d4",
+            "uuid": uuid4(),
+            "project": "payments-api",
+            "title": "Webhook retries",
+            "mode": "quick",
+            "status": "ticketed",
+            "tickets": ["7b55e0c1"],
+            "created": NOW,
+            "updated": NOW,
+        }
+    )
+    documents.save_plan(project, Doc(plan, {"Goal": "Webhook deliveries retry with backoff."}))
+    doc = make_ticket(
+        importance="simple",
+        workflow="simple",
+        loop_max=3,
+        status="in_process/under_planning",
+        step="plan",
+        branch="hrn/7b55e0c1",
+    )
+    doc.sections["Acceptance"] = "- [ ] retries 3 times"
+    documents.save_ticket(project, doc)
+    worktree = store_paths.worktree("payments-api", "7b55e0c1")
+    gitops.ensure_worktree(registered_repo, worktree, "hrn/7b55e0c1", "main")
+    return Engine(store_paths, registered_repo)

@@ -10,6 +10,9 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - `projects.relink(slug, new_path)` → `InitResult`: re-points a moved project.
 - `projects.doctor(fix, scan)` → `DoctorReport`: one `Problem` per repo, link, exclude or document issue, then repo trust and provider checks; `fix` repairs links and exclude entries only. `Problem.warning` marks findings that never fail `doctor`.
 - `slots`: `queue_slot` (a claim queues its first slot), `acquire` (a worker's waiter is granted once every earlier waiter that fits has been), `release`, `occupied` (held plus queued, for claims), `limits` (defaults scope and each project), all under `slots.lock`.
+- `steps.run_job(ticket_id, project=, steps=)` → `JobEnd(status, reason)`: the step loop of SP3 spec §5. Per step: flags and caps under the project lock (`workflow.before`), the agent (`agents.pick`), a slot (`waiting_slot` while queued), the session (reused per role and provider; claude ids chosen before the call), the prompt, one adapter call, a commit with trailers after editing steps (agent commits folded by `reset --soft`), then Handoff or Findings, Log, tokens, session, `step.end`, routing (`workflow.after`) and a store commit under the lock. `steps=N` pauses after N steps. `steps.fail_ticket(paths, slug, id, reason)` fails a running ticket.
+- `lifecycle`: `step_status` (the `status.names` sub-status) and `status_event` (the journal event of a status, with `status`, `loop`, `loop_max`, `reason`).
+- `tickets.refresh_queue` (was private): turn queued tickets ready or blocked to match their dependencies.
 - `prompts`: step instructions, `new_prompt` (role, step, Goal, Scope, Acceptance, Handoff, Findings, diff stat inline), `resumed_prompt` (Findings for work steps; Handoff and diff stat for review steps), `repair_prompt`, `handoff_text` (redacted, 15 lines), `findings_text`, `log_line`, `output_kind`, `profile`, `role_skill` (project `roles/`, then `defaults/roles/`).
 - `agents.pick(settings, role, status, skip=)` → `Pick(role, provider, model, fallback)`: the role's `cli`, then each fallback, first usable; `NeedsSetup` naming the install or sign-in step when none is. `agents.detector(paths)` detects each provider once.
 - `providers.check_providers(paths)` → `ProviderCheck(provider, users, blocking, message)` for each provider that enabled agents, their fallbacks or the compactor need (all scopes) and that is missing, signed out or unsupported (`blocking` when a role or the compactor is left with no usable provider), plus a warning for a claude login other than claude.ai unless `providers.claude.allow_api_key`; scopes with invalid settings are skipped. Detection goes through `adapters`.
@@ -35,6 +38,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-23: `steps` step loop, `lifecycle`; `tickets.refresh_queue` is public (SP3 M3).
 - 2026-10-23: `prompts` and `agents` (SP3 M3).
 - 2026-10-23: `slots`: queued and held provider slots (SP3 M3).
 - 2026-10-23: doctor checks providers and repo trust (SP3 M2).
