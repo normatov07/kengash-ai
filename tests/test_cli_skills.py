@@ -10,17 +10,18 @@ from typer.testing import CliRunner
 
 from super_harness.cli import app
 from super_harness.ops import skills
+from super_harness.store import StorePaths
 
 runner = CliRunner()
 UV = shutil.which("uv")  # found before the fake-CLI fixture narrows PATH
 
 
-def test_cli_lint_is_clean_on_the_repo() -> None:
+def test_cli_lint_is_clean_on_the_repo(store_paths: StorePaths) -> None:  # no real store
     result = runner.invoke(app, ["skills", "lint"])
     assert (result.exit_code, result.stdout) == (0, ""), result.output
 
 
-def test_cli_lint_names_an_unknown_command(tmp_path: Path) -> None:
+def test_cli_lint_names_an_unknown_command(tmp_path: Path, store_paths: StorePaths) -> None:
     folder = tmp_path / "typo"
     folder.mkdir()
     (folder / "SKILL.md").write_text(
@@ -33,7 +34,9 @@ def test_cli_lint_names_an_unknown_command(tmp_path: Path) -> None:
     assert result.stdout == f"{folder / 'SKILL.md'}: unknown command: harness plan reveiw\n"
 
 
-def test_cli_install_exits_5_until_yes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cli_install_exits_5_until_yes(
+    tmp_path: Path, store_paths: StorePaths, monkeypatch: pytest.MonkeyPatch
+) -> None:
     source = tmp_path / "source" / "alpha"
     source.mkdir(parents=True)
     (source / "SKILL.md").write_text("---\nname: alpha\ndescription: Use when.\n---\nv1\n")
