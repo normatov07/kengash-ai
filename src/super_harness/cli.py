@@ -14,6 +14,7 @@ from super_harness import __version__
 from super_harness.model import Folder, HarnessError, PlanMode, UserError
 from super_harness.ops import (
     changes,
+    compaction,
     controls,
     merging,
     plans,
@@ -247,8 +248,32 @@ def memory_add(
         typer.echo(f"{result.file}: already recorded")
     else:
         typer.echo(f"{result.file} +1 line ({result.lines}/{result.cap})")
-        if result.over_cap:
+        if result.compacting:
+            typer.echo(
+                f"{result.file} is over its {result.cap}-line cap; compacting it in the background"
+            )
+        elif result.over_cap:
             typer.echo(f"warning: {result.file} is over its {result.cap}-line cap; compact it soon")
+
+
+@memory_app.command("compact")
+def memory_compact(
+    timeout: Annotated[
+        float, typer.Option("--timeout", min=0, help="Seconds to wait for the result (exit 3).")
+    ] = 540,
+    as_json: AsJson = False,
+) -> None:
+    """Compact MEMORY.md on `memory.compactor` and wait; pinned lines always survive."""
+    with _errors():
+        outcome = compaction.compact_memory(timeout=timeout)
+    if as_json:
+        _emit_json(outcome)
+    elif outcome.accepted:
+        typer.echo(f"MEMORY.md {outcome.before} → {outcome.after} lines")
+    else:
+        typer.echo(f"MEMORY.md kept ({outcome.before} lines): {outcome.reason}", err=True)
+    if not outcome.accepted:
+        raise typer.Exit(1)
 
 
 @memory_app.command("show")

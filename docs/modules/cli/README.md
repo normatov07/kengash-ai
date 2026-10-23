@@ -10,7 +10,7 @@ Typer command surface for `harness` (alias `hrn`): parses arguments and formats 
 - `harness --help` lists commands and options.
 - `run ID... [--steps N]` (`started <id> <step>→<provider>` / `skipped <id>: <reason>`; exit 1 when none started, 4 when a provider needs setup), `approve ID [--loops N] [--tokens N]`, `park ID --why W`, `stop ID`, `pause` and `resume` (`--project`), `ticket changes ID [--diff]` (`<path> +a -r  loop n <step> <provider>/<model>`), `ticket attach ID [--role R]` (the resume command), `wait [--timeout 540]` (`<id> <status> loop n/max: <detail>`, `plan <id> round r/max: <verdict>, <summary>` for plan reviews, `idle`, exit 3 on timeout), `merge ID` (`merged <id>: N commits into <base>`; exit 1 when the main tree is dirty or off base, or on a conflict), each with `--json` (SP3 spec §10).
 - `harness init [PATH]`, `doctor [--fix] [--quiet] [--scan DIR]`, `link SLUG NEW_PATH`, `adopt PATH`, each with `--json` (SP2 spec §3). `doctor` prints warnings as `[<slug>: ]warning: <message>`; it exits 1 only for problems that are neither fixed nor warnings.
-- `harness settings show|get KEY|check`, `memory add TEXT --why WHY [--section S|--decision [--rejected R]] [--by NAME]`, `memory show [--decisions]`, `context`; all take `--project/-p` (default: the project containing the current folder) and `--json`. `settings get` prints strings plain and other values as JSON; `settings check` prints problems only.
+- `harness settings show|get KEY|check`, `memory add TEXT --why WHY [--section S|--decision [--rejected R]] [--by NAME]`, `memory show [--decisions]`, `memory compact [--timeout 540]` (`MEMORY.md N → M lines`; exit 1 with the reason when the result is kept out, 3 on timeout), `context`; all take `--project/-p` (default: the project containing the current folder) and `--json`. `settings get` prints strings plain and other values as JSON; `settings check` prints problems only.
 - `harness plan new --title T --mode grill|direct|quick` (prompt on stdin), `plan save ID` (`## Section` Markdown on stdin), `plan show ID`, `plan review ID [--timeout 540]` (`plan <id> round r: pass|fail, N findings`, a `warning:` line when the review ran on the conductor's provider, then the findings; exit 3 on timeout, 5 once the rounds are used up), `plan approve ID [--skip-review]`, `plan reject ID --why W`; id commands take `--project/-p` to narrow the search.
 - `harness ticket add --plan ID [--file F]` (YAML or JSON list, else stdin), `ticket show ID`, `ticket list [--folder F]`, `ticket find TEXT`, `ticket set ID KEY=VALUE…`, `ticket move ID FOLDER[/SUB] --why W`, `status [--project SLUG]`; `list` and `find` cover the project here, else every project; `status` covers every project and prints at most 5 lines.
 - `harness next [--project SLUG]`: tickets that can start now, one `<id> <project> <importance> <step>→<provider> <title>` line each, at most 5; otherwise why nothing can run (`--json`: everything, reasons included).
@@ -24,6 +24,7 @@ Typer command surface for `harness` (alias `hrn`): parses arguments and formats 
 
 ## Changes
 
+- 2026-10-23: `memory compact`; `memory add` reports a background compaction (SP3 M4).
 - 2026-10-23: `plan review`; plan reviews in `wait` (SP3 M4).
 - 2026-10-23: `ticket changes`, `ticket attach` (SP3 M3).
 - 2026-10-23: `wait`; `doctor` reports dead workers (SP3 M3).

@@ -115,6 +115,21 @@ def review_log_lines(round: int, output: ReviewOutput) -> list[str]:
     return [redact(line) for line in lines]
 
 
+def compact_prompt(text: str, *, cap: int) -> str:
+    """The compactor's prompt: MEMORY.md inline and the rules its result must meet."""
+    target = cap * 3 // 4
+    return (
+        "You compact MEMORY.md, the user's global memory for coding agents: "
+        f"{len(text.splitlines())} lines, cap {cap}.\n"
+        f"Rewrite it in at most {target} lines: merge duplicates, drop stale or superseded "
+        "facts, and keep one fact per line of about 20 words.\n"
+        "Keep the title, the intro paragraph and every '## ' heading. Keep every entry "
+        "marked (pin) exactly as it is.\n"
+        "Return the whole new file as text.\n\n"
+        f"MEMORY.md:\n```markdown\n{text.rstrip(chr(10))}\n```\n\n{REPLY}"
+    )
+
+
 def repair_prompt(problem: str) -> str:
     return (
         f"Your last reply failed: {problem}\n"

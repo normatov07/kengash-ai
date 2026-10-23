@@ -119,3 +119,101 @@ def test_show_filters_decisions_by_project(store: StorePaths) -> None:
 def test_memory_needs_a_store(store_paths: StorePaths) -> None:
     with pytest.raises(NeedsSetup, match="harness init"):
         memory.add(store_paths, "x", "y")
+
+
+CURRENT = [
+    "# MEMORY.md",
+    "",
+    "## Working style",
+    "",
+    "- ships small (pin)",
+    "- ships small",
+    "- ships small changes",
+    "",
+    "## Goals",
+    "",
+    "- payments first",
+]
+GOOD = [
+    "# MEMORY.md",
+    "",
+    "## Working style",
+    "",
+    "- ships small (pin)",
+    "",
+    "## Goals",
+    "",
+    "- payments first",
+]
+
+
+def test_compaction_problem_names_each_rejection() -> None:
+    assert memory.compaction_problem(CURRENT, GOOD, cap=20) is None
+    assert memory.compaction_problem(CURRENT, ["", "  "], cap=20) == "the result is empty"
+    unpinned = [line for line in GOOD if "(pin)" not in line]
+    assert memory.compaction_problem(CURRENT, unpinned, cap=20) == (
+        "the result drops 1 pinned line(s): - ships small (pin)"
+    )
+    headless = [line for line in GOOD if line != "## Goals"]
+    assert memory.compaction_problem(CURRENT, headless, cap=20) == (
+        "the result drops the heading ## Goals"
+    )
+    assert memory.compaction_problem(CURRENT, GOOD, cap=9) == "the result has 9 lines; the cap is 9"
+
+
+def test_merge_added_keeps_lines_written_meanwhile() -> None:
+    current = [*CURRENT[:7], "- reviews hard", *CURRENT[7:], "- new goal"]
+    assert memory.merge_added(CURRENT, current, GOOD) == [
+        "# MEMORY.md",
+        "",
+        "## Working style",
+        "",
+        "- ships small (pin)",
+        "- reviews hard",
+        "",
+        "## Goals",
+        "",
+        "- payments first",
+        "- new goal",
+    ]
+    assert memory.merge_added(CURRENT, current, current) == current
+
+
+def test_apply_compaction_replaces_memory_and_journals(
+    store: StorePaths, run_git: Callable[..., str]
+) -> None:
+    memory.add(store, "ships small (pin)", "said so", section="Working style")
+    memory.add(store, "ships small", "said so", section="Working style")
+    snapshot = memory_text(store)
+    compacted = snapshot.replace("- ships small\n", "")
+    outcome = memory.apply_compaction(
+        store, snapshot, compacted, cap=50, detail={"provider": "claude"}
+    )
+    lines = len(snapshot.splitlines())
+    assert outcome == memory.Compaction(before=lines, after=lines - 1, accepted=True)
+    assert memory_text(store) == compacted
+    event = json.loads(next(store.journal.glob("*.jsonl")).read_text().splitlines()[-1])
+    assert (event["type"], event["accepted"], event["provider"], event["by"]) == (
+        "memory.compacted",
+        True,
+        "claude",
+        "harness",
+    )
+    assert run_git(store.home, "log", "-1", "--format=%s").strip() == "harness: memory compact"
+
+
+def test_a_rejected_compaction_leaves_memory_alone(store: StorePaths) -> None:
+    memory.add(store, "ships small (pin)", "said so", section="Working style")
+    snapshot = memory_text(store)
+    outcome = memory.apply_compaction(
+        store, snapshot, snapshot.replace("- ships small (pin)\n", ""), cap=50, detail={}
+    )
+    assert not outcome.accepted and "pinned" in outcome.reason
+    assert memory_text(store) == snapshot
+    event = json.loads(next(store.journal.glob("*.jsonl")).read_text().splitlines()[-1])
+    assert (event["type"], event["accepted"]) == ("memory.compacted", False)
+
+
+def test_only_entries_marked_pin_are_pinned() -> None:
+    intro = "Lines marked (pin) survive compaction."
+    assert memory.compaction_problem([intro, *CURRENT], GOOD, cap=20) is None

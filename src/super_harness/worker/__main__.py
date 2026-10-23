@@ -1,5 +1,5 @@
-"""`python -m super_harness.worker ticket <id> [--steps N] [--project SLUG]`, or
-`plan-review <id> [--project SLUG]`.
+"""`python -m super_harness.worker ticket <id> [--steps N] [--project SLUG]`,
+`plan-review <id> [--project SLUG]`, or `compact`.
 
 A frontend for one detached job, as `cli` is for commands: it heartbeats, turns SIGTERM
 into an orderly exit (the running CLI goes down with it), and calls `ops`.
@@ -13,7 +13,7 @@ import traceback
 from collections.abc import Callable
 from types import FrameType
 
-from super_harness.ops import jobs, reviews, steps
+from super_harness.ops import compaction, jobs, reviews, steps
 
 HEARTBEAT_S = 15
 STOPPED = 143
@@ -50,11 +50,14 @@ def _parser() -> argparse.ArgumentParser:
     review = kinds.add_parser("plan-review", help="run one review round of a plan")
     review.add_argument("id")
     review.add_argument("--project", default=None)
+    kinds.add_parser("compact", help="compact MEMORY.md")
     return parser
 
 
 def _job(args: argparse.Namespace) -> Job:
     """The job's worker id, its body, and what to do when the body fails."""
+    if args.job == "compact":
+        return jobs.COMPACT, compaction.run_compaction, compaction.fail_compaction
     if args.job == "plan-review":
         return (
             args.id,

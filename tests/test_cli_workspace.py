@@ -1,9 +1,11 @@
 import json
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
+from conftest import COMPACTED, FakeClis, write_settings
 from typer.testing import CliRunner
 
 from super_harness.cli import app
@@ -89,6 +91,7 @@ def test_every_command_speaks_json(store_paths: StorePaths, inside_repo: Path) -
     assert call("settings", "show")["loop_max"]["critical"] == 6
     assert call("settings", "check") == {"problems": []}
     assert call("memory", "add", "prefers runbooks", "--why", "said so") == {
+        "compacting": False,
         "file": "MEMORY.md",
         "line": "- prefers runbooks",
         "lines": 13,
@@ -106,3 +109,38 @@ def test_every_command_speaks_json(store_paths: StorePaths, inside_repo: Path) -
         "process": ["# PROCESS.md", "## Process notes"],
         "gates": [],
     }
+
+
+def test_memory_compact_prints_the_line_counts_or_exits_1(
+    inside_repo: Path, long_memory: Path, fake_clis: FakeClis
+) -> None:
+    long = long_memory.read_text(encoding="utf-8")
+    fake_clis.queue("claude", stdout=fake_clis.claude_output({"text": COMPACTED}))
+    done = runner.invoke(app, ["memory", "compact", "--timeout", "60"])
+    assert (done.exit_code, done.stdout) == (0, "MEMORY.md 19 → 16 lines\n")
+    long_memory.write_text(long, encoding="utf-8")
+    fake_clis.queue("claude", stdout=fake_clis.claude_output({"text": "# MEMORY.md\n"}))
+    kept = runner.invoke(app, ["memory", "compact", "--timeout", "60"])
+    assert kept.exit_code == 1
+    assert kept.stderr.startswith("MEMORY.md kept (19 lines): the result drops")
+
+
+def test_memory_add_over_the_cap_compacts_in_the_background(
+    inside_repo: Path, store_paths: StorePaths, fake_clis: FakeClis
+) -> None:
+    write_settings(store_paths, "memory.compact_at_lines: 12\n", slugs=(None,))
+    short = (
+        "# MEMORY.md\n\n## Working style\n\n- prefers runbooks\n\n"
+        "## Goals\n\n## Preferences\n\n## Turned down\n"
+    )
+    fake_clis.queue("claude", stdout=fake_clis.claude_output({"text": short}))
+    added = runner.invoke(app, ["memory", "add", "prefers runbooks", "--why", "said so"])
+    assert added.stdout == (
+        "MEMORY.md +1 line (13/12)\n"
+        "MEMORY.md is over its 12-line cap; compacting it in the background\n"
+    )
+    path = store_paths.memory / "MEMORY.md"
+    deadline = time.monotonic() + 20
+    while path.read_text(encoding="utf-8") != short:
+        assert time.monotonic() < deadline, "the background compaction never landed"
+        time.sleep(0.1)

@@ -18,6 +18,7 @@ from super_harness import gitops
 from super_harness.model import Doc, Plan, Ticket, TicketState
 from super_harness.ops import projects
 from super_harness.store import StorePaths, documents, runtime
+from super_harness.store.seed import ensure_store
 
 NOW = datetime(2026, 10, 22, 9, 41, tzinfo=UTC)
 FAKES = Path(__file__).parent / "fakes"
@@ -269,3 +270,42 @@ def engine(
     worktree = store_paths.worktree("payments-api", "7b55e0c1")
     gitops.ensure_worktree(registered_repo, worktree, "hrn/7b55e0c1", "main")
     return Engine(store_paths, registered_repo)
+
+
+PINNED = "- ships small, reviews hard (pin)"
+LONG_MEMORY = [
+    "# MEMORY.md",
+    "",
+    "Global memory.",
+    "",
+    "## Working style",
+    "",
+    PINNED,
+    "- ships small",
+    "- small diffs",
+    "- small PRs",
+    "",
+    "## Goals",
+    "",
+    "- payments first",
+    "- payments come first",
+    "",
+    "## Preferences",
+    "",
+    "## Turned down",
+]
+COMPACTED = (
+    "# MEMORY.md\n\nGlobal memory.\n\n## Working style\n\n"
+    f"{PINNED}\n- small diffs and PRs\n\n## Goals\n\n- payments first\n\n"
+    "## Preferences\n\n## Turned down\n"
+)
+
+
+@pytest.fixture
+def long_memory(store_paths: StorePaths) -> Path:
+    """A 19-line MEMORY.md over its 18-line cap; COMPACTED is a valid 16-line result."""
+    ensure_store(store_paths)
+    write_settings(store_paths, "memory.compact_at_lines: 18\n", slugs=(None,))
+    path = store_paths.memory / "MEMORY.md"
+    path.write_text("\n".join(LONG_MEMORY) + "\n", encoding="utf-8")
+    return path

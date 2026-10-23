@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from super_harness import memory, settings
 from super_harness.model import Folder, Settings, UserError
+from super_harness.ops import compaction
 from super_harness.ops.records import repo_root
 from super_harness.store import documents
 from super_harness.store.paths import StorePaths
@@ -76,11 +77,15 @@ def remember(
     cwd: Path,
     by: str,
 ) -> memory.AddResult:
+    """Add a memory line; MEMORY.md past its cap starts a compaction in the background."""
     paths = StorePaths.default()
     slug = resolve_slug(project, cwd, paths)
-    return memory.add(
+    result = memory.add(
         paths, text, why, section=section, decision=decision, rejected=rejected, project=slug, by=by
     )
+    if result.added and result.file == "MEMORY.md" and result.over_cap:
+        result.compacting = compaction.start_background(paths)
+    return result
 
 
 def recall(decisions: bool, project: str | None, cwd: Path) -> str:

@@ -8,6 +8,7 @@ Run one detached job (SP3 spec §3, decision 1): `harness run` starts `python -m
 
 - `ticket <id>`: run the ticket's steps until a gate, the end, a pause or park request, or `--steps N` steps; print `<id>: <status>: <reason>`; exit 0.
 - `plan-review <id>`: one review round of an `in_review` plan (`ops.reviews.run_review`); print `<id>: round <r> <verdict>` or `<id>: review ended: <reason>`; exit 0. An unexpected error journals `worker.exited` (`ops.reviews.fail_review`) and exits 1.
+- `compact`: compact MEMORY.md (`ops.compaction.run_compaction`, worker id `compact`); print the line counts or why the result was kept out; exit 0.
 - A daemon thread calls `ops.jobs.heartbeat` every 15 s (`HEARTBEAT_S`); the dead-worker check treats a heartbeat older than 2 minutes as dead.
 - SIGTERM (`harness stop`) raises `SystemExit(143)`; the adapter's process runner ends the running CLI's process group on the way out. `stop` then marks the ticket failed "stopped".
 - An unexpected exception prints its traceback to the log, fails the ticket with `worker error: <message>; log: runtime/logs/<id>.log`, and exits 1.
@@ -21,6 +22,6 @@ Run one detached job (SP3 spec §3, decision 1): `harness run` starts `python -m
 
 ## Changes
 
-- 2026-10-23: `plan-review` jobs (SP3 M4).
+- 2026-10-23: `plan-review` and `compact` jobs (SP3 M4).
 - 2026-10-23: heartbeat and record cleanup moved to `ops.jobs` (SP3 M4).
 - 2026-10-23: ticket jobs with heartbeat and clean stop (SP3 M3).
