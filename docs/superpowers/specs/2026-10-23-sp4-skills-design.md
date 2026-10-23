@@ -21,7 +21,7 @@ Each milestone is planned just before it is built, ends green on `make check`, a
 1. **`open-ui` moves to SP5.** Its only command, `harness ui open`, arrives with the UI, and lint refuses skills that name missing commands. SP4 ships the other five installed skills. (System spec §13 row 4 changed.)
 2. **One source per skill.** Installed skills live at the repo root, `skills/<name>/SKILL.md`, where `npx skills add` and plugin marketplaces find them; the wheel force-includes them as `super_harness/skills/`. `ops.skills.packaged()` finds them in the package, else in the source checkout. Role skills live in `src/super_harness/roles/<role>/SKILL.md`.
 3. **Role skills use the skill format** (`roles/<role>/SKILL.md`, frontmatter `name` and `description`). Workers inject the body without its frontmatter. Lookup: project `roles/` → `defaults/roles/` → package. `harness init` seeds missing ones into `defaults/roles/` and never overwrites them. The flat `roles/<name>.md` files that SP3 looked up are no longer read.
-4. **Install targets.** `harness skills install --agent claude,codex,antigravity [--global] [--path DIR] [--cli-name hrn] [--yes]`: claude → `<root>/.claude/skills/<name>/`, codex and antigravity → `<root>/.agents/skills/<name>/` (one copy serves both). The root is the repo containing `--path` (default: the current folder), or the home folder with `--global`. Global agy skills go where a live probe in M1 finds that agy loads them; the probe's result is recorded in §5.
+4. **Install targets.** `harness skills install --agent claude,codex,antigravity [--global] [--path DIR] [--cli-name hrn] [--yes]`: claude → `<root>/.claude/skills/<name>/`, codex and antigravity → `<root>/.agents/skills/<name>/` (one copy serves both). The root is the repo containing `--path` (default: the current folder). `--global` writes claude → `~/.claude/skills/`, codex → `~/.agents/skills/` (documented), antigravity → `~/.gemini/config/skills/` (§5).
 5. **Install is safe to repeat.** Each skill folder is written atomically. A skill that is missing is installed, one that is identical is left alone, and one that differs prints a unified diff and is replaced only with `--yes` (exit 5 otherwise). Installs never delete files outside the skills they write.
 6. **`--cli-name hrn`** rewrites every `harness ` command prefix in installed text to `hrn `. `harness doctor` warns when the first `harness` on `PATH` is not super-harness's own (it compares `harness --version`), naming `--cli-name hrn`.
 7. **Lint** runs on installed skills (all §8.3 rules: frontmatter, `name` equals the folder, "Use when" and at most 500 characters, at most `skill.max_lines` lines and `skill.max_words` words, step 0 runs `harness --version`, `references/` one level deep and every named reference present, every `harness <command> [<subcommand>]` mentioned exists) and on role skills (frontmatter, `name` equals the folder, the caps). `cli` hands the command tree to `ops`, since `ops` never imports `cli`. `make check` runs `harness skills lint`.
@@ -57,7 +57,7 @@ Each milestone is planned just before it is built, ends green on `make check`, a
 
 ## 5. Live facts (filled in during the build)
 
-- agy global skills folder: (M1 probe)
+- agy skills folders: `<workspace>/.agents/skills/<name>/SKILL.md` and, globally, `~/.gemini/config/skills/<name>/SKILL.md` (path strings in the agy 1.4.5 binary, 2026-10-23); the M2 probe confirms that headless agy loads the workspace one.
 - agy conductor mode for evals: (M2 probe)
 
 ## 6. Acceptance (SP4 exit)
