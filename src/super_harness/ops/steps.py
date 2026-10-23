@@ -35,7 +35,7 @@ from super_harness.model import (
     WorkOutput,
     utc_now,
 )
-from super_harness.ops import agents, lifecycle, merging, prompts, records, slots
+from super_harness.ops import agents, calls, lifecycle, merging, prompts, records, slots
 from super_harness.ops.workspace import GATES
 from super_harness.store import documents, runtime
 from super_harness.store.locks import locked
@@ -44,12 +44,7 @@ from super_harness.store.registry import load_registry
 
 SLOT_POLL_S = 5
 QUOTA_WAIT_S = 900
-BINARIES = {"claude": "claude", "codex": "codex", "antigravity": "agy"}
 sleep = time.sleep
-
-
-def step_timeout(resolved: Settings) -> int:
-    return resolved.step_timeout_min * 60
 
 
 @dataclass
@@ -248,7 +243,7 @@ def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
     timed_out = repaired = False
     while True:
         result = adapters.get(pick.provider, runtime=job.paths.runtime).run(request)
-        usage = _plus(usage, result.usage)
+        usage = calls.plus(usage, result.usage)
         error = result.error
         if error is None:
             return _Ran(pick, request, result, usage, ready.doc.meta.loop)
@@ -274,7 +269,7 @@ def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
             continue
         if _never_started(request, result):
             _forget_session(job, ready.step, pick.role, str(request.session_id))
-        return _fail(job, _failure(pick, request, result), usage)
+        return _fail(job, calls.failure(pick.provider, request, result), usage)
 
 
 def _prepare(job: _Job, ready: _Ready, pick: agents.Pick) -> StepRequest:
@@ -307,18 +302,6 @@ def _prepare(job: _Job, ready: _Ready, pick: agents.Pick) -> StepRequest:
     return _request(job, ready, pick, session_id=session_id, resume=resume, log=log)
 
 
-def _again(job: _Job, request: StepRequest, result: StepResult | None = None) -> StepRequest:
-    """The same request once more, logging to a fresh file. A new claude session that the
-    CLI reported, or that ran until the timeout, exists now: the retry resumes it, since
-    claude refuses a `--session-id` already in use."""
-    update: dict[str, Any] = {"log": _next_log(job)}
-    fresh = result is not None and not request.resume and request.session_id is not None
-    if fresh and result is not None and (result.session_id or result.error == "timeout"):
-        session = result.session_id or request.session_id
-        update |= {"resume": True, "session_id": session, "skill": None}
-    return request.model_copy(update=update)
-
-
 def _never_started(request: StepRequest, result: StepResult) -> bool:
     """A new claude session whose CLI failed before creating it (no id, no timeout)."""
     fresh = not request.resume and request.session_id is not None
@@ -336,21 +319,12 @@ def _forget_session(job: _Job, step: str, role: str, session_id: str) -> None:
     _update(job, step, forget)
 
 
+def _again(job: _Job, request: StepRequest, result: StepResult | None = None) -> StepRequest:
+    return calls.again(request, result, _next_log(job))
+
+
 def _repair(job: _Job, request: StepRequest, result: StepResult, problem: str) -> StepRequest:
-    """A resumed turn that asks the session to fix `problem`; without a session, a retry."""
-    session = result.session_id or request.session_id
-    if session is None:
-        return _again(job, request)
-    return request.model_copy(
-        update={
-            "prompt": prompts.repair_prompt(problem),
-            "resume": True,
-            "session_id": session,
-            "skill": None,
-            "prior_usage": result.total_usage or request.prior_usage,
-            "log": _next_log(job),
-        }
-    )
+    return calls.repair(request, result, problem, _next_log(job))
 
 
 def _fallback(job: _Job, ready: _Ready, pick: agents.Pick, tried: set[str]) -> agents.Pick | None:
@@ -376,14 +350,6 @@ def _wait_quota(job: _Job, ready: _Ready, result: StepResult) -> None:
         remaining -= nap
     step_status = lifecycle.step_status(ready.resolved, ready.step)
     _update(job, ready.step, lambda doc, state: _status(doc, step_status))
-
-
-def _failure(pick: agents.Pick, request: StepRequest, result: StepResult) -> str:
-    if result.error == "timeout":
-        return f"timeout: killed after {request.timeout_s} s twice; log: {request.log}"
-    if result.error == "auth":
-        return f"sign in to {BINARIES.get(pick.provider, pick.provider)} interactively"
-    return f"{result.error}: {result.detail}; log: {request.log}"
 
 
 def _next_log(job: _Job) -> Path:
@@ -428,7 +394,7 @@ def _request(
         prompt=prompt,
         output=prompts.output_kind(step),
         profile=prompts.profile(step),
-        timeout_s=step_timeout(resolved),
+        timeout_s=calls.step_timeout(resolved),
         log=log,
         model=pick.model,
         session_id=session_id,
@@ -471,9 +437,9 @@ def _commit(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
             problem = "the commit hook failed:\n" + "\n".join(lines[-20:])
             request = _repair(job, ran.request, ran.result, problem)
             result = adapters.get(ran.pick.provider, runtime=job.paths.runtime).run(request)
-            ran.usage = _plus(ran.usage, result.usage)
+            ran.usage = calls.plus(ran.usage, result.usage)
             if result.error is not None:
-                return _fail(job, _failure(ran.pick, request, result), ran.usage)
+                return _fail(job, calls.failure(ran.pick.provider, request, result), ran.usage)
             session = result.session_id or ran.result.session_id
             ran.result = ran.result.model_copy(update={"session_id": session})
     ran.files = gitops.commit_files(job.worktree, ran.commit) if ran.commit else []
@@ -621,19 +587,6 @@ def _recover(job: _Job) -> None:
                 documents.save_ticket(job.paths.project(job.slug), doc)
         state.running = None
         runtime.save_ticket_state(job.paths, job.ticket_id, state)
-
-
-def _plus(a: Usage, b: Usage) -> Usage:
-    cost = (
-        None if a.cost_usd is None and b.cost_usd is None else (a.cost_usd or 0) + (b.cost_usd or 0)
-    )
-    return Usage(
-        input=a.input + b.input,
-        output=a.output + b.output,
-        cache_read=a.cache_read + b.cache_read,
-        cache_write=a.cache_write + b.cache_write,
-        cost_usd=cost,
-    )
 
 
 def _goal(job: _Job, ticket: Ticket) -> str:

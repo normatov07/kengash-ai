@@ -7,7 +7,7 @@ import pytest
 from conftest import Engine, Events, FakeClis, write_settings
 
 from super_harness.model import Running, TicketState
-from super_harness.ops import steps
+from super_harness.ops import calls, steps
 from super_harness.ops.steps import JobEnd
 from super_harness.store import StorePaths, documents, runtime
 from super_harness.workflow import fingerprint
@@ -115,7 +115,7 @@ def test_an_agent_commit_is_folded_into_the_harness_commit(
 def test_a_timeout_retries_once_then_fails(
     engine: Engine, fake_clis: FakeClis, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(steps, "step_timeout", lambda resolved: 1)
+    monkeypatch.setattr(calls, "step_timeout", lambda resolved: 1)
     fake_clis.queue("claude", fixture="claude/work_resume.json", sleep=3)
     fake_clis.queue("claude", fixture="claude/work_resume.json", sleep=3)
     end = steps.run_job("7b55e0c1")
@@ -242,7 +242,7 @@ def test_a_new_claude_session_that_never_started_is_forgotten(
 def test_a_timed_out_new_claude_session_retries_by_resuming(
     engine: Engine, fake_clis: FakeClis, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(steps, "step_timeout", lambda resolved: 1)
+    monkeypatch.setattr(calls, "step_timeout", lambda resolved: 1)
     fake_clis.queue("claude", fixture="claude/work_resume.json", sleep=3)
     fake_clis.queue("claude", fixture="claude/work_resume.json")
     steps.run_job("7b55e0c1", steps=1)

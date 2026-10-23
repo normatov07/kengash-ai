@@ -14,7 +14,7 @@ from super_harness.model.documents import (
     Ticket,
     TicketInput,
 )
-from super_harness.model.errors import HarnessError, NeedsSetup, NeedsUser, UserError
+from super_harness.model.errors import HarnessError, NeedsSetup, NeedsUser, UserError, WaitTimeout
 from super_harness.model.events import Event
 from super_harness.model.registry import ProjectEntry, Registry
 from super_harness.model.runtime import (
@@ -103,6 +103,7 @@ __all__ = [
     "Trust",
     "Usage",
     "UserError",
+    "WaitTimeout",
     "WorkOutput",
     "WorkerRecord",
     "Workflow",
