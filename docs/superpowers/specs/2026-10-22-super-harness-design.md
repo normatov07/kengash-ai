@@ -534,5 +534,5 @@ super-harness/
 |---|---|---|
 | 2 Store + CLI | `model`, `store`, `settings`, `memory`, `journal`, `ops` (store-only use cases); init, doctor, link, adopt; plan, ticket, memory, status and context commands | plans and tickets fully manageable from the CLI; links survive project moves; adopt merges correctly |
 | 3 Engine | `adapters`, `workflow`, `scheduler`, `gitops`, `worker`; next, run, wait, approve, park, stop, pause, resume, merge; plan review and compaction jobs | integration lifecycle green with fakes; live smoke green per installed provider |
-| 4 Skills | six installed skills, seven role skills, installer, plugin manifests, lint, eval | evals pass on claude, codex and agy |
-| 5 UI | FastAPI, SSE, seven screens; `open-ui` | canvas parity checklist complete; live updates; every action goes through `ops` |
+| 4 Skills | five installed skills (`open-ui` ships with SP5), seven role skills, installer, plugin manifests, lint, eval | evals pass on claude, codex and agy |
+| 5 UI | FastAPI, SSE, seven screens; the `open-ui` skill | canvas parity checklist complete; live updates; every action goes through `ops` |
