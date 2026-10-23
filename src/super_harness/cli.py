@@ -21,6 +21,7 @@ from super_harness.ops import (
     projects,
     queue,
     reviews,
+    skills,
     status,
     tickets,
     waiting,
@@ -797,3 +798,37 @@ def ticket_attach(
         _emit_json(found)
         return
     typer.echo(found.command)
+
+
+skills_app = typer.Typer(help="Skills: lint and install.", no_args_is_help=True)
+app.add_typer(skills_app, name="skills")
+
+
+def _command_tree() -> set[str]:
+    """Every command name, plus `<group> <command>` for the commands of each group."""
+    root: Any = typer.main.get_command(app)  # typer's vendored click: groups have `commands`
+    names: set[str] = set()
+    for name, command in root.commands.items():
+        names.add(name)
+        names |= {f"{name} {sub}" for sub in getattr(command, "commands", {})}
+    return names
+
+
+@skills_app.command("lint")
+def skills_lint(
+    paths: Annotated[
+        list[Path] | None,
+        typer.Argument(help="SKILL.md files or folders; default: every packaged skill."),
+    ] = None,
+    as_json: AsJson = False,
+) -> None:
+    """Check skills against the writing standard; prints problems only."""
+    with _errors():
+        problems = skills.lint_skills(paths or [], commands=_command_tree())
+    if as_json:
+        typer.echo(json.dumps([dataclasses.asdict(p) for p in problems], indent=2))
+    else:
+        for problem in problems:
+            typer.echo(f"{problem.path}: {problem.message}")
+    if problems:
+        raise typer.Exit(1)

@@ -2,7 +2,10 @@
 
 from pathlib import Path
 
+import pytest
+
 from super_harness.model import SkillMeta
+from super_harness.model.settings import SkillCaps
 from super_harness.ops import skills
 from super_harness.store import StorePaths
 from super_harness.store.frontmatter import split_frontmatter
@@ -41,3 +44,96 @@ def test_init_seeds_role_skills_and_keeps_edits(store_paths: StorePaths) -> None
     edited.write_text("---\nname: implement\ndescription: Use when mine.\n---\nMine.\n")
     ensure_store(store_paths)
     assert edited.read_text().endswith("Mine.\n")
+
+
+COMMANDS = {"init", "wait", "plan", "plan new", "plan review", "memory", "memory add"}
+CAPS = SkillCaps()
+GOOD = """---
+name: good-skill
+description: Use when the user asks for a good skill.
+---
+0. Run `harness --version`; it prints `super-harness <version>`.
+1. Run `harness plan new --title T` and `harness wait --timeout 540`.
+
+```
+harness plan review <id>
+$ harness memory add "x" --why y
+```
+Read `references/rubric.md` when grading.
+"""
+
+
+def skill(folder: Path, name: str, text: str) -> Path:
+    path = folder / name / "SKILL.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def problems(*targets: Path) -> list[str]:
+    return [p.message for p in skills.lint(list(targets), commands=COMMANDS, caps=CAPS)]
+
+
+def test_a_good_skill_is_clean(tmp_path: Path) -> None:
+    path = skill(tmp_path, "good-skill", GOOD)
+    (path.parent / "references").mkdir()
+    (path.parent / "references" / "rubric.md").write_text("rubric")
+    assert problems(tmp_path) == []
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "message"),
+    [
+        ("name: good-skill", "name: other", "name other does not match its folder good-skill"),
+        (
+            "description: Use when",
+            "description: Helps when",
+            'description must start with "Use when"',
+        ),
+        ("Run `harness --version`; it", "Check", "step 0 must run harness --version"),
+        (
+            "harness plan review <id>",
+            "harness plan reveiw <id>",
+            "unknown command: harness plan reveiw",
+        ),
+        ("`harness wait --timeout 540`", "`harness waitt`", "unknown command: harness waitt"),
+    ],
+)
+def test_lint_names_each_problem(tmp_path: Path, old: str, new: str, message: str) -> None:
+    path = skill(tmp_path, "good-skill", GOOD.replace(old, new))
+    (path.parent / "references").mkdir()
+    (path.parent / "references" / "rubric.md").write_text("rubric")
+    assert problems(tmp_path) == [message]
+
+
+def test_lint_checks_names_sizes_and_references(tmp_path: Path) -> None:
+    description = "Use when " + "x" * 500
+    long = GOOD.replace("Use when the user asks for a good skill.", description) + "word\n" * 80
+    path = skill(tmp_path, "Bad_Name", long.replace("name: good-skill", "name: Bad_Name"))
+    (path.parent / "references" / "nested").mkdir(parents=True)
+    assert problems(path) == [
+        "name must be lowercase words joined by single hyphens, at most 64 characters",
+        f"description has {len(description)} characters; the cap is 500",
+        f"{len(long.splitlines())} lines; the cap is 80",
+        "references/rubric.md is missing",
+        "references/ must not hold folders",
+    ]
+
+
+def test_role_skills_skip_the_installed_rules(tmp_path: Path) -> None:
+    text = "---\nname: plan\ndescription: Plans.\n---\nPlan it.\n"
+    skill(tmp_path / "roles", "plan", text)
+    assert problems(tmp_path / "roles") == []
+    skill(tmp_path / "roles", "bad", text)
+    assert problems(tmp_path / "roles" / "bad") == ["name plan does not match its folder bad"]
+
+
+def test_mentions_reads_code_spans_and_fenced_commands() -> None:
+    assert skills.mentions(GOOD) == [
+        [],
+        ["plan", "new"],
+        ["wait"],
+        ["plan", "review"],
+        ["memory", "add"],
+    ]
+    assert skills.mentions("Load `harness-memory` and the `harness store`.") == [["store"]]
