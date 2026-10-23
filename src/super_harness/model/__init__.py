@@ -15,6 +15,7 @@ from super_harness.model.documents import (
     TicketInput,
 )
 from super_harness.model.errors import HarnessError, NeedsSetup, NeedsUser, UserError, WaitTimeout
+from super_harness.model.evals import EvalScenario, Expect, RecordsExpect, SetupStep
 from super_harness.model.events import Event
 from super_harness.model.registry import ProjectEntry, Registry
 from super_harness.model.runtime import (
@@ -68,7 +69,9 @@ __all__ = [
     "ConductorPing",
     "Doc",
     "ErrorKind",
+    "EvalScenario",
     "Event",
+    "Expect",
     "Finding",
     "Folder",
     "Gate",
@@ -85,12 +88,14 @@ __all__ = [
     "ProjectEntry",
     "ProviderOptions",
     "ProviderStatus",
+    "RecordsExpect",
     "Registry",
     "Review",
     "ReviewOutput",
     "Running",
     "SessionRef",
     "Settings",
+    "SetupStep",
     "ShortId",
     "SkillMeta",
     "SlotEntry",
