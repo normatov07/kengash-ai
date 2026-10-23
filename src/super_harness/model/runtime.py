@@ -33,3 +33,9 @@ class Claims(_Runtime):
     """runtime/claims.json: when each project last had a ticket claimed."""
 
     last: dict[str, datetime] = Field(default_factory=dict)
+
+
+class Trust(_Runtime):
+    """runtime/trust.json: digest of each repo's hook and MCP files that doctor last reported."""
+
+    seen: dict[str, str] = Field(default_factory=dict)

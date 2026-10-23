@@ -95,7 +95,7 @@ def doctor(
     ] = None,
     as_json: AsJson = False,
 ) -> None:
-    """Check projects, links and documents; --fix repairs links."""
+    """Check projects, links, documents, providers and repo trust; --fix repairs links."""
     with _errors():
         report = projects.doctor(fix=fix, scan=scan)
     if as_json:
@@ -103,11 +103,11 @@ def doctor(
     else:
         for problem in report.problems:
             prefix = f"{problem.slug}: " if problem.slug else ""
-            typer.echo(prefix + problem.message)
+            typer.echo(prefix + ("warning: " if problem.warning else "") + problem.message)
         if not report.problems and not quiet:
             plural = "" if report.projects == 1 else "s"
             typer.echo(f"ok: {report.projects} project{plural}")
-    if any(not problem.fixed for problem in report.problems):
+    if any(not problem.fixed and not problem.warning for problem in report.problems):
         raise typer.Exit(1)
 
 

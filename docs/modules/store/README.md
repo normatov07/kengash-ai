@@ -6,7 +6,7 @@ Everything under `~/.harness`: paths, atomic writes, frontmatter documents, ids,
 
 ## Interface
 
-- `StorePaths.default()` and `ProjectPaths`: the layout of system spec §4.1, plus `StorePaths.slots`, `claims` and `flags` under `runtime/`; `HARNESS_HOME` overrides `~/.harness`.
+- `StorePaths.default()` and `ProjectPaths`: the layout of system spec §4.1, plus `StorePaths.slots`, `claims`, `trust` and `flags` under `runtime/`; `HARNESS_HOME` overrides `~/.harness`.
 - `seed.ensure_store`, `seed.ensure_project`: create folders and copy default files only when missing.
 - `documents`: `load_plan`, `load_ticket`, `load_any`, `save_plan`, `save_ticket` (a ticket lands in the folder its status names), `save_any`, `find_ticket`, `iter_documents`, `check_document`.
 - `frontmatter.parse`, `frontmatter.render`, `files.atomic_write`, `ids.new_id`, `locks.locked`, `yamlio.load_yaml`, `yamlio.dump_yaml`.
@@ -15,7 +15,7 @@ Everything under `~/.harness`: paths, atomic writes, frontmatter documents, ids,
 - `links`: `link_state`, `obstruction`, `make_link`, `ensure_excluded`, `is_excluded`.
 - `redact.redact`: masks private keys, API tokens and the values assigned to names ending in `password`, `secret`, `token` or `api_key` (also `access_key`, `secret_key`, `private_key`), in any form: `DB_PASSWORD=…`, `token: …`, `"api_key": "…"`; quoted values are masked whole. Applied before anything reaches the journal or memory.
 - `seed.package_default(name)`: a default file's text from the package.
-- `runtime`: `load_slots`/`save_slots` (`runtime/slots.json`), `load_claims`/`save_claims` (`runtime/claims.json`), `pause_state` → `Pause(everything, projects)` and `set_pause(paths, slug or None, on=)` (`runtime/flags/`); a damaged file raises an error naming it.
+- `runtime`: `load_slots`/`save_slots` (`runtime/slots.json`), `load_claims`/`save_claims` (`runtime/claims.json`), `load_trust`/`save_trust` (`runtime/trust.json`), `pause_state` → `Pause(everything, projects)` and `set_pause(paths, slug or None, on=)` (`runtime/flags/`); a damaged file raises an error naming it.
 - `storegit.commit_store`: commits every change as `harness`, never with the user's identity, hooks or signing.
 
 ## Invariants
@@ -28,6 +28,7 @@ Everything under `~/.harness`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
+- 2026-10-23: `runtime/trust.json` (SP3 M2).
 - 2026-10-22: runtime slots, claims and pause flags (SP3 M1).
 - 2026-10-22: default SETTINGS.md adds `memory.compactor`, `providers` and the `bypass_permissions` note (SP3 M1).
 - 2026-10-22: `read_sections`; ids never read as numbers (SP2 M3).

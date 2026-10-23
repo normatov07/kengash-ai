@@ -8,7 +8,9 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 - `projects.init_project(path)` → `InitResult`: registers the repo containing `path`, seeds its store folder, links `<repo>/.harness`, adds the exclude entry. Idempotent.
 - `projects.relink(slug, new_path)` → `InitResult`: re-points a moved project.
-- `projects.doctor(fix, scan)` → `DoctorReport`: one `Problem` per repo, link, exclude or document issue; `fix` repairs links and exclude entries only.
+- `projects.doctor(fix, scan)` → `DoctorReport`: one `Problem` per repo, link, exclude or document issue, then repo trust and provider checks; `fix` repairs links and exclude entries only. `Problem.warning` marks findings that never fail `doctor`.
+- `providers.check_providers(paths)` → `ProviderCheck(provider, users, blocking, message)` for each provider that enabled agents, their fallbacks or the compactor need (all scopes) and that is missing, signed out or unsupported (`blocking` when a role or the compactor is left with no usable provider), plus a warning for a claude login other than claude.ai unless `providers.claude.allow_api_key`; scopes with invalid settings are skipped. Detection goes through `adapters`.
+- `providers.trust_notice(paths, slug, repo)`: a warning when the repo ships `.claude/settings.json` hooks or `.mcp.json`, once until those files change (digest in `runtime/trust.json`).
 - `projects.adopt(path)` → `AdoptResult`: merges a real `.harness/` folder by uuid and archives the original.
 - `workspace`: `resolve_slug` (the named project, else the registered project containing the current folder), settings `settings_yaml`/`setting`/`settings_problems`, memory `remember`/`recall`, `context` → `Context(memory, project, process, gates)` (MEMORY.md, PROCESS.md headings, open gates) and `open_gates` → `OpenGate(id, sub_status, title)` items.
 - `records`: `scope`, `locate_plan`, `locate_ticket` (ids are store-unique; `project` narrows the search), `taken_ids`, `project_tickets`, `load_plan`/`load_ticket` (schema errors become `UserError`), `document` → `Document(project, path, meta, sections, text)`, `describe` (one line per validation error, with a "did you mean" for unknown fields and a quoting hint for YAML text read as a mapping), `one_line`, `record` (journal the events, then commit).
@@ -30,6 +32,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-23: doctor checks providers and repo trust (SP3 M2).
 - 2026-10-22: `queue.next_tickets` (SP3 M1).
 - 2026-10-22: dependencies are met only by `done/merged` and `done/closed`; a move to `done` clears `step` (SP3 M1).
 - 2026-10-22: `describe` hints at quoting YAML text that contains `: ` (SP2 review).

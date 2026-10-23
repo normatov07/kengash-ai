@@ -10,6 +10,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from super_harness.model import NeedsSetup, Plan, ProjectEntry, Ticket, UserError, utc_now
+from super_harness.ops import providers
 from super_harness.store import documents, links, storegit
 from super_harness.store.locks import locked
 from super_harness.store.paths import ProjectPaths, StorePaths
@@ -41,6 +42,7 @@ class Problem:
     message: str
     slug: str | None = None
     fixed: bool = False
+    warning: bool = False
 
 
 @dataclass
@@ -107,7 +109,7 @@ def relink(slug: str, new_path: Path, paths: StorePaths | None = None) -> InitRe
 def doctor(
     fix: bool = False, scan: Path | None = None, paths: StorePaths | None = None
 ) -> DoctorReport:
-    """Check every project's repo, link, exclude entry and documents."""
+    """Check every project's repo, link, exclude entry, documents and trust, then providers."""
     paths = paths or StorePaths.default()
     if not paths.home.is_dir():
         return DoctorReport(0, [Problem(f"no store at {paths.home}; run: harness init")])
@@ -115,6 +117,9 @@ def doctor(
     problems: list[Problem] = []
     for slug, entry in sorted(registry.projects.items()):
         problems += _check_project(paths, slug, entry.path, fix)
+        notice = providers.trust_notice(paths, slug, entry.path) if entry.path.is_dir() else None
+        if notice is not None:
+            problems.append(Problem(notice, slug, warning=True))
     if scan is not None:
         known = {entry.path.resolve() for entry in registry.projects.values()}
         for found in _real_folders(scan.resolve(), SCAN_DEPTH):
@@ -122,6 +127,10 @@ def doctor(
                 problems.append(
                     Problem(f"unmanaged store {found}; run: harness adopt {found.parent}")
                 )
+    problems += [
+        Problem(check.message, warning=not check.blocking)
+        for check in providers.check_providers(paths)
+    ]
     return DoctorReport(len(registry.projects), problems)
 
 

@@ -89,6 +89,10 @@ class StorePaths:
         return self.runtime / "claims.json"
 
     @property
+    def trust(self) -> Path:
+        return self.runtime / "trust.json"
+
+    @property
     def flags(self) -> Path:
         return self.runtime / "flags"
 

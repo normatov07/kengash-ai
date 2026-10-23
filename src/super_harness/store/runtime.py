@@ -1,11 +1,11 @@
-"""Engine bookkeeping under runtime/: slots, last claims and pause flags (SP3 spec §4)."""
+"""Engine bookkeeping under runtime/: slots, claims, pause flags, repo trust (SP3 spec §4)."""
 
 from dataclasses import dataclass
 from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
 
-from super_harness.model import Claims, HarnessError, SlotTable
+from super_harness.model import Claims, HarnessError, SlotTable, Trust
 from super_harness.store.files import atomic_write
 from super_harness.store.paths import StorePaths
 
@@ -37,6 +37,14 @@ def load_claims(paths: StorePaths) -> Claims:
 
 def save_claims(paths: StorePaths, claims: Claims) -> None:
     _save(paths.claims, claims)
+
+
+def load_trust(paths: StorePaths) -> Trust:
+    return _load(paths.trust, Trust)
+
+
+def save_trust(paths: StorePaths, trust: Trust) -> None:
+    _save(paths.trust, trust)
 
 
 def pause_state(paths: StorePaths) -> Pause:

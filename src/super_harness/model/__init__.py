@@ -17,7 +17,7 @@ from super_harness.model.documents import (
 from super_harness.model.errors import HarnessError, NeedsSetup, NeedsUser, UserError
 from super_harness.model.events import Event
 from super_harness.model.registry import ProjectEntry, Registry
-from super_harness.model.runtime import Claims, SlotEntry, SlotTable
+from super_harness.model.runtime import Claims, SlotEntry, SlotTable, Trust
 from super_harness.model.settings import (
     PROVIDERS,
     STEP_ROLES,
@@ -86,6 +86,7 @@ __all__ = [
     "Ticket",
     "TicketInput",
     "Title",
+    "Trust",
     "Usage",
     "UserError",
     "WorkOutput",
