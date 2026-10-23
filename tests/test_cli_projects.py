@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from conftest import FakeClis
 from typer.testing import CliRunner
 
 from super_harness.cli import app
@@ -58,3 +59,23 @@ def test_link_and_adopt(store_paths: StorePaths, repo: Path, tmp_path: Path) -> 
 def test_json_output(store_paths: StorePaths, repo: Path) -> None:
     result = runner.invoke(app, ["init", str(repo), "--json"])
     assert '"slug": "payments-api"' in result.stdout
+
+
+def test_doctor_warnings_do_not_fail(store_paths: StorePaths, repo: Path) -> None:
+    runner.invoke(app, ["init", str(repo)])
+    (repo / ".mcp.json").write_text("{}")
+    result = runner.invoke(app, ["doctor"])
+    assert (result.exit_code, result.stdout) == (
+        0,
+        "payments-api: warning: repo ships .mcp.json; workers run them without a trust prompt\n",
+    )
+    assert runner.invoke(app, ["doctor"]).stdout == "ok: 1 project\n"
+
+
+def test_doctor_fails_on_a_blocking_provider(
+    store_paths: StorePaths, repo: Path, fake_clis: FakeClis
+) -> None:
+    runner.invoke(app, ["init", str(repo)])
+    fake_clis.hide("codex")
+    result = runner.invoke(app, ["doctor"])
+    assert result.exit_code == 1 and result.stdout.startswith("codex: not installed;")

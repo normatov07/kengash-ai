@@ -35,6 +35,7 @@ from super_harness.store.yamlio import load_yaml
 SETTABLE = ("title", "importance", "workflow", "gate", "loop_max", "touches", "depends_on", "tags")
 LISTS = frozenset({"touches", "depends_on", "tags"})
 QUEUED = ("in_queue/ready", "in_queue/blocked")
+MET = ("done/merged", "done/closed")  # dependents start from merged code (SP3 spec decision 6)
 
 
 @dataclass
@@ -195,9 +196,11 @@ def move_ticket(ticket_id: str, target: str, why: str, *, project: str | None, b
         if after == before:
             return Moved(ticket.id, slug, before, after)
         ticket.status = after
+        if ticket.folder is Folder.done:
+            ticket.step = None  # a done ticket runs no step; parked or requeued ones resume
         ticket.updated = utc_now()
         documents.save_ticket(project_paths, doc)
-        ready, blocked = _refresh_queue(project_paths, tickets)
+        ready, blocked = refresh_queue(project_paths, tickets)
     note = f"{ticket.id} moved to {after}"
     events = [_moved(slug, ticket.id, before, after, reason, by)]
     events += [_moved(slug, tid, QUEUED[1], QUEUED[0], note, "harness") for tid in ready]
@@ -235,7 +238,7 @@ def set_fields(ticket_id: str, pairs: Sequence[str], *, project: str | None, by:
                 raise UserError(f"dependency cycle: {' -> '.join(cycle)}")
         ticket.updated = utc_now()
         documents.save_ticket(project_paths, doc)
-        _refresh_queue(project_paths, tickets)
+        refresh_queue(project_paths, tickets)
     values = ticket.model_dump(mode="json")
     fields = {key: values[key] for key in changes}
     updated = Event(
@@ -322,8 +325,8 @@ def _cycle(graph: Mapping[str, Sequence[str]]) -> list[str] | None:
 
 
 def _met(depends_on: Iterable[str], tickets: Mapping[str, Doc[Ticket]]) -> bool:
-    """True when every dependency is a ticket of this project in `done/`."""
-    return all(dep in tickets and tickets[dep].meta.folder is Folder.done for dep in depends_on)
+    """True when every dependency is a ticket of this project that is merged or closed."""
+    return all(dep in tickets and tickets[dep].meta.status in MET for dep in depends_on)
 
 
 def _target(
@@ -350,7 +353,7 @@ def _target(
     return f"{folder.value}/{sub}"
 
 
-def _refresh_queue(
+def refresh_queue(
     project: ProjectPaths, tickets: Mapping[str, Doc[Ticket]]
 ) -> tuple[list[str], list[str]]:
     """Turn each ready or blocked ticket ready or blocked to match its dependencies."""

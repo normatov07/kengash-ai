@@ -1,0 +1,122 @@
+"""Antigravity driver: `agy -p` with JSON output (SP3 spec §8.1, live runs of 2026-10-23)."""
+
+import json
+from typing import Any
+
+from super_harness.adapters.base import (
+    CliProvider,
+    checked,
+    classify,
+    positional,
+    probe,
+    schema_json,
+    tail,
+)
+from super_harness.adapters.process import ProcessResult
+from super_harness.model import StepRequest, StepResult, Usage
+
+# agy's plan mode denies terminal commands and then returns nothing; this line avoids them.
+READ_ONLY_LINE = (
+    "This is a read-only step: read files with your file-viewing tools only; "
+    "never run terminal commands."
+)
+MODE = {"read_only": "plan", "edit_worktree": "accept-edits"}
+
+
+class Antigravity(CliProvider):
+    """No isolation flag: `--disable-slash-commands` makes agy ignore `--mode`."""
+
+    name = "antigravity"
+    binary = "agy"
+    install_hint = "install the Antigravity CLI (agy), then run `agy` once to sign in"
+    signin_hint = "run `agy` and sign in"
+
+    def command(self, req: StepRequest) -> list[str]:
+        text = f"{req.skill}\n\n{req.prompt}" if req.skill and not req.resume else req.prompt
+        if req.profile == "read_only":
+            text = f"{text}\n\n{READ_ONLY_LINE}"
+        argv = [self.binary, "-p", positional(text)]
+        if req.resume:
+            argv += ["--conversation", str(req.session_id)]
+        # Every turn passes the schema: without it agy repeats the previous output.
+        argv += ["--output-format", "json", "--json-schema", schema_json(req.output)]
+        if req.model:
+            argv += ["--model", req.model]
+        argv += ["--mode", MODE[req.profile]]
+        return argv + (["--dangerously-skip-permissions"] if req.bypass else [])
+
+    def parse(self, req: StepRequest, proc: ProcessResult) -> StepResult:
+        stdout = proc.stdout.strip()
+        if not stdout and proc.exit_code == 0:
+            return StepResult(session_id=req.session_id, error="empty", detail="no output")
+        try:
+            data = json.loads(stdout)
+        except json.JSONDecodeError:
+            data = None
+        if not isinstance(data, dict):
+            message = tail(proc.stderr or proc.stdout) or f"exit {proc.exit_code}"
+            return StepResult(session_id=req.session_id, error=classify(message), detail=message)
+        text = str(data.get("response") or "")
+        totals = _totals(data.get("usage") or {})
+
+        def result(**fields: Any) -> StepResult:
+            return StepResult(
+                session_id=data.get("conversation_id") or req.session_id,
+                text=text,
+                usage=totals.minus(req.prior_usage),
+                total_usage=totals,
+                **fields,
+            )
+
+        if data.get("status") != "SUCCESS" or proc.exit_code != 0:
+            message = "\n".join(part for part in (text, proc.stderr) if part.strip())
+            return result(
+                error=classify(message),
+                detail=tail(text or proc.stderr) or f"exit {proc.exit_code}",
+            )
+        structured = data.get("structured_output")
+        if structured is None:
+            denied = [
+                str(action.get("display_name") or action.get("action"))
+                for action in data.get("denied_actions") or []
+                if isinstance(action, dict)
+            ]
+            detail = f"no output; denied: {', '.join(denied)}" if denied else "no output"
+            return result(error="empty", detail=detail)
+        if not _fresh(text, structured):
+            return result(error="schema", detail="agy repeated the previous turn's output")
+        output, problem = checked(req.output, structured)
+        if output is None:
+            return result(error="schema", detail=problem)
+        return result(output=output)
+
+    def signed_in(self) -> tuple[bool, str | None]:
+        result = probe([self.binary, "models"])
+        return result is not None and result.returncode == 0, None
+
+    def attach_command(self, session_id: str) -> list[str]:
+        return [self.binary, "--conversation", session_id]
+
+
+def _totals(usage: dict[str, Any]) -> Usage:
+    """Conversation totals; agy reports cache reads apart from `input_tokens`."""
+    return Usage(
+        input=int(usage.get("input_tokens") or 0),
+        output=int(usage.get("output_tokens") or 0),
+        cache_read=int(usage.get("cache_read_tokens") or 0),
+    )
+
+
+def _fresh(response: str, structured: object) -> bool:
+    """True when this turn's text carries the structured output, so it is not a stale repeat."""
+    candidates = [response, *reversed(response.splitlines())]
+    for candidate in candidates:
+        candidate = candidate.strip()
+        if not candidate.startswith("{"):
+            continue
+        try:
+            if json.loads(candidate) == structured:
+                return True
+        except json.JSONDecodeError:
+            continue
+    return False

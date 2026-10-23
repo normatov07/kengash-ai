@@ -3,7 +3,7 @@ import stat
 from datetime import UTC, date, datetime
 
 from super_harness import journal
-from super_harness.model import Event
+from super_harness.model import Event, JournalCursor
 from super_harness.store import StorePaths
 
 TS = datetime(2026, 10, 22, 12, 4, 11, tzinfo=UTC)
@@ -38,3 +38,17 @@ def test_read_since_skips_older_days(store_paths: StorePaths) -> None:
     journal.append(store_paths, Event(ts=datetime(2026, 10, 21, tzinfo=UTC), type="old"))
     journal.append(store_paths, Event(ts=TS, type="new"))
     assert [event.type for event in journal.read(store_paths, since=date(2026, 10, 22))] == ["new"]
+
+
+def test_read_after_returns_each_event_once(store_paths: StorePaths) -> None:
+    start = journal.end(store_paths)
+    assert start == JournalCursor()
+    journal.append(store_paths, Event(ts=datetime(2026, 10, 22, 23, 59, tzinfo=UTC), type="a"))
+    journal.append(store_paths, Event(ts=datetime(2026, 10, 23, 0, 1, tzinfo=UTC), type="b"))
+    events, cursor = journal.read_after(store_paths, start)
+    assert [e.type for e in events] == ["a", "b"] and cursor == JournalCursor(
+        day="2026-10-23", line=1
+    )
+    journal.append(store_paths, Event(ts=datetime(2026, 10, 23, 0, 2, tzinfo=UTC), type="c"))
+    events, cursor = journal.read_after(store_paths, cursor)
+    assert [e.type for e in events] == ["c"] and cursor == journal.end(store_paths)

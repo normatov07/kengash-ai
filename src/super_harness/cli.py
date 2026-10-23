@@ -12,7 +12,18 @@ import typer
 
 from super_harness import __version__
 from super_harness.model import Folder, HarnessError, PlanMode, UserError
-from super_harness.ops import plans, projects, status, tickets, workspace
+from super_harness.ops import (
+    changes,
+    controls,
+    merging,
+    plans,
+    projects,
+    queue,
+    status,
+    tickets,
+    waiting,
+    workspace,
+)
 
 app = typer.Typer(
     name="harness",
@@ -95,7 +106,7 @@ def doctor(
     ] = None,
     as_json: AsJson = False,
 ) -> None:
-    """Check projects, links and documents; --fix repairs links."""
+    """Check projects, links, documents, providers and repo trust; --fix repairs links."""
     with _errors():
         report = projects.doctor(fix=fix, scan=scan)
     if as_json:
@@ -103,11 +114,11 @@ def doctor(
     else:
         for problem in report.problems:
             prefix = f"{problem.slug}: " if problem.slug else ""
-            typer.echo(prefix + problem.message)
+            typer.echo(prefix + ("warning: " if problem.warning else "") + problem.message)
         if not report.problems and not quiet:
             plural = "" if report.projects == 1 else "s"
             typer.echo(f"ok: {report.projects} project{plural}")
-    if any(not problem.fixed for problem in report.problems):
+    if any(not problem.fixed and not problem.warning for problem in report.problems):
         raise typer.Exit(1)
 
 
@@ -375,6 +386,18 @@ Here = Annotated[
     ),
 ]
 MAX_LINES = 5
+Every = Annotated[
+    str | None,
+    typer.Option("--project", "-p", help="Only this project; default: every project."),
+]
+
+
+def _capped(lines: list[str], command: str) -> list[str]:
+    """At most MAX_LINES lines; the last one says how many more `command` shows."""
+    if len(lines) <= MAX_LINES:
+        return lines
+    more = len(lines) - MAX_LINES + 1
+    return [*lines[: MAX_LINES - 1], f"+{more} more; run: {command}"]
 
 
 def _ticket_lines(lines: list[tickets.TicketLine], as_json: bool) -> None:
@@ -485,13 +508,7 @@ def ticket_move(
 
 
 @app.command("status")
-def show_status(
-    project: Annotated[
-        str | None,
-        typer.Option("--project", "-p", help="Only this project; default: every project."),
-    ] = None,
-    as_json: AsJson = False,
-) -> None:
+def show_status(project: Every = None, as_json: AsJson = False) -> None:
     """Board summary: tickets per folder for each project, then gates waiting on the user."""
     with _errors():
         board = status.board(project)
@@ -510,8 +527,213 @@ def show_status(
     ]
     if not lines:
         lines = ["no projects; run: harness init"]
-    if len(lines) > MAX_LINES:
-        more = len(lines) - MAX_LINES + 1
-        lines = [*lines[: MAX_LINES - 1], f"+{more} more; run: harness status --json"]
-    for line in lines:
+    for line in _capped(lines, "harness status --json"):
         typer.echo(line)
+
+
+@app.command("next")
+def show_next(project: Every = None, as_json: AsJson = False) -> None:
+    """Tickets that can start now, in the order to start them."""
+    with _errors():
+        found = queue.next_tickets(project)
+    if as_json:
+        _emit_json(found)
+        return
+    lines = [
+        f"{item.id} {item.project} {item.importance} {item.step}→{item.provider} {item.title}"
+        for item in found.runnable
+    ] or [_nothing_runnable(found)]
+    for line in _capped(lines, "harness next --json"):
+        typer.echo(line)
+
+
+def _nothing_runnable(found: queue.Queue) -> str:
+    counts = [
+        f"{count} {label}"
+        for count, label in (
+            (len(found.held_back), "held back"),
+            (found.blocked, "blocked"),
+            (found.running, "running"),
+            (found.gates, "at gates"),
+            (found.paused, "paused"),
+        )
+        if count
+    ]
+    return f"nothing runnable: {', '.join(counts) or 'the queue is empty'}"
+
+
+Ids = Annotated[list[str], typer.Argument(help="Ticket ids, 8 hex digits each.")]
+
+
+@app.command("run")
+def run_tickets(
+    ticket_ids: Ids,
+    steps: Annotated[
+        int | None, typer.Option("--steps", min=1, help="Pause after this many steps.")
+    ] = None,
+    project: Only = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Claim tickets and start a detached worker for each; returns at once."""
+    with _errors():
+        result = controls.run_tickets(ticket_ids, steps=steps, project=project, by=by)
+    if as_json:
+        _emit_json(result)
+    else:
+        lines = [f"started {s.id} {s.step}→{s.provider}" for s in result.started]
+        lines += [f"skipped {tid}: {reason}" for tid, reason in result.skipped.items()]
+        for line in _capped(lines, "harness run --json"):
+            typer.echo(line)
+    if not result.started:
+        raise typer.Exit(1)
+
+
+@app.command("approve")
+def approve_ticket(
+    ticket_id: TicketId,
+    loops: Annotated[int | None, typer.Option("--loops", min=1, help="Loops to add.")] = None,
+    tokens: Annotated[int | None, typer.Option("--tokens", min=1, help="Tokens to add.")] = None,
+    project: Only = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Open an approval gate: the approve step, a loop cap or a token cap."""
+    with _errors():
+        approved = controls.approve_ticket(
+            ticket_id, loops=loops, tokens=tokens, project=project, by=by
+        )
+    if as_json:
+        _emit_json(approved)
+        return
+    running = approved.status.split("/", 1)[1] not in workspace.GATES
+    typer.echo(f"ticket {approved.id} approved; {'running' if running else approved.status}")
+
+
+@app.command("park")
+def park_ticket(
+    ticket_id: TicketId,
+    why: Annotated[str, typer.Option("--why", help="One line: why it waits.")],
+    project: Only = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Park a ticket; a running one parks after its step."""
+    with _errors():
+        parked = controls.park_ticket(ticket_id, why, project=project, by=by)
+    if as_json:
+        _emit_json(parked)
+        return
+    later = " after its step" if parked.deferred else ""
+    typer.echo(f"ticket {parked.id} → in_queue/parked{later}")
+
+
+@app.command("stop")
+def stop_ticket(
+    ticket_id: TicketId, project: Only = None, by: By = "unknown", as_json: AsJson = False
+) -> None:
+    """Kill a ticket's worker now; the ticket fails as stopped."""
+    with _errors():
+        status_now = controls.stop_ticket(ticket_id, project=project, by=by)
+    if as_json:
+        typer.echo(json.dumps({"id": ticket_id, "status": status_now}))
+        return
+    typer.echo(f"ticket {ticket_id} stopped")
+
+
+@app.command("pause")
+def pause(project: Every = None, by: By = "unknown", as_json: AsJson = False) -> None:
+    """Start nothing new; running workers finish their step, then pause."""
+    with _errors():
+        paused = controls.pause(project, by=by)
+    if as_json:
+        _emit_json(paused)
+        return
+    typer.echo(f"paused: {paused.running} running finish their step")
+
+
+@app.command("resume")
+def resume(project: Every = None, by: By = "unknown", as_json: AsJson = False) -> None:
+    """Clear the pause and restart paused tickets."""
+    with _errors():
+        resumed = controls.resume(project, by=by)
+    if as_json:
+        _emit_json(resumed)
+        return
+    typer.echo(f"resumed {len(resumed.started)}")
+
+
+@app.command("merge")
+def merge_ticket(
+    ticket_id: TicketId, project: Only = None, by: By = "unknown", as_json: AsJson = False
+) -> None:
+    """Rebase the ticket branch, fast-forward the base branch, remove the worktree."""
+    with _errors():
+        merged = merging.merge_ticket(ticket_id, project=project, by=by)
+    if as_json:
+        _emit_json(merged)
+        return
+    typer.echo(f"merged {merged.id}: {merged.commits} commits into {merged.base}")
+
+
+@app.command("wait")
+def wait(
+    project: Every = None,
+    timeout: Annotated[
+        float, typer.Option("--timeout", min=0, help="Seconds before giving up (exit 3).")
+    ] = 540,
+    as_json: AsJson = False,
+) -> None:
+    """Block until a ticket needs the conductor; `idle` when nothing runs."""
+    with _errors():
+        result = waiting.wait(project, timeout=timeout)
+    if as_json:
+        _emit_json(result)
+    elif result.events:
+        lines = [f"{e.id} {e.status} loop {e.loop}/{e.loop_max}: {e.detail}" for e in result.events]
+        for line in _capped(lines, "harness wait --json"):
+            typer.echo(line)
+    elif result.idle:
+        typer.echo("idle")
+    if result.timed_out:
+        typer.echo(f"wait timed out after {timeout:g} s", err=True)
+        raise typer.Exit(3)
+
+
+@ticket_app.command("changes")
+def ticket_changes(
+    ticket_id: TicketId,
+    diff: Annotated[bool, typer.Option("--diff", help="Also print each commit's diff.")] = False,
+    project: Only = None,
+    as_json: AsJson = False,
+) -> None:
+    """Files the ticket changed, with the loop, step and model of each commit."""
+    with _errors():
+        found = changes.ticket_changes(ticket_id, diff=diff, project=project)
+    if as_json:
+        _emit_json(found)
+        return
+    for change in found.changes:
+        added = "-" if change.added is None else change.added
+        removed = "-" if change.removed is None else change.removed
+        typer.echo(
+            f"{change.path} +{added} -{removed}  loop {change.loop} {change.step} {change.model}"
+        )
+    if found.diff:
+        typer.echo(found.diff)
+
+
+@ticket_app.command("attach")
+def ticket_attach(
+    ticket_id: TicketId,
+    role: Annotated[str | None, typer.Option("--role", help="Role whose session to open.")] = None,
+    project: Only = None,
+    as_json: AsJson = False,
+) -> None:
+    """Print the command that opens a role's live CLI session in the ticket's worktree."""
+    with _errors():
+        found = changes.attach_command(ticket_id, role=role, project=project)
+    if as_json:
+        _emit_json(found)
+        return
+    typer.echo(found.command)

@@ -1,0 +1,32 @@
+# gitops
+
+## Purpose
+
+The git commands harness runs in the user's repo (SP3 spec §9): ticket worktrees, commits with `Harness-*` trailers, diffs, rebase, fast-forward merge and a ticket's history. Never touches the store.
+
+## Interface
+
+- `ensure_worktree(repo, path, branch, base)` → `Worktree(path, branch, created)`: prunes stale worktree records, reuses `path` when it is already the worktree of `branch`, re-attaches an existing `branch`, else creates both from `base`. A foreign folder at `path` is a `GitError`.
+- `commit_all(cwd, subject, trailers)` → new sha, or None when nothing changed: `git add -A`, then one commit whose message is the subject's first line and the trailers as `Key: value` lines.
+- `head`, `current_branch` (None when detached), `is_clean` (tracked files only), `reset_soft(cwd, commit)`.
+- `commit_files(cwd, sha)` → one commit's `FileChange`s; `show(repo, sha)` → its sha, subject and diff; `branch_exists(repo, branch)`.
+- `diff(cwd, base, stat=)` and `numstat(cwd, base)` → `FileChange(path, added, removed)` (None for binary files), both over `<base>...HEAD`.
+- `rebase(cwd, base)` → `[]`, or the conflicted paths after `git rebase --abort` (the branch is left as it was).
+- `merge_ff(repo, branch, base)` → commits merged: refused unless the main working tree is on `base` with no tracked changes; `git merge --ff-only`.
+- `remove_worktree(repo, path, branch)`: removes the worktree and deletes the branch, whichever still exist.
+- `ticket_commits(repo, uuid, ref)` → `Commit(sha, subject, trailers, files)`, oldest first, found by `Harness-Ticket: <uuid>`; works on the base branch after the merge.
+- Errors: `GitError` (a `UserError`, exit 1) ends with git's last output line; `CommitFailed.output` holds everything a failing commit printed, hook output included.
+
+## Invariants
+
+- Imports only `model`.
+- Plain `git`: the user's identity, signing and hooks apply; never `--no-verify`, never `-c` overrides, never a push.
+- A commit subject keeps its first line only, so agent text cannot forge trailers.
+- Serialising commands per repo (`repo-<slug>.lock`) is the caller's job.
+
+## Changes
+
+- 2026-10-23: `show`, `branch_exists` (SP3 M3).
+- 2026-10-23: `commit_files` (SP3 M3).
+- 2026-10-23: rebase, fast-forward merge, cleanup, ticket history (SP3 M2).
+- 2026-10-23: worktrees, commits with trailers, diffs (SP3 M2).

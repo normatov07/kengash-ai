@@ -207,3 +207,29 @@ def test_set_refuses_dependency_cycles(registered_repo: Path) -> None:
     keyring, rotate = add(registered_repo)
     with pytest.raises(UserError, match="dependency cycle"):
         tickets.set_fields(keyring, [f"depends_on={rotate}"], project=None, by="x")
+
+
+def test_a_branch_ready_dependency_keeps_dependents_blocked(
+    store_paths: StorePaths, registered_repo: Path, make_ticket: Callable[..., Doc[Ticket]]
+) -> None:
+    documents.save_ticket(
+        store_paths.project("payments-api"), make_ticket(status="done/branch_ready")
+    )
+    batch = "- {title: Follow-up, importance: simple, depends_on: [7b55e0c1]}"
+    added = tickets.add_tickets(plan_for(registered_repo), batch, project=None, by="x")
+    follow_up = added.tickets[0]
+    assert follow_up.status == "in_queue/blocked"
+    moved = tickets.move_ticket("7b55e0c1", "done/merged", "merged", project=None, by="x")
+    assert moved.ready == [follow_up.id]
+
+
+def test_closing_a_ticket_clears_its_step(
+    store_paths: StorePaths, registered_repo: Path, make_ticket: Callable[..., Doc[Ticket]]
+) -> None:
+    parked = make_ticket(status="in_queue/parked", step="implement")
+    documents.save_ticket(store_paths.project("payments-api"), parked)
+    requeued = tickets.move_ticket("7b55e0c1", "in_queue", "retry", project=None, by="x")
+    assert requeued.after == "in_queue/ready"
+    assert tickets.show_ticket("7b55e0c1", project=None).meta["step"] == "implement"
+    tickets.move_ticket("7b55e0c1", "done", "dropped", project=None, by="x")
+    assert "step" not in tickets.show_ticket("7b55e0c1", project=None).meta

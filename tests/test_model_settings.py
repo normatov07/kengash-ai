@@ -4,7 +4,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from super_harness.model import Event, Settings
+from super_harness.model import Event, ProviderOptions, Settings, split_cli
 
 AGENTS: dict[str, Any] = {
     "planner": {"cli": "claude/opus", "skill": "plan"},
@@ -55,3 +55,32 @@ def test_events_keep_extra_fields() -> None:
         "type": "step.end",
         "loop": 2,
     }
+
+
+def test_agents_and_fallbacks_name_known_providers() -> None:
+    assert not Settings.model_validate({"agents": AGENTS}).agents["planner"].bypass_permissions
+    planner = {"cli": "cluade/opus", "skill": "plan"}
+    with pytest.raises(ValidationError, match="unknown provider 'cluade'"):
+        Settings.model_validate({"agents": {**AGENTS, "planner": planner}})
+    implementer = {"cli": "codex", "skill": "implement", "fallback": ["shell"]}
+    with pytest.raises(ValidationError, match="unknown provider 'shell'"):
+        Settings.model_validate({"agents": {**AGENTS, "implementer": implementer}})
+
+
+def test_the_compactor_names_a_model_provider() -> None:
+    assert Settings().memory.compactor == "claude/haiku"
+    with pytest.raises(ValidationError, match="unknown provider 'llama'"):
+        Settings.model_validate({"memory": {"compactor": "llama/3"}})
+
+
+def test_provider_options_default_per_provider() -> None:
+    settings = Settings.model_validate({"providers": {"codex": {"user_config": True}}})
+    assert settings.provider("codex").user_config is True
+    assert settings.provider("claude") == ProviderOptions()
+    with pytest.raises(ValidationError, match=r"unknown providers \['cursor'\]"):
+        Settings.model_validate({"providers": {"cursor": {}}})
+
+
+def test_split_cli_separates_provider_and_model() -> None:
+    assert split_cli("claude/opus") == ("claude", "opus")
+    assert split_cli("codex") == ("codex", None)

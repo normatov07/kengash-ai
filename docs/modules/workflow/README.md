@@ -1,0 +1,26 @@
+# workflow
+
+## Purpose
+
+Decide what a ticket does next (SP3 spec §6): which steps its workflow runs, when a cap, a stall or an approval stops it, and where a failing review sends it. Pure: settings and progress in, decisions out.
+
+## Interface
+
+- `steps_for(settings, workflow, hitl=)`: the effective steps; roles that are off are skipped, `review_plan` is dropped at `plan.review_max: 0`, hitl tickets get `approve` after `plan`. `first_step(...)` is the first of them.
+- `blocking_off(settings, workflow)`: a blocking role that is switched off.
+- `before(settings, progress)` → `Routed`: run the step, or halt at the token cap or the approval step; a step whose role was switched off is skipped.
+- `after(settings, progress, outcome)` → `Routed`: route a finished step; the first matching rule of SP3 spec §6 wins.
+- `approve(settings, progress, approval, loops=, tokens=)` → `Routed`: what `harness approve` grants.
+- `fingerprint(file, issue)`: 12 hex digits naming a finding across loops.
+- Types: `Progress(workflow, hitl, step, loop, loop_max, tokens, tokens_max, streaks, plan_rounds)`, `Outcome(verdict, fingerprints)`, decisions `Run(step, loop)`, `Halt(status, reason, approval)`, `Merge()`, and `Routed(decision, progress)`.
+
+## Invariants
+
+- Imports only `model`; no I/O and no clock.
+- `loop` grows only on a failing verdict with an `on_fail` edge, or when a loop cap is approved; a `review_plan` failure keeps it while `loop_count_rejected_review` is false.
+- Stall streaks count consecutive failing runs of one review step per fingerprint; a pass clears that step's streaks.
+- `Halt.approval` is set exactly when `harness approve` can open the gate.
+
+## Changes
+
+- 2026-10-22: effective steps, caps, stalls, approvals, fingerprints (SP3 M1).

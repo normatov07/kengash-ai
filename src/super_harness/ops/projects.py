@@ -10,6 +10,8 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from super_harness.model import NeedsSetup, Plan, ProjectEntry, Ticket, UserError, utc_now
+from super_harness.ops import providers, waiting
+from super_harness.ops.records import repo_root
 from super_harness.store import documents, links, storegit
 from super_harness.store.locks import locked
 from super_harness.store.paths import ProjectPaths, StorePaths
@@ -41,6 +43,7 @@ class Problem:
     message: str
     slug: str | None = None
     fixed: bool = False
+    warning: bool = False
 
 
 @dataclass
@@ -55,19 +58,6 @@ class AdoptResult:
     added: int
     conflicts: int
     archive: Path
-
-
-def repo_root(path: Path) -> Path:
-    """The git top-level that contains `path`, else `path` itself as an absolute path."""
-    if not path.is_dir():
-        raise UserError(f"not a folder: {path}")
-    result = subprocess.run(
-        ["git", "-C", str(path), "rev-parse", "--show-toplevel"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return Path(result.stdout.strip()) if result.returncode == 0 else path.absolute()
 
 
 def init_project(path: Path, paths: StorePaths | None = None) -> InitResult:
@@ -107,7 +97,7 @@ def relink(slug: str, new_path: Path, paths: StorePaths | None = None) -> InitRe
 def doctor(
     fix: bool = False, scan: Path | None = None, paths: StorePaths | None = None
 ) -> DoctorReport:
-    """Check every project's repo, link, exclude entry and documents."""
+    """Check every project's repo, link, exclude entry, documents and trust, then providers."""
     paths = paths or StorePaths.default()
     if not paths.home.is_dir():
         return DoctorReport(0, [Problem(f"no store at {paths.home}; run: harness init")])
@@ -115,6 +105,9 @@ def doctor(
     problems: list[Problem] = []
     for slug, entry in sorted(registry.projects.items()):
         problems += _check_project(paths, slug, entry.path, fix)
+        notice = providers.trust_notice(paths, slug, entry.path) if entry.path.is_dir() else None
+        if notice is not None:
+            problems.append(Problem(notice, slug, warning=True))
     if scan is not None:
         known = {entry.path.resolve() for entry in registry.projects.values()}
         for found in _real_folders(scan.resolve(), SCAN_DEPTH):
@@ -122,6 +115,15 @@ def doctor(
                 problems.append(
                     Problem(f"unmanaged store {found}; run: harness adopt {found.parent}")
                 )
+    for slug, ticket_id in waiting.dead_workers(paths):
+        if fix:
+            waiting.check_workers(paths)
+        hint = "marked failed" if fix else "run: harness doctor --fix"
+        problems.append(Problem(f"worker of {ticket_id} died; {hint}", slug, fix))
+    problems += [
+        Problem(check.message, warning=not check.blocking)
+        for check in providers.check_providers(paths)
+    ]
     return DoctorReport(len(registry.projects), problems)
 
 

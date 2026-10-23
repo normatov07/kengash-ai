@@ -80,5 +80,44 @@ class StorePaths:
     def locks(self) -> Path:
         return self.runtime / "locks"
 
+    @property
+    def slots(self) -> Path:
+        return self.runtime / "slots.json"
+
+    @property
+    def claims(self) -> Path:
+        return self.runtime / "claims.json"
+
+    @property
+    def workers(self) -> Path:
+        return self.runtime / "workers"
+
+    @property
+    def ticket_states(self) -> Path:
+        return self.runtime / "tickets"
+
+    @property
+    def conductors(self) -> Path:
+        return self.runtime / "conductors"
+
+    @property
+    def logs(self) -> Path:
+        return self.runtime / "logs"
+
+    @property
+    def worktrees(self) -> Path:
+        return self.home / "worktrees"
+
+    def worktree(self, slug: str, ticket_id: str) -> Path:
+        return self.worktrees / slug / f"hrn-{ticket_id}"
+
+    @property
+    def trust(self) -> Path:
+        return self.runtime / "trust.json"
+
+    @property
+    def flags(self) -> Path:
+        return self.runtime / "flags"
+
     def project(self, slug: str) -> ProjectPaths:
         return ProjectPaths(self.projects / slug)

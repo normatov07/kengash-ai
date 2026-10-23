@@ -1,6 +1,7 @@
 """Find plans and tickets across projects, describe bad input, and record each change."""
 
 import difflib
+import subprocess
 from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
@@ -136,3 +137,16 @@ def _only(kind: str, item_id: str, found: list[tuple[str, Path]]) -> tuple[str, 
         names = ", ".join(slug for slug, _ in found)
         raise UserError(f"{kind} {item_id} is in several projects ({names}); pass --project")
     return found[0]
+
+
+def repo_root(path: Path) -> Path:
+    """The git top-level that contains `path`, else `path` itself as an absolute path."""
+    if not path.is_dir():
+        raise UserError(f"not a folder: {path}")
+    result = subprocess.run(
+        ["git", "-C", str(path), "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return Path(result.stdout.strip()) if result.returncode == 0 else path.absolute()
