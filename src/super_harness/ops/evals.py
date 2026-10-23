@@ -8,7 +8,8 @@ import re
 import signal
 import subprocess
 import sys
-from collections.abc import Mapping
+import tempfile
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -20,8 +21,8 @@ from super_harness import journal
 from super_harness.adapters.base import positional
 from super_harness.adapters.env import worker_env
 from super_harness.adapters.process import run_process
-from super_harness.model import EvalScenario, Expect, RecordsExpect, UserError
-from super_harness.ops import records, skills
+from super_harness.model import EvalScenario, Expect, NeedsSetup, RecordsExpect, UserError
+from super_harness.ops import agents, records, skills
 from super_harness.store import runtime
 from super_harness.store.paths import StorePaths
 from super_harness.store.registry import load_registry
@@ -38,6 +39,9 @@ CHEAPEST: dict[str, str | None] = {
 CLAUDE_TOOLS = ("Read", "Grep", "Glob", "Bash(harness:*)")
 BIN = Path(sys.executable).parent  # this interpreter's console scripts, harness among them
 TAIL = 400
+
+
+AGENTS = ("claude", "codex", "antigravity")
 
 
 @dataclass
@@ -69,6 +73,53 @@ def scenarios(root: Path, skill: str | None) -> list[tuple[str, Path]]:
 def fill(text: str, values: Mapping[str, str]) -> str:
     """`text` with each `{name}` that `values` knows replaced."""
     return PLACEHOLDER.sub(lambda match: values.get(match.group(1), match.group(0)), text)
+
+
+def run_evals(
+    skill: str | None,
+    *,
+    agents_: Sequence[str] | None,
+    model: str | None,
+    baseline: bool,
+    root: Path = EVALS_DIR,
+    keep: Path | None = None,
+) -> tuple[list[EvalRun], Path]:
+    """Every scenario of `skill` (or of every skill) on each agent; the runs and the
+    folder that holds their transcripts."""
+    named = scenarios(root, skill)
+    chosen = _agents(agents_)
+    base = keep or Path(tempfile.mkdtemp(prefix="harness-eval-"))
+    runs: list[EvalRun] = []
+    for name, path in named:
+        scenario = load(path)
+        for agent in chosen:
+            work = base / f"{name.replace('/', '-')}-{agent}"
+            used = model or CHEAPEST[agent]
+            runs.append(
+                run_scenario(name, scenario, agent, work=work, model=used, baseline=baseline)
+            )
+    return runs, base
+
+
+def _agents(named: Sequence[str] | None) -> list[str]:
+    """The named agents, each installed and signed in; by default every usable one."""
+    with tempfile.TemporaryDirectory() as scratch:
+        detect = agents.detector(StorePaths(Path(scratch)))
+        if named is None:
+            usable = [agent for agent in AGENTS if detect(agent).usable]
+            if not usable:
+                raise NeedsSetup("no agent CLI is installed and signed in")
+            return usable
+        chosen: list[str] = []
+        for raw in named:
+            agent = skills.ALIASES.get(raw.strip(), raw.strip())
+            if agent not in AGENTS:
+                raise UserError(f"unknown agent {agent}; use claude, codex or antigravity")
+            problem = agents.problem(agent, detect)
+            if problem is not None:
+                raise NeedsSetup(problem)
+            chosen.append(agent)
+        return chosen
 
 
 def conductor_argv(agent: str, turn: str, *, model: str | None, session: str | None) -> list[str]:

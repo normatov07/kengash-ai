@@ -14,7 +14,7 @@ Typer command surface for `harness` (alias `hrn`): parses arguments and formats 
 - `harness plan new --title T --mode grill|direct|quick` (prompt on stdin), `plan save ID` (`## Section` Markdown on stdin), `plan show ID`, `plan review ID [--timeout 540]` (`plan <id> round r: pass|fail, N findings`, a `warning:` line when the review ran on the conductor's provider, then the findings; exit 3 on timeout, 5 once the rounds are used up), `plan approve ID [--skip-review]`, `plan reject ID --why W`; id commands take `--project/-p` to narrow the search.
 - `harness ticket add --plan ID [--file F]` (YAML or JSON list, else stdin), `ticket show ID`, `ticket list [--folder F]`, `ticket find TEXT`, `ticket set ID KEY=VALUE…`, `ticket move ID FOLDER[/SUB] --why W`, `status [--project SLUG]`; `list` and `find` cover the project here, else every project; `status` covers every project and prints at most 5 lines.
 - `harness next [--project SLUG]`: tickets that can start now, one `<id> <project> <importance> <step>→<provider> <title>` line each, at most 5; otherwise why nothing can run (`--json`: everything, reasons included).
-- `harness skills lint [PATH…]`: one `<path>: <problem>` line per problem, exit 1 when any; default targets are the packaged installed and role skills; the command tree comes from the Typer app (SP4 spec decision 7). `make lint` runs it. `harness skills install --agent A,… [--global] [--path DIR] [--cli-name N] [--yes]`: `<agent> <name>: installed|updated|unchanged|differs → <folder>` per skill (capped), then the diffs of skills that differ; exit 5 until `--yes`.
+- `harness skills lint [PATH…]`: one `<path>: <problem>` line per problem, exit 1 when any; default targets are the packaged installed and role skills; the command tree comes from the Typer app (SP4 spec decision 7). `make lint` runs it. `harness skills install --agent A,… [--global] [--path DIR] [--cli-name N] [--yes]`: `<agent> <name>: installed|updated|unchanged|differs → <folder>` per skill (capped), then the diffs of skills that differ; exit 5 until `--yes`. `harness skills eval [SKILL] [--all] [--agent A,…] [--model M] [--baseline] [--dir D] [--keep D]`: `<skill>/<scenario> <agent>: pass|fail: <reason>` per run, then `transcripts: <folder>`; exit 1 on a failure, 4 when a named agent is missing or signed out. `make evals` runs every scenario.
 - Commands that change state take `--by NAME` (default `$HARNESS_AGENT`); stdin must be piped, never a terminal.
 
 ## Invariants
@@ -25,6 +25,7 @@ Typer command surface for `harness` (alias `hrn`): parses arguments and formats 
 
 ## Changes
 
+- 2026-10-23: `skills eval` (SP4 M2).
 - 2026-10-23: `skills lint`, `skills install` (SP4 M1).
 - 2026-10-23: `memory compact`; `memory add` reports a background compaction (SP3 M4).
 - 2026-10-23: `plan review`; plan reviews in `wait` (SP3 M4).

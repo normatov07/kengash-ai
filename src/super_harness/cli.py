@@ -16,6 +16,7 @@ from super_harness.ops import (
     changes,
     compaction,
     controls,
+    evals,
     merging,
     plans,
     projects,
@@ -800,7 +801,7 @@ def ticket_attach(
     typer.echo(found.command)
 
 
-skills_app = typer.Typer(help="Skills: lint and install.", no_args_is_help=True)
+skills_app = typer.Typer(help="Skills: lint, install and eval.", no_args_is_help=True)
 app.add_typer(skills_app, name="skills")
 
 
@@ -875,3 +876,47 @@ def skills_install(
             f"{count} differ from the installed copies; rerun with --yes to replace them", err=True
         )
         raise typer.Exit(5)
+
+
+@skills_app.command("eval")
+def skills_eval(
+    skill: Annotated[str | None, typer.Argument(help="The skill whose scenarios to run.")] = None,
+    all_: Annotated[bool, typer.Option("--all", help="Every skill's scenarios.")] = False,
+    agent: Annotated[
+        str | None, typer.Option("--agent", help="claude, codex, antigravity; default: all usable.")
+    ] = None,
+    model: Annotated[
+        str | None, typer.Option("--model", help="Conductor model; default: the cheapest.")
+    ] = None,
+    baseline: Annotated[
+        bool, typer.Option("--baseline", help="Run without installing the skills (RED).")
+    ] = False,
+    folder: Annotated[
+        Path | None, typer.Option("--dir", help="Scenario folder; default: the checkout's evals/.")
+    ] = None,
+    keep: Annotated[
+        Path | None, typer.Option("--keep", help="Write each run's store and transcripts here.")
+    ] = None,
+    as_json: AsJson = False,
+) -> None:
+    """Replay eval scenarios headless on real agents; spends subscription quota."""
+    with _errors():
+        if skill is None and not all_:
+            raise UserError("name a skill, or pass --all")
+        runs, base = evals.run_evals(
+            None if all_ else skill,
+            agents_=agent.split(",") if agent else None,
+            model=model,
+            baseline=baseline,
+            root=folder or evals.EVALS_DIR,
+            keep=keep,
+        )
+    if as_json:
+        typer.echo(json.dumps([dataclasses.asdict(run) for run in runs], default=str, indent=2))
+    else:
+        for run in runs:
+            verdict = "pass" if run.passed else f"fail: {run.failure}"
+            typer.echo(f"{run.name} {run.agent}: {verdict}")
+        typer.echo(f"transcripts: {base}")
+    if not all(run.passed for run in runs):
+        raise typer.Exit(1)

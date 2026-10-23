@@ -47,7 +47,7 @@ Skills are built like code, test first (superpowers `writing-skills`):
 2. **GREEN**: write the smallest skill that makes the scenario pass.
 3. **REFACTOR**: find new loopholes, close them, re-run.
 
-`harness skills eval <skill> --agent claude,codex,antigravity` (sub-project 4) replays `evals/*.yaml` scenarios headless against a temporary store, so each skill is proven on every supported agent.
+`harness skills eval <skill> --agent claude,codex,antigravity` replays `evals/<skill>/*.yaml` scenarios headless against a temporary store, so each skill is proven on every supported agent; `--baseline` runs them without the skills for the RED step. The scenario format is in `evals/README.md`.
 
 ## Enforcement
 
