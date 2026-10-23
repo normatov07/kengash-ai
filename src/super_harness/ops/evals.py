@@ -214,6 +214,7 @@ def run_scenario(
         skills.install([agent], root=repo, source=source)
     session: str | None = None
     reply = ""
+    before = _changes(repo)  # installed skills are the runner's, not the conductor's
     try:
         for number, turn in enumerate(scenario.turns, 1):
             argv = conductor_argv(agent, fill(turn, values), model=model, session=session)
@@ -228,6 +229,9 @@ def run_scenario(
     finally:
         _stop_workers(paths)
     problem = check(scenario.expect, paths, slug, values, reply)
+    if problem is None and scenario.expect.clean:
+        changed = sorted(_changes(repo) - before)
+        problem = f"the repo has changes: {', '.join(changed)}" if changed else None
     return EvalRun(name, agent, problem is None, problem or "", work)
 
 
@@ -324,6 +328,18 @@ def _harness(
         timeout=300,
         check=False,
     )
+
+
+def _changes(repo: Path) -> set[str]:
+    """Paths `git status` reports in the scratch repo (its store link is excluded)."""
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return {line[3:] for line in status.stdout.splitlines() if line.strip()}
 
 
 def _stop_workers(paths: StorePaths) -> None:

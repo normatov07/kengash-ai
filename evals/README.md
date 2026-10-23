@@ -22,6 +22,7 @@ expect:
   tickets: {min: 2}
   memory: ["text MEMORY.md must hold"]
   reply: ["text the last reply must hold"]
+  clean: true                         # the conductor changes no file in the repo
 timeout_s: 900                        # per turn
 ```
 

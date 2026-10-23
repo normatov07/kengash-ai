@@ -31,6 +31,7 @@ class Expect(_Eval):
     memory: list[str] = Field(default_factory=list)  # text MEMORY.md must hold
     decisions: list[str] = Field(default_factory=list)
     reply: list[str] = Field(default_factory=list)  # text the last reply must hold
+    clean: bool = False  # the conductor leaves the repo's files alone
 
 
 class EvalScenario(_Eval):

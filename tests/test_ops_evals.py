@@ -224,3 +224,11 @@ def test_settings_and_turns_get_the_agent_placeholders(
     assert settings == "plan.reviewer: claude/haiku\n"
     assert fake_clis.calls("claude")[0]["argv"][1] == "/to-plan on claude haiku"
     assert evals.agent_values("codex", None) == {"agent": "codex", "model": "", "cli": "codex"}
+
+
+def test_a_clean_expectation_names_changed_files(
+    work: Path, source: Path, fake_clis: FakeClis
+) -> None:
+    fake_clis.queue("claude", stdout=claude_reply(), shell=f"{PLAN_NEW}\necho x > notes.md")
+    result = run(work, source, scenario(expect={"clean": True}))
+    assert (result.passed, result.failure) == (False, "the repo has changes: notes.md")
