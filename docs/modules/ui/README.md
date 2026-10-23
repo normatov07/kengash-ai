@@ -16,10 +16,11 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 
 - Imports only `ops` and `model` (import-linter); every action goes through `ops` with `by="ui"`.
 - No network fetches, no build step: the screens are static ES modules and one stylesheet.
-- Every `/api` request needs the run's token; foreign `Host` headers are refused; `POST` needs `X-Harness: 1`.
+- Every `/api` request needs the run's token; foreign `Host` and `Origin` headers are refused (system spec §10); `POST` needs `X-Harness: 1`.
 
 ## Changes
 
+- 2026-10-23: requests with a foreign `Origin` are refused (SP5 M2).
 - 2026-10-23: link health on the Memory screen, link banner on the Overview (system spec §4.2).
 - 2026-10-23: app shell, Overview and Task board (SP5 M1).
 - 2026-10-23: the `ui` unit and its layer contract (SP5 M1).

@@ -142,3 +142,22 @@ def test_stores_found_beside_registered_repos_are_listed(
         1,
         0,
     )
+
+
+def test_past_journal_days_are_parsed_once(
+    seeded: StorePaths, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parsed: list[str] = []
+    read_day = journal.read_day
+
+    def counting(path: Path) -> list[Event]:
+        parsed.append(path.stem)
+        return read_day(path)
+
+    monkeypatch.setattr(journal, "read_day", counting)
+    views.overview(seeded)
+    journal.append(seeded, Event(type="ticket.moved", project="payments-api", ticket="aaaaaaa2"))
+    tail = views.overview(seeded).tail
+    past = (utc_now() - timedelta(days=3)).date().isoformat()
+    assert parsed.count(past) == 1
+    assert tail[-1]["type"] == "ticket.moved" and tail[-1]["ticket"] == "aaaaaaa2"

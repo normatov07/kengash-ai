@@ -4,6 +4,7 @@ import json
 import os
 from collections.abc import Iterator
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 from super_harness.model import Event, JournalCursor
@@ -26,12 +27,20 @@ def append(paths: StorePaths, event: Event) -> None:
 
 def read(paths: StorePaths, since: date | None = None) -> Iterator[Event]:
     """Events in file order, starting at day `since` (inclusive)."""
-    for path in sorted(paths.journal.glob("*.jsonl")):
-        if since is not None and path.stem < since.isoformat():
-            continue
-        for line in path.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                yield Event.model_validate_json(line)
+    for path in days(paths):
+        if since is None or path.stem >= since.isoformat():
+            yield from read_day(path)
+
+
+def days(paths: StorePaths) -> list[Path]:
+    """The day files, oldest first."""
+    return sorted(paths.journal.glob("*.jsonl"))
+
+
+def read_day(path: Path) -> list[Event]:
+    """The events of one day file, in order."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return [Event.model_validate_json(line) for line in lines if line.strip()]
 
 
 def read_after(paths: StorePaths, cursor: JournalCursor) -> tuple[list[Event], JournalCursor]:

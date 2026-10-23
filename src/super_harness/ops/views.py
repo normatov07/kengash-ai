@@ -33,6 +33,7 @@ WAITING = ("waiting_slot", "waiting_quota", "paused")
 TAIL = 30
 NEARBY_DEPTH = 2  # levels below each registered repo's parent folder
 FRESH_PING = timedelta(minutes=10)
+_parsed: dict[Path, tuple[tuple[int, int], list[Event]]] = {}  # day file → (stat, events)
 COLUMNS = (
     ("in_queue", "In queue"),
     ("plan", "Planning"),
@@ -358,7 +359,22 @@ def _tickets(paths: StorePaths, project: str | None) -> list[tuple[str, Doc[Tick
 
 
 def _events(paths: StorePaths) -> list[Event]:
-    return list(journal.read(paths)) if paths.journal.is_dir() else []
+    """Every journal event; a day file is parsed again only once it has grown."""
+    if not paths.journal.is_dir():
+        return []
+    days = journal.days(paths)
+    for stale in [path for path in _parsed if path.parent == paths.journal]:
+        if stale not in days:
+            del _parsed[stale]
+    events: list[Event] = []
+    for path in days:
+        stat = path.stat()
+        key = (stat.st_size, stat.st_mtime_ns)
+        cached = _parsed.get(path)
+        if cached is None or cached[0] != key:
+            cached = _parsed[path] = (key, journal.read_day(path))
+        events += cached[1]
+    return events
 
 
 def _reasons(events: list[Event]) -> dict[str, str]:

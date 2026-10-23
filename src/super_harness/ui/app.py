@@ -57,6 +57,7 @@ def create_app(*, token: str, port: int) -> FastAPI:
     """The app for one server run: `token` guards every API call, `port` the Host check."""
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+    origins = [f"http://{host}" for host in sorted(hosts)]
 
     def authorized(request: Request) -> bool:
         given = request.cookies.get(COOKIE, "")
@@ -71,6 +72,8 @@ def create_app(*, token: str, port: int) -> FastAPI:
     ) -> Response:
         if request.headers.get("host", "") not in hosts:
             return PlainTextResponse("forbidden host", status_code=403)
+        if request.headers.get("origin", origins[0]) not in origins:
+            return PlainTextResponse("forbidden origin", status_code=403)
         if request.url.path.startswith("/api/"):
             if not authorized(request):
                 return JSONResponse({"error": "missing or wrong token"}, status_code=401)

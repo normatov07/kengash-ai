@@ -7,7 +7,7 @@ The append-only event log behind monitoring, the UI's live view and the audit tr
 ## Interface
 
 - `append(paths, event)`: one JSON line in `journal/YYYY-MM-DD.jsonl` (UTC day of `event.ts`).
-- `read(paths, since=None)` → `Event`s in file order, from day `since`.
+- `read(paths, since=None)` → `Event`s in file order, from day `since`; `days(paths)` → the day files, oldest first; `read_day(path)` → one day's events.
 - `read_after(paths, cursor)` → the events after a `JournalCursor` (day file and line) and the cursor at the end; `end(paths)` → the cursor after the last event. `harness wait` reports each event once this way.
 
 ## Invariants
@@ -18,5 +18,6 @@ The append-only event log behind monitoring, the UI's live view and the audit tr
 
 ## Changes
 
+- 2026-10-23: `days`, `read_day` (SP5 M2: the UI parses each past day once).
 - 2026-10-23: journal positions: `read_after`, `end` (SP3 M3).
 - 2026-10-22: append and read (SP2 M2).

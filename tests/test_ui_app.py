@@ -60,6 +60,15 @@ def test_posts_need_the_harness_header(client: TestClient) -> None:
     assert client.post("/api/resume", headers={"X-Harness": "1"}).json() == {"started": []}
 
 
+def test_a_foreign_origin_is_refused(client: TestClient) -> None:
+    signed_in(client)
+    evil = {"X-Harness": "1", "Origin": "http://evil.example"}
+    assert client.post("/api/pause", headers=evil).status_code == 403
+    own = {"X-Harness": "1", "Origin": f"http://127.0.0.1:{PORT}"}
+    assert client.post("/api/pause", headers=own).status_code == 200
+    assert client.post("/api/resume", headers={"X-Harness": "1"}).status_code == 200
+
+
 def test_overview_and_board_are_json(client: TestClient) -> None:
     signed_in(client)
     overview = client.get("/api/overview?window=7d").json()
