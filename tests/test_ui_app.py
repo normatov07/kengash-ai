@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
@@ -114,3 +115,30 @@ def test_the_overview_says_when_everything_is_paused(client: TestClient) -> None
     assert client.get("/api/overview").json()["paused"] is False
     client.post("/api/pause", headers=POST)
     assert client.get("/api/overview").json()["paused"] is True
+
+
+def test_link_health_and_its_actions(client: TestClient, registered_repo: Path) -> None:
+    signed_in(client)
+    assert client.get("/api/links").json()["intact"] == 1
+    (registered_repo / ".harness").unlink()
+    assert client.get("/api/links").json()["projects"][0]["fix"] == "repair"
+    repaired = client.post("/api/links/repair", headers=POST).json()
+    assert repaired["projects"][0]["state"] == "ok"
+    moved = registered_repo.with_name("moved")
+    registered_repo.rename(moved)
+    relinked = client.post(
+        "/api/links/relink", json={"project": "payments-api", "path": str(moved)}, headers=POST
+    ).json()
+    assert relinked["projects"][0]["repo"] == str(moved) and relinked["intact"] == 1
+
+
+def test_adopt_merges_a_found_store(client: TestClient, registered_repo: Path) -> None:
+    other = registered_repo.parent / "legacy-crm"
+    other.mkdir()
+    subprocess.run(["git", "init", "-q", str(other)], check=True)
+    (other / ".harness").mkdir()
+    signed_in(client)
+    assert [f["repo"] for f in client.get("/api/links").json()["nearby"]] == [str(other)]
+    adopted = client.post("/api/links/adopt", json={"path": str(other)}, headers=POST).json()
+    assert adopted["nearby"] == [] and adopted["total"] == 2
+    assert (other / ".harness").is_symlink()

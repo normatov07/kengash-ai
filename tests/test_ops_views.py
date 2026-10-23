@@ -101,3 +101,44 @@ def test_the_board_puts_cards_in_their_columns(seeded: StorePaths) -> None:
     card: Any = columns["implement"].cards[0]
     assert (card.added, card.removed, card.provider) == (130, 2, "codex")
     assert columns["in_queue"].cards[0].title == "<script>x</script>"  # escaped by the UI
+
+
+def test_links_report_each_projects_link_and_its_fix(
+    registered_repo: Path, store_paths: StorePaths, tmp_path: Path, run_git: Callable[..., str]
+) -> None:
+    healthy = views.links(store_paths)
+    (project,) = healthy.projects
+    assert (project.state, project.memory, project.excluded, project.fix) == ("ok", "ok", True, "")
+    assert (healthy.intact, healthy.total) == (1, 1)
+    assert project.link == str(registered_repo / ".harness")
+    (registered_repo / ".harness").unlink()
+    broken = views.links(store_paths).projects[0]
+    assert (broken.state, broken.fix, broken.hint) == ("missing", "repair", "harness doctor --fix")
+    (registered_repo / ".harness").mkdir()
+    real = views.links(store_paths).projects[0]
+    assert (real.state, real.fix) == ("real folder", "adopt")
+    assert real.hint == f"harness adopt {registered_repo}"
+
+
+def test_a_moved_repo_needs_a_relink(registered_repo: Path, store_paths: StorePaths) -> None:
+    registered_repo.rename(registered_repo.with_name("moved"))
+    moved = views.links(store_paths).projects[0]
+    assert (moved.state, moved.fix) == ("repo missing", "relink")
+    assert moved.hint == "harness link payments-api <new-path>"
+    assert views.overview(store_paths, window="today").links_broken == 1
+
+
+def test_stores_found_beside_registered_repos_are_listed(
+    registered_repo: Path, store_paths: StorePaths
+) -> None:
+    other = registered_repo.parent / "legacy-crm" / ".harness"
+    (other / "tasks" / "in_queue").mkdir(parents=True)
+    (other / "tasks" / "in_queue" / "aaaaaaa1.md").write_text("---\n---\n")
+    (other / "plans").mkdir()
+    (found,) = views.links(store_paths).nearby
+    assert (found.path, found.repo, found.tickets, found.plans) == (
+        str(other),
+        str(other.parent),
+        1,
+        0,
+    )

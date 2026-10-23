@@ -110,7 +110,7 @@ def doctor(
             problems.append(Problem(notice, slug, warning=True))
     if scan is not None:
         known = {entry.path.resolve() for entry in registry.projects.values()}
-        for found in _real_folders(scan.resolve(), SCAN_DEPTH):
+        for found in real_folders(scan.resolve(), SCAN_DEPTH):
             if found.parent not in known:
                 problems.append(
                     Problem(f"unmanaged store {found}; run: harness adopt {found.parent}")
@@ -242,7 +242,7 @@ def _fixable(message: str, slug: str, fixed: bool) -> Problem:
     return Problem(f"{message}; {hint}", slug, fixed)
 
 
-def _real_folders(root: Path, depth: int) -> list[Path]:
+def real_folders(root: Path, depth: int) -> list[Path]:
     """Real `.harness/` folders at most `depth` levels below `root`."""
     found: list[Path] = []
     pending = [(root, 0)]

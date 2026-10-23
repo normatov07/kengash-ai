@@ -4,6 +4,7 @@ the runtime files and the journal. Nothing here writes."""
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Literal
 
 from super_harness import __version__, journal, settings
@@ -19,8 +20,10 @@ from super_harness.model import (
     split_cli,
     utc_now,
 )
+from super_harness.ops import projects as project_ops
 from super_harness.ops import records
 from super_harness.ops.workspace import GATES
+from super_harness.store import links as store_links
 from super_harness.store import runtime
 from super_harness.store.paths import StorePaths
 from super_harness.store.registry import load_registry
@@ -28,6 +31,7 @@ from super_harness.store.registry import load_registry
 Window = Literal["today", "7d", "all"]
 WAITING = ("waiting_slot", "waiting_quota", "paused")
 TAIL = 30
+NEARBY_DEPTH = 2  # levels below each registered repo's parent folder
 FRESH_PING = timedelta(minutes=10)
 COLUMNS = (
     ("in_queue", "In queue"),
@@ -89,6 +93,7 @@ class Slot:
 class Overview:
     projects: list[str] = field(default_factory=list)
     paused: bool = False  # `harness pause` without a project
+    links_broken: int = 0  # projects whose folder or memory link needs a fix
     sessions: list[Session] = field(default_factory=list)
     queue: Counts = field(default_factory=Counts)
     gates: list[Gate] = field(default_factory=list)
@@ -129,10 +134,46 @@ class Board:
     columns: list[Column] = field(default_factory=list)
 
 
+@dataclass
+class ProjectLink:
+    """One project's view of the store (system spec §4.2): its repo's folder link, the
+    project's memory link and the exclude entry, and the one action that fixes them."""
+
+    project: str
+    repo: str
+    link: str
+    target: str
+    state: str
+    memory: str
+    excluded: bool | None
+    tickets: int
+    fix: Literal["", "repair", "relink", "adopt", "manual"]
+    hint: str
+
+
+@dataclass
+class FoundStore:
+    """A real `.harness/` folder beside a registered repo that the store does not know."""
+
+    path: str
+    repo: str
+    tickets: int
+    plans: int
+
+
+@dataclass
+class Links:
+    projects: list[ProjectLink] = field(default_factory=list)
+    nearby: list[FoundStore] = field(default_factory=list)
+    intact: int = 0
+    total: int = 0
+
+
 def overview(paths: StorePaths | None = None, *, window: Window = "today") -> Overview:
     """The Overview screen: what runs, what waits, what needs the user, what it cost."""
     paths = paths or StorePaths.default()
     found = Overview(projects=_projects(paths), paused=runtime.pause_state(paths).everything)
+    found.links_broken = sum(1 for link in links(paths, nearby=False).projects if link.fix)
     events = _events(paths)
     reasons = _reasons(events)
     for slug, doc in _tickets(paths, None):
@@ -209,6 +250,71 @@ def board(paths: StorePaths | None = None, *, project: str | None = None) -> Boa
     for column in columns.values():
         column.cards.sort(key=lambda card: (card.updated, card.id), reverse=column.key == "done")
     return Board(list(columns.values()))
+
+
+def links(paths: StorePaths | None = None, *, nearby: bool = True) -> Links:
+    """Link health for the Memory screen: every project's links and, with `nearby`, the real
+    `.harness/` folders beside registered repos."""
+    paths = paths or StorePaths.default()
+    found = Links()
+    if not paths.registry.exists():
+        return found
+    entries = load_registry(paths).projects
+    for slug, entry in sorted(entries.items()):
+        found.projects.append(_project_link(paths, slug, entry.path))
+    found.total = len(found.projects)
+    found.intact = sum(1 for link in found.projects if not link.fix)
+    if not nearby:
+        return found
+    known = {entry.path.resolve() for entry in entries.values()}
+    roots = {entry.path.resolve().parent for entry in entries.values()}
+    seen: set[Path] = set()
+    for root in sorted(roots):
+        for folder in project_ops.real_folders(root, NEARBY_DEPTH):
+            if folder.parent.resolve() in known or folder in seen:
+                continue
+            seen.add(folder)
+            tickets = len(list(folder.glob("tasks/*/*.md")))
+            found.nearby.append(
+                FoundStore(
+                    str(folder), str(folder.parent), tickets, len(list(folder.glob("plans/*.md")))
+                )
+            )
+    return found
+
+
+def _project_link(paths: StorePaths, slug: str, repo: Path) -> ProjectLink:
+    project = paths.project(slug)
+    tickets = len(list(project.root.glob("tasks/*/*.md")))
+    memory = store_links.state_of(project.memory_link, paths.memory).value
+    link = str(repo / store_links.LINK)
+    if not repo.is_dir():
+        hint = f"harness link {slug} <new-path>"
+        return ProjectLink(
+            slug,
+            str(repo),
+            link,
+            str(project.root),
+            "repo missing",
+            memory,
+            None,
+            tickets,
+            "relink",
+            hint,
+        )
+    state = store_links.link_state(repo, project.root)
+    excluded = store_links.is_excluded(repo)
+    fix: Literal["", "repair", "relink", "adopt", "manual"] = ""
+    hint = ""
+    if state is store_links.LinkState.real_dir:
+        fix, hint = "adopt", f"harness adopt {repo}"
+    elif state is store_links.LinkState.blocked or memory in ("real folder", "blocked by a file"):
+        fix, hint = "manual", "harness doctor"
+    elif state is not store_links.LinkState.ok or memory != "ok" or excluded is False:
+        fix, hint = "repair", "harness doctor --fix"
+    return ProjectLink(
+        slug, str(repo), link, str(project.root), state.value, memory, excluded, tickets, fix, hint
+    )
 
 
 def version() -> str:

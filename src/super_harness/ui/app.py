@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from super_harness.model import HarnessError, JournalCursor, NeedsSetup, NeedsUser
-from super_harness.ops import controls, merging, tickets, views
+from super_harness.ops import controls, merging, projects, tickets, views
 
 STATIC = Path(__file__).parent / "static"
 COOKIE = "harness_token"
@@ -40,6 +40,13 @@ class Action(BaseModel):
     tokens: int | None = None
     why: str = ""
     to: str = ""
+
+
+class LinkAction(BaseModel):
+    """The body of a link action: the project to re-link, or the folder to adopt."""
+
+    project: str = ""
+    path: str = ""
 
 
 class Connection(Protocol):
@@ -128,6 +135,25 @@ def create_app(*, token: str, port: int) -> FastAPI:
         if action == "move":
             return tickets.move_ticket(ticket_id, body.to, body.why, project=None, by=BY)
         raise HTTPException(status_code=404, detail=f"unknown action {action}")
+
+    @app.get("/api/links")
+    def link_health() -> views.Links:
+        return views.links()
+
+    @app.post("/api/links/repair")
+    def repair_links() -> views.Links:
+        projects.doctor(fix=True)  # what `harness doctor --fix` does, links included
+        return views.links()
+
+    @app.post("/api/links/relink")
+    def relink(body: LinkAction) -> views.Links:
+        projects.relink(body.project, Path(body.path).expanduser())
+        return views.links()
+
+    @app.post("/api/links/adopt")
+    def adopt(body: LinkAction) -> views.Links:
+        projects.adopt(Path(body.path).expanduser())
+        return views.links()
 
     @app.get("/api/events")
     def events(request: Request) -> StreamingResponse:

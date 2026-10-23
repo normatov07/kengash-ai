@@ -10,7 +10,7 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 - `app.create_app(token=, port=)`: `GET /` (`?token=` sets an `HttpOnly`, `SameSite=Strict` cookie and redirects to `/`; otherwise 401 without it), `/static/*`, `GET /api/overview?window=today|7d|all`, `GET /api/board?project=`, `POST /api/pause|resume?project=`, `POST /api/tickets/{id}/approve|park|run|stop|merge|move` (body `{loops, tokens, why, to}`; each action reads what it needs), `GET /api/events` (SSE `event: journal` per new journal line, `: ping` every 15 s; `app.event_stream`). Harness errors come back as `{"error": …}`: 400, or 409 for setup and user decisions.
 
 - `static/`: `index.html`, `app.css` (the canvas tokens), `app.js` (sidebar with counts and the CLI pool, top bar with project filter, search and the `/to-ticket` and `/to-loop` hints, hash routes, refresh on journal events), `api.js`, `html.js` (templates that escape every value), `format.js`, `views/overview.js`, `views/board.js`. Other routes show a placeholder until M2.
-- `GET /api/meta` → `{version}`.
+- `GET /api/meta` → `{version}`. `GET /api/links` (link health); `POST /api/links/repair` (`harness doctor --fix`), `POST /api/links/relink` `{project, path}`, `POST /api/links/adopt` `{path}`; each answers with the new link health.
 
 ## Invariants
 
