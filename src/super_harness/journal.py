@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from datetime import date
 from typing import Any
 
-from super_harness.model import Event
+from super_harness.model import Event, JournalCursor
 from super_harness.store.paths import StorePaths
 from super_harness.store.redact import redact
 
@@ -32,6 +32,28 @@ def read(paths: StorePaths, since: date | None = None) -> Iterator[Event]:
         for line in path.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 yield Event.model_validate_json(line)
+
+
+def read_after(paths: StorePaths, cursor: JournalCursor) -> tuple[list[Event], JournalCursor]:
+    """Events written after `cursor`, in order, and the cursor at the journal's end."""
+    events: list[Event] = []
+    for path in sorted(paths.journal.glob("*.jsonl")):
+        if path.stem < cursor.day:
+            continue
+        lines = path.read_text(encoding="utf-8").splitlines()
+        skip = cursor.line if path.stem == cursor.day else 0
+        events += [Event.model_validate_json(line) for line in lines[skip:] if line.strip()]
+        cursor = JournalCursor(day=path.stem, line=len(lines))
+    return events, cursor
+
+
+def end(paths: StorePaths) -> JournalCursor:
+    """The position after the last event written so far."""
+    days = sorted(paths.journal.glob("*.jsonl"))
+    if not days:
+        return JournalCursor()
+    last = days[-1]
+    return JournalCursor(day=last.stem, line=len(last.read_text(encoding="utf-8").splitlines()))
 
 
 def _scrub(value: Any) -> Any:

@@ -89,6 +89,29 @@ class StorePaths:
         return self.runtime / "claims.json"
 
     @property
+    def workers(self) -> Path:
+        return self.runtime / "workers"
+
+    @property
+    def ticket_states(self) -> Path:
+        return self.runtime / "tickets"
+
+    @property
+    def conductors(self) -> Path:
+        return self.runtime / "conductors"
+
+    @property
+    def logs(self) -> Path:
+        return self.runtime / "logs"
+
+    @property
+    def worktrees(self) -> Path:
+        return self.home / "worktrees"
+
+    def worktree(self, slug: str, ticket_id: str) -> Path:
+        return self.worktrees / slug / f"hrn-{ticket_id}"
+
+    @property
     def trust(self) -> Path:
         return self.runtime / "trust.json"
 

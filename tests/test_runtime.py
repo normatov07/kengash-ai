@@ -2,7 +2,16 @@ from datetime import UTC, datetime
 
 import pytest
 
-from super_harness.model import Claims, HarnessError, SlotEntry, SlotTable
+from super_harness.model import (
+    Claims,
+    HarnessError,
+    JournalCursor,
+    SlotEntry,
+    SlotTable,
+    TicketState,
+    Usage,
+    WorkerRecord,
+)
 from super_harness.store import StorePaths, runtime
 
 NOW = datetime(2026, 10, 22, 9, 41, tzinfo=UTC)
@@ -36,3 +45,34 @@ def test_a_damaged_runtime_file_names_itself(store_paths: StorePaths) -> None:
     store_paths.slots.write_text("{", encoding="utf-8")
     with pytest.raises(HarnessError, match=r"slots\.json: damaged runtime file"):
         runtime.load_slots(store_paths)
+
+
+def test_worker_records_beat_and_drop(store_paths: StorePaths) -> None:
+    runtime.save_worker(store_paths, WorkerRecord(id="7b55e0c1", project="payments-api", pid=4242))
+    before = runtime.load_worker(store_paths, "7b55e0c1")
+    assert before is not None and before.step is None
+    runtime.set_worker_step(store_paths, "7b55e0c1", "implement")
+    runtime.beat(store_paths, "7b55e0c1")
+    after = runtime.load_worker(store_paths, "7b55e0c1")
+    assert after is not None and after.step == "implement" and after.heartbeat >= before.heartbeat
+    assert [w.id for w in runtime.load_workers(store_paths)] == ["7b55e0c1"]
+    runtime.drop_worker(store_paths, "7b55e0c1")
+    runtime.beat(store_paths, "7b55e0c1")
+    assert runtime.load_worker(store_paths, "7b55e0c1") is None
+
+
+def test_ticket_state_park_flags_and_cursors(store_paths: StorePaths) -> None:
+    assert runtime.load_ticket_state(store_paths, "7b55e0c1") == TicketState()
+    state = TicketState(plan_rounds=1, totals={"doc-writer": Usage(input=5)})
+    runtime.save_ticket_state(store_paths, "7b55e0c1", state)
+    assert runtime.load_ticket_state(store_paths, "7b55e0c1") == state
+    runtime.set_park(store_paths, "7b55e0c1", on=True)
+    assert runtime.park_requested(store_paths, "7b55e0c1")
+    runtime.set_park(store_paths, "7b55e0c1", on=False)
+    assert not runtime.park_requested(store_paths, "7b55e0c1")
+    assert runtime.load_cursor(store_paths, "all") is None
+    runtime.save_cursor(store_paths, "all", JournalCursor(day="2026-10-23", line=4))
+    assert runtime.load_cursor(store_paths, "all") == JournalCursor(day="2026-10-23", line=4)
+    assert store_paths.worktree("payments-api", "7b55e0c1") == (
+        store_paths.home / "worktrees" / "payments-api" / "hrn-7b55e0c1"
+    )
