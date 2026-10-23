@@ -64,9 +64,9 @@ Each milestone is planned just before it is built, ends green on `make check`, a
 
 ## 6. Acceptance (SP4 exit)
 
-- [ ] `harness skills lint` is clean on `skills/` and `src/super_harness/roles/`, and runs in `make check`.
-- [ ] `harness skills install` writes each agent's folders, is idempotent, shows diffs before replacing, and `--cli-name hrn` rewrites commands; `harness doctor` reports a foreign `harness` on `PATH`.
-- [ ] Workers inject packaged role skills unless the defaults or the project override them.
-- [ ] `claude plugin validate .` and `agy plugin validate .` pass.
-- [ ] Every eval scenario fails without its skill and passes with it, on claude and agy; codex once installed.
-- [ ] Module docs for the new units; `make check` green.
+- [x] `harness skills lint` is clean on `skills/` and `src/super_harness/roles/`, and runs in `make check`. (M1)
+- [x] `harness skills install` writes each agent's folders, is idempotent, shows diffs before replacing, and `--cli-name hrn` rewrites commands; `harness doctor` reports a foreign `harness` on `PATH`. (M1)
+- [x] Workers inject packaged role skills unless the defaults or the project override them. (M1)
+- [x] `claude plugin validate .` and `agy plugin validate .` pass (agy loads all five skills). (M1, M3)
+- [x] Every eval scenario passes with its skill on claude and agy (`make evals`, 10/10 on 2026-10-23); without it, every scenario fails on claude, while agy found `harness` on its own for `harness-memory`, `to-ticket` and `to-loop` (each scenario's `notes:`). Codex once installed. (M3)
+- [x] Module docs for the new units; `make check` green. (M3)
