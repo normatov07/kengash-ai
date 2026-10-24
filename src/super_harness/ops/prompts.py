@@ -3,7 +3,16 @@
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 
-from super_harness.model import Finding, OutputKind, Profile, Ticket
+from super_harness.model import (
+    PLAN_SECTIONS,
+    Finding,
+    OutputKind,
+    Plan,
+    Profile,
+    ReviewOutput,
+    Ticket,
+)
+from super_harness.ops import skills
 from super_harness.store.paths import StorePaths
 from super_harness.store.redact import redact
 
@@ -25,6 +34,12 @@ INSTRUCTIONS = {
     "docs": "Update the docs for the branch's changes. Do not commit; harness commits.",
 }
 REPLY = "Reply with JSON that matches the schema."
+PLAN_REVIEW = (
+    "Review this plan against the user's Prompt and the code in this directory, read-only. "
+    "Fail only for real gaps: a missed requirement, a wrong assumption, or a design that is "
+    "unsafe or cannot be tested. For a finding about the plan itself, set file to its "
+    "section name and line to 0."
+)
 
 
 def output_kind(step: str) -> OutputKind:
@@ -72,6 +87,51 @@ def resumed_prompt(
     return _join(head, blocks, None)
 
 
+def plan_review_prompt(
+    plan: Plan, sections: Mapping[str, str], decisions: str, *, round: int, resumed: bool
+) -> str:
+    """A plan-review round: the whole plan inline; a new session also gets the decision log,
+    a resumed one the Review log (SP3 spec decision 29)."""
+    of = f"round {round} of {plan.review.max}"
+    if resumed:
+        head = f"Round {round} of {plan.review.max}: the planner revised the plan. {PLAN_REVIEW}"
+        blocks = [(name, sections.get(name, "")) for name in PLAN_SECTIONS]
+    else:
+        head = f'You are the plan-reviewer for plan {plan.id} "{plan.title}", {of}.\n{PLAN_REVIEW}'
+        blocks = [(name, sections.get(name, "")) for name in PLAN_SECTIONS if name != "Review log"]
+        blocks.append(("Decisions log", decisions))
+    return _join(head, blocks, REPLY)
+
+
+def review_log_lines(round: int, output: ReviewOutput) -> list[str]:
+    """A round's Review log lines: a pass line, then one line per finding."""
+    lines = (
+        [f"- round {round} · pass · {_flat(output.summary)}"] if output.verdict == "pass" else []
+    )
+    lines += [
+        f"- round {round} · {f.severity} · {f.file or '-'}:{f.line} · {_flat(f.issue)} · "
+        f"{_flat(f.fix)}"
+        for f in output.findings
+    ]
+    return [redact(line) for line in lines]
+
+
+def compact_prompt(text: str, *, cap: int) -> str:
+    """The compactor's prompt: MEMORY.md inline and the rules its result must meet."""
+    target = cap * 3 // 4
+    return (
+        "You compact MEMORY.md, the user's global memory for coding agents: "
+        f"{len(text.splitlines())} lines, cap {cap}.\n"
+        f"Rewrite it in at most {target} lines: merge duplicates, drop stale or superseded "
+        "facts, and keep one fact per line of about 20 words.\n"
+        "Keep the title, the intro paragraph and every '## ' heading. Keep every entry "
+        "marked (pin) exactly as it is.\n"
+        "Everything you need is below: use no tools, read and write no files, and return "
+        "the whole new file as text.\n\n"
+        f"MEMORY.md:\n```markdown\n{text.rstrip(chr(10))}\n```\n\n{REPLY}"
+    )
+
+
 def repair_prompt(problem: str) -> str:
     return (
         f"Your last reply failed: {problem}\n"
@@ -100,12 +160,12 @@ def log_line(
 
 
 def role_skill(paths: StorePaths, slug: str, skill: str) -> str | None:
-    """The role skill: the project's `roles/`, then `defaults/roles/` (package roles: SP4)."""
-    for folder in (paths.project(slug).root / "roles", paths.defaults / "roles"):
-        path = folder / f"{skill}.md"
-        if path.is_file():
-            return path.read_text(encoding="utf-8")
-    return None
+    """The role skill's body: project `roles/`, then `defaults/roles/`, then the package."""
+    return skills.role_text(paths, slug, skill)
+
+
+def _flat(text: str) -> str:
+    return " ".join(text.split())
 
 
 def _join(head: str, blocks: Sequence[tuple[str, str]], tail: str | None) -> str:

@@ -14,7 +14,8 @@ from super_harness.model.documents import (
     Ticket,
     TicketInput,
 )
-from super_harness.model.errors import HarnessError, NeedsSetup, NeedsUser, UserError
+from super_harness.model.errors import HarnessError, NeedsSetup, NeedsUser, UserError, WaitTimeout
+from super_harness.model.evals import EvalScenario, Expect, RecordsExpect, SetupStep
 from super_harness.model.events import Event
 from super_harness.model.registry import ProjectEntry, Registry
 from super_harness.model.runtime import (
@@ -26,6 +27,7 @@ from super_harness.model.runtime import (
     SlotTable,
     TicketState,
     Trust,
+    UiRecord,
     WorkerRecord,
 )
 from super_harness.model.settings import (
@@ -37,6 +39,7 @@ from super_harness.model.settings import (
     Workflow,
     split_cli,
 )
+from super_harness.model.skills import SkillMeta
 from super_harness.model.steps import (
     OUTPUT_SCHEMAS,
     CompactOutput,
@@ -67,7 +70,9 @@ __all__ = [
     "ConductorPing",
     "Doc",
     "ErrorKind",
+    "EvalScenario",
     "Event",
+    "Expect",
     "Finding",
     "Folder",
     "Gate",
@@ -84,13 +89,16 @@ __all__ = [
     "ProjectEntry",
     "ProviderOptions",
     "ProviderStatus",
+    "RecordsExpect",
     "Registry",
     "Review",
     "ReviewOutput",
     "Running",
     "SessionRef",
     "Settings",
+    "SetupStep",
     "ShortId",
+    "SkillMeta",
     "SlotEntry",
     "SlotTable",
     "StepOutput",
@@ -101,8 +109,10 @@ __all__ = [
     "TicketState",
     "Title",
     "Trust",
+    "UiRecord",
     "Usage",
     "UserError",
+    "WaitTimeout",
     "WorkOutput",
     "WorkerRecord",
     "Workflow",

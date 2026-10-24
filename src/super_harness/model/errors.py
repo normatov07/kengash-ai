@@ -21,3 +21,9 @@ class NeedsUser(HarnessError):
     """A decision only the user can make."""
 
     exit_code = 5
+
+
+class WaitTimeout(HarnessError):
+    """A wait ran out of time; the work it waited for goes on."""
+
+    exit_code = 3

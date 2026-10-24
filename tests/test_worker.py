@@ -1,14 +1,16 @@
 """Detached workers: real processes running a ticket's steps with the fake CLIs."""
 
 import subprocess
+import sys
 import time
 from collections.abc import Callable
+from pathlib import Path
 
 from conftest import Engine, FakeClis
 
-from super_harness.model import WorkerRecord
-from super_harness.ops import controls
-from super_harness.store import runtime
+from super_harness.model import PlanMode, PlanStatus, WorkerRecord
+from super_harness.ops import controls, plans, records
+from super_harness.store import StorePaths, documents, runtime
 
 
 def wait_until(check: Callable[[], bool], within: float = 20.0) -> None:
@@ -40,3 +42,28 @@ def test_stop_ends_the_worker_and_its_cli(engine: Engine, fake_clis: FakeClis) -
     assert (
         subprocess.run(["pgrep", "-f", "fake_cli.py claude"], capture_output=True).returncode == 1
     )
+
+
+def test_the_worker_runs_a_plan_review(
+    registered_repo: Path, store_paths: StorePaths, fake_clis: FakeClis
+) -> None:
+    made = plans.new_plan(
+        "Rotate keys.",
+        title="Rotatable keys",
+        mode=PlanMode.direct,
+        project=None,
+        cwd=registered_repo,
+        by="user",
+    )
+    plans.save_plan(made.id, "## Goal\nKeys rotate.\n", project=None, by="user")
+    _, path = records.locate_plan(store_paths, made.id, None)
+    doc = records.load_plan(path)
+    doc.meta.status, doc.meta.review.reviewer = PlanStatus.in_review, "claude"
+    documents.save_plan(store_paths.project("payments-api"), doc)
+    review = {"verdict": "pass", "summary": "Fine.", "findings": []}
+    fake_clis.queue("claude", stdout=fake_clis.claude_output(review))
+    worker = [sys.executable, "-m", "super_harness.worker", "plan-review", made.id]
+    done = subprocess.run([*worker, "--project", "payments-api"], capture_output=True, text=True)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert done.stdout == f"{made.id}: round 1 pass\n"
+    assert records.load_plan(path).meta.review.round == 1

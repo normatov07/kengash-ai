@@ -117,6 +117,18 @@ Settings values and role skills resolve project → defaults → package built-i
 | `harness link <slug> <new-path>` | Re-points a moved project. |
 | `harness adopt <path>` | Imports a real `.harness/` folder: plans and tickets merge by uuid (on conflict the newer `updated` wins and the other copy goes to `archive/`), then the folder is replaced by the symlink. |
 
+**Why one directory symlink, not hard links.** The original request asks for memory and tasks "hard linked" into each project "so we may work in both places at once", and for a broken link, or a project folder that kept its own copy, to be linked back "both sides". Those goals are the contract; the mechanism is chosen to meet them:
+
+| Goal | Per-file hard links | One directory symlink per project |
+|---|---|---|
+| One canonical store the OS can reach | yes | yes |
+| Both paths show the same files, new ones included | no: directories cannot be hard-linked, so new plans and tickets never reach the repo | yes: the repo path is the store directory |
+| Edits from either side survive | no: atomic saves (write, then rename) and status moves (`in_queue/` → `in_process/`) give the store file a new inode while the repo keeps the old one | yes: both paths resolve to the same file |
+| Repos on another disk | no: hard links cannot cross filesystems | yes |
+| Repair and recovery both ways | relink every file by hand | `doctor --fix` re-creates the link, `harness link` follows a moved repo, `adopt` merges a project's own `.harness/` folder into the store and links it |
+
+Also rejected: bind mounts (root, not persistent), a two-way sync daemon (hard rule 7; two copies drift), and a store that points into the repos (moving a repo would break the store). Two links make the whole view: `<repo>/.harness -> <store>/projects/<slug>` and, inside it, `memory -> ../../memory` for the global MEMORY.md and DECISIONS.md; `doctor` checks and repairs both. `git clean -x` removes the repo link, never the store's files. Windows needs symlink rights (developer mode) or a directory junction; it is not a supported host yet. User-facing text calls them folder links.
+
 ### 4.3 Write discipline
 
 - Only harness writes store files. Agents change state through harness commands, or by returning JSON that harness records.
@@ -340,7 +352,7 @@ One JSON object per line in `journal/YYYY-MM-DD.jsonl`:
 {"ts":"2026-10-22T12:04:11Z","type":"step.end","project":"payments-api","ticket":"4f2a1b7c","step":"implement","role":"implementer","provider":"codex","model":"default","session":"019a…","loop":2,"verdict":"pass","tokens":{"in":12000,"out":3400,"cache_read":80000},"duration_s":252,"files":3,"added":128,"removed":14,"commit":"abc1234"}
 ```
 
-Types: `plan.created`, `plan.saved`, `plan.reviewed`, `plan.approved`, `plan.rejected`, `ticket.created`, `ticket.claimed`, `step.start`, `step.end`, `ticket.recirculated`, `ticket.needs_approval`, `ticket.approved`, `ticket.stalled`, `ticket.failed`, `ticket.awaiting_merge`, `ticket.merged`, `ticket.moved`, `ticket.updated`, `ticket.paused`, `ticket.resumed`, `ticket.stopped`, `memory.write`, `session.created`, `session.resumed`, `worker.started`, `worker.exited`, `settings.changed`, `link.broken`, `link.repaired`, `link.adopted`. Secrets are redacted before writing.
+Types: `plan.created`, `plan.saved`, `plan.reviewed`, `plan.approved`, `plan.rejected`, `ticket.created`, `ticket.claimed`, `step.start`, `step.end`, `ticket.recirculated`, `ticket.needs_approval`, `ticket.approved`, `ticket.stalled`, `ticket.failed`, `ticket.awaiting_merge`, `ticket.merged`, `ticket.moved`, `ticket.updated`, `ticket.paused`, `ticket.resumed`, `ticket.stopped`, `memory.write`, `memory.compacted`, `session.created`, `session.resumed`, `worker.started`, `worker.exited`, `settings.changed`, `link.broken`, `link.repaired`, `link.adopted`. Secrets are redacted before writing.
 
 ## 7. Workers and provider adapters
 
@@ -534,5 +546,5 @@ super-harness/
 |---|---|---|
 | 2 Store + CLI | `model`, `store`, `settings`, `memory`, `journal`, `ops` (store-only use cases); init, doctor, link, adopt; plan, ticket, memory, status and context commands | plans and tickets fully manageable from the CLI; links survive project moves; adopt merges correctly |
 | 3 Engine | `adapters`, `workflow`, `scheduler`, `gitops`, `worker`; next, run, wait, approve, park, stop, pause, resume, merge; plan review and compaction jobs | integration lifecycle green with fakes; live smoke green per installed provider |
-| 4 Skills | six installed skills, seven role skills, installer, plugin manifests, lint, eval | evals pass on claude, codex and agy |
-| 5 UI | FastAPI, SSE, seven screens; `open-ui` | canvas parity checklist complete; live updates; every action goes through `ops` |
+| 4 Skills | five installed skills (`open-ui` ships with SP5), seven role skills, installer, plugin manifests, lint, eval | evals pass on claude, codex and agy |
+| 5 UI | FastAPI, SSE, seven screens; the `open-ui` skill | canvas parity checklist complete; live updates; every action goes through `ops` |

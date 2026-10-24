@@ -1,0 +1,19 @@
+skill: to-plan
+description: a direct plan from a one-line request, reviewed, then approved by the user
+notes: >-
+  RED 2026-10-23: claude (haiku) tried to edit calc.py and stopped at the denied write; agy
+  loaded the user's own global writing-plans skill and wrote docs/ into the repo. Neither
+  created a harness plan. REFACTOR: claude (haiku) chained ls and cat in one shell call, was
+  denied, then never ran harness; the skill now reads with file tools and keeps the shell
+  for harness commands.
+files:
+  calc.py: "\"\"\"Small arithmetic helpers.\"\"\"\n\n\ndef sub(a: int, b: int) -> int:\n    return a - b\n"
+settings: "plan.reviewer: {cli}\nplan.review_max: 1\n"
+turns:
+  - "/to-plan Add an add(a, b) function to calc.py"
+  - "Approve it."
+expect:
+  journal: [plan.created, plan.saved, plan.reviewed, plan.approved]
+  plans: {count: 1, fields: {mode: direct, status: approved}}
+  clean: true
+timeout_s: 900

@@ -2,13 +2,15 @@
 
 super-harness lets one developer run many projects at once with the coding-agent subscriptions they already have (Claude Code, Codex, Antigravity `agy`; Gemini CLI optional), driven through the official CLIs, never API keys. Skills installed into the user's agent conduct the work, the deterministic `harness` CLI does every mechanical step, and a local UI monitors it all.
 
-Status: sub-projects 1–2 of 5 done (Foundation; Store + `harness` CLI): `harness init|doctor|link|adopt|settings|memory|context|plan|ticket|status|next|run|wait|approve|park|stop|pause|resume|merge` work; sub-project 3 (Engine) in progress: M1–M3 built (rules, providers, git, workers); M4 plan review, compaction and live smoke next. `docs/architecture.md` tracks what is built.
+Status: all 5 sub-projects done (Foundation; Store + `harness` CLI; Engine; Skills; Web UI): `harness init|doctor|link|adopt|settings|memory|context|plan|ticket|status|next|run|wait|approve|park|stop|pause|resume|merge|skills|ui` work, with detached workers, plan review, memory compaction, role skills, six installed skills (`skills/`, proven by `evals/`), and the local web UI (`harness ui open`, seven screens matching the canvas). `docs/architecture.md` tracks what is built.
 
 ## Commands
 
 - `make setup`: install the uv environment and git hooks
 - `make check`: everything CI runs (format, lint, types, tests, docs checks)
 - `make fmt`: format and auto-fix
+- `make live`: live smoke on the real provider CLIs (spends subscription quota; never in `make check`)
+- `make evals`: every skill scenario on every installed agent (spends quota; never in `make check`)
 - One test: `uv run pytest tests/test_cli.py::test_version_names_the_package`
 - `make docs DOCS_BASE=origin/main`: docs checks against another base
 

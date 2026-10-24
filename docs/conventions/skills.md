@@ -47,7 +47,7 @@ Skills are built like code, test first (superpowers `writing-skills`):
 2. **GREEN**: write the smallest skill that makes the scenario pass.
 3. **REFACTOR**: find new loopholes, close them, re-run.
 
-`harness skills eval <skill> --agent claude,codex,antigravity` (sub-project 4) replays `evals/*.yaml` scenarios headless against a temporary store, so each skill is proven on every supported agent.
+`harness skills eval <skill> --agent claude,codex,antigravity` replays `evals/<skill>/*.yaml` scenarios headless against a temporary store, so each skill is proven on every supported agent; `--baseline` runs them without the skills for the RED step. The scenario format is in `evals/README.md`.
 
 ## Enforcement
 
@@ -62,3 +62,7 @@ Skills are built like code, test first (superpowers `writing-skills`):
 | Claude and Codex plugin marketplaces | managed by the agent, with auto-update |
 
 Role skills are never installed into agents: `harness` injects them into worker sessions.
+
+- Format: `src/super_harness/roles/<role>/SKILL.md` with `name` and `description`; workers get the body without the frontmatter.
+- Lookup: `projects/<slug>/roles/<role>/SKILL.md`, then `defaults/roles/` (seeded by `harness init`, never overwritten), then the package.
+- Install folders: claude `.claude/skills/`, codex and antigravity `.agents/skills/` in a repo; with `--global`, `~/.claude/skills/`, `~/.agents/skills/` and `~/.gemini/config/skills/`. Antigravity reads its plugin manifest from `.antigravity-plugin/plugin.json`.

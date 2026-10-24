@@ -53,7 +53,12 @@ class Grill(_Section):
 
 class PlanReview(_Section):
     review_max: int = Field(2, ge=0)
-    reviewer: str = "different-provider"
+    reviewer: str = "different-provider"  # or provider[/model]
+
+    @field_validator("reviewer")
+    @classmethod
+    def _reviewer(cls, value: str) -> str:
+        return value if value == "different-provider" else _known(value)
 
 
 def _default_slots() -> dict[str, NonNegativeInt]:

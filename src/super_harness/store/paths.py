@@ -105,6 +105,10 @@ class StorePaths:
         return self.runtime / "logs"
 
     @property
+    def ui_file(self) -> Path:
+        return self.runtime / "ui.json"
+
+    @property
     def worktrees(self) -> Path:
         return self.home / "worktrees"
 

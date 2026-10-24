@@ -4,9 +4,9 @@ from typing import Any
 
 import pytest
 
-from super_harness.model import NeedsUser, PlanMode, UserError
-from super_harness.ops import plans
-from super_harness.store import StorePaths
+from super_harness.model import NeedsUser, PlanMode, PlanStatus, UserError
+from super_harness.ops import plans, records
+from super_harness.store import StorePaths, documents
 
 PROMPT = "Make webhook keys rotatable.\n## Goal\nas the user typed it\n"
 Events = Callable[[], list[dict[str, Any]]]
@@ -140,3 +140,33 @@ def test_unknown_plans_and_projects(registered_repo: Path) -> None:
         plans.show_plan("deadbeef", project=None)
     with pytest.raises(UserError, match="unknown project: nope"):
         plans.show_plan("deadbeef", project="nope")
+
+
+def reviewed(store_paths: StorePaths, plan_id: str, round: int, verdict: str | None) -> None:
+    _, path = records.locate_plan(store_paths, plan_id, None)
+    doc = records.load_plan(path)
+    doc.meta.status = PlanStatus.in_review
+    doc.meta.review.round, doc.meta.review.verdict = round, verdict  # type: ignore[assignment]
+    documents.save_plan(store_paths.project("payments-api"), doc)
+
+
+def test_approve_refuses_a_failed_round_with_rounds_left(
+    store_paths: StorePaths, registered_repo: Path
+) -> None:
+    plan_id = new(registered_repo)
+    reviewed(store_paths, plan_id, 1, "fail")
+    with pytest.raises(NeedsUser, match="failed review round 1 of 2"):
+        plans.approve_plan(plan_id, skip_review=False, project=None, by="x")
+    skipped = plans.approve_plan(plan_id, skip_review=True, project=None, by="x")
+    assert skipped.review_skipped is True
+
+
+def test_approve_accepts_a_pass_or_used_up_rounds(
+    store_paths: StorePaths, registered_repo: Path
+) -> None:
+    passed, used_up = new(registered_repo), new(registered_repo)
+    reviewed(store_paths, passed, 1, "pass")
+    reviewed(store_paths, used_up, 2, None)  # saved again after the last round failed
+    for plan_id in (passed, used_up):
+        result = plans.approve_plan(plan_id, skip_review=False, project=None, by="x")
+        assert (result.status, result.review_skipped) == ("approved", False)

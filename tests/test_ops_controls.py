@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 from conftest import Engine, Events, FakeClis
-from super_harness.ops.controls import Paused, Resumed, Started
 
 from super_harness.model import (
     Doc,
@@ -17,6 +16,7 @@ from super_harness.model import (
     WorkerRecord,
 )
 from super_harness.ops import controls
+from super_harness.ops.controls import Paused, Resumed, Started
 from super_harness.store import StorePaths, documents, runtime
 
 Make = Callable[..., Doc[Ticket]]
@@ -136,3 +136,24 @@ def test_pause_and_resume(engine: Engine, spawned: list[tuple[str, int | None]])
     documents.save_ticket(engine.paths.project(engine.slug), doc)
     assert controls.resume("payments-api", by="user") == Resumed(["7b55e0c1"])
     assert not runtime.pause_state(engine.paths).covers("payments-api")
+
+
+def test_resuming_a_stalled_ticket_clears_its_plan_rounds(
+    registered_repo: Path,
+    store_paths: StorePaths,
+    make_ticket: Make,
+    spawned: list[tuple[str, int | None]],
+) -> None:
+    project = store_paths.project("payments-api")
+    stalled = make_ticket(
+        importance="standard",
+        workflow="standard",
+        status="in_process/stalled",
+        step="review_plan",
+    )
+    documents.save_ticket(project, stalled)
+    streaks = {"review_plan": {"a1b2c3d4e5f6": 2}}
+    runtime.save_ticket_state(store_paths, "7b55e0c1", TicketState(plan_rounds=2, streaks=streaks))
+    assert controls.run_tickets(["7b55e0c1"], steps=None, by="user").started
+    state = runtime.load_ticket_state(store_paths, "7b55e0c1")
+    assert (state.plan_rounds, state.streaks) == (0, {})

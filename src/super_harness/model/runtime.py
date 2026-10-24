@@ -50,7 +50,7 @@ class WorkerRecord(_Runtime):
     id: str
     project: str
     pid: int
-    job: Literal["ticket"] = "ticket"
+    job: Literal["ticket", "plan-review", "compact"] = "ticket"
     step: str | None = None
     started: datetime = Field(default_factory=utc_now)
     heartbeat: datetime = Field(default_factory=utc_now)
@@ -85,6 +85,15 @@ class ConductorPing(_Runtime):
     agent: str
     project: str | None
     time: datetime = Field(default_factory=utc_now)
+
+
+class UiRecord(_Runtime):
+    """runtime/ui.json: the running UI server (mode 0600: it holds the run's token)."""
+
+    pid: int
+    port: int
+    token: str
+    started: datetime = Field(default_factory=utc_now)
 
 
 class JournalCursor(_Runtime):

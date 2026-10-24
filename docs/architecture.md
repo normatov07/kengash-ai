@@ -21,22 +21,22 @@ UI: harness ui → FastAPI + SSE on 127.0.0.1, through the same `ops` layer as t
 
 | Module | Responsibility | May import | Status |
 |---|---|---|---|
-| `cli` | Typer command surface, output formatting | `ops`, `model` | `--version`, `init`, `doctor`, `link`, `adopt`, `settings`, `memory`, `context`, `plan`, `ticket`, `status`, `next` |
-| `model` | Pydantic schemas: Plan, Ticket, Settings, Event, StepRequest, StepResult, Verdict | — | Plan, Ticket, TicketInput, Registry, Settings, Event, errors (SP2 M1–M3); runtime files, provider options (SP3 M1); step contract, provider status, trust file (SP3 M2) |
-| `store` | Paths, frontmatter, atomic writes, locks, status moves, registry, links, store commits | `model` | built (SP2 M1); runtime slots, claims, pause flags (SP3 M1); repo trust digests (SP3 M2) |
-| `settings` | Seed, load, validate, resolve; comment-preserving edits | `model`, `store` | built (SP2 M2); comment-preserving edits in SP5 |
-| `memory` | MEMORY/DECISIONS/PROCESS writes and caps | `model`, `store`, `journal`, `settings` | built (SP2 M2): MEMORY and DECISIONS writes; compaction in SP3 |
-| `journal` | Append-only JSONL events, follow, usage aggregates | `model`, `store` | built (SP2 M2): append, read; follow and usage later |
-| `ops` | Use cases shared by CLI, UI and workers | all units above; starts workers as processes | `projects`, `workspace`, `records`, `plans`, `tickets`, `status` (SP2 M1–M3); `queue` (SP3 M1); `providers` (SP3 M2); `slots`, `agents`, `prompts`, `lifecycle`, `steps`, `controls`, `merging`, `waiting`, `changes` (SP3 M3); grows in SP3 M4, SP5 |
+| `cli` | Typer command surface, output formatting | `ops`, `model` | `--version`, `init`, `doctor`, `link`, `adopt`, `settings`, `memory` (incl. `compact`), `context`, `plan` (incl. `review`), `ticket` (incl. `changes`, `attach`), `status`, `next`, `run`, `wait`, `approve`, `park`, `stop`, `pause`, `resume`, `merge`, `skills lint|install|eval` |
+| `model` | Pydantic schemas: Plan, Ticket, Settings, Event, StepRequest, StepResult, Verdict | — | Plan, Ticket, TicketInput, Registry, Settings, Event, errors (SP2 M1–M3); runtime files, provider options (SP3 M1); step contract, provider status, trust file (SP3 M2); worker, ticket-state, cursor files (SP3 M3); job kinds, `WaitTimeout` (SP3 M4) |
+| `store` | Paths, frontmatter, atomic writes, locks, status moves, registry, links, store commits | `model` | built (SP2 M1); runtime slots, claims, pause flags (SP3 M1); repo trust digests (SP3 M2); UI record, `yamledit` (SP5) |
+| `settings` | Seed, load, validate, resolve; comment-preserving edits | `model`, `store` | built (SP2 M2); comment-preserving writes, overrides (SP5 M2) |
+| `memory` | MEMORY/DECISIONS/PROCESS writes and caps | `model`, `store`, `journal`, `settings` | built (SP2 M2): MEMORY and DECISIONS writes; compaction checks and writes, DECISIONS archive (SP3 M4) |
+| `journal` | Append-only JSONL events, follow, usage aggregates | `model`, `store` | built (SP2 M2): append, read; positions (SP3 M3); day files (SP5 M2) |
+| `ops` | Use cases shared by CLI, UI and workers | all units above; starts workers as processes | `projects`, `workspace`, `records`, `plans`, `tickets`, `status` (SP2 M1–M3); `queue` (SP3 M1); `providers` (SP3 M2); `slots`, `agents`, `prompts`, `lifecycle`, `steps`, `controls`, `merging`, `waiting`, `changes` (SP3 M3); `calls`, `jobs`, `reviews`, `compaction` (SP3 M4); `skills` (SP4 M1); `evals` (SP4 M2); `views`, `ui_server` (SP5 M1); `configure`, the screen views (SP5 M2) |
 | `scheduler` | Runnable set: dependencies, `touches` overlap, provider slots, fairness | `model` | built (SP3 M1) |
 | `workflow` | Step graph per importance, routing, loop and budget caps, stalls | `model` | built (SP3 M1) |
 | `adapters` | One driver per provider CLI behind the `Provider` protocol | `model` | built (SP3 M2): claude, codex, antigravity, shell |
 | `gitops` | Worktrees, commits with trailers, diffs, rebase, merge | `model` | built (SP3 M2) |
-| `worker` | Runs one job through `ops`; heartbeats; handles signals | `ops`, `model` | built (SP3 M3): ticket jobs |
-| `roles` | Packaged role skill files (data only) | — | planned, SP4 |
-| `ui` | FastAPI app, SSE, static assets | `ops`, `model` | planned, SP5 |
+| `worker` | Runs one job through `ops`; heartbeats; handles signals | `ops`, `model` | built (SP3 M3–M4): `ticket`, `plan-review` and `compact` jobs |
+| `roles` | Packaged role skill files (data only) | — | built (SP4 M1): seven role skills, seeded into `defaults/roles/` |
+| `ui` | FastAPI app, SSE, static assets | `ops`, `model` | built (SP5 M1–M2, canvas parity): token auth, Host, Origin and `X-Harness` checks, journal SSE, the seven screens matching the canvas, settings saves |
 
-`adapters` and `gitops` never touch the store. Import-linter (`make lint`) enforces the layers `cli | worker > ops > memory > journal | settings > store > model` (`journal` and `settings` independent of each other) and keeps `cli` and `worker` from importing `store`, `settings`, `memory` or `journal` directly; `workflow`, `scheduler`, `adapters` and `gitops` import only `model`; each new module adds its contract.
+`adapters` and `gitops` never touch the store. Import-linter (`make lint`) enforces the layers `cli | worker | ui > ops > memory > journal | settings > store > model` (`journal` and `settings` independent of each other) and keeps `cli`, `worker` and `ui` from importing `store`, `settings`, `memory` or `journal` directly; `workflow`, `scheduler`, `adapters` and `gitops` import only `model`; each new module adds its contract.
 
 ## Store (built in SP2 M1)
 
@@ -58,9 +58,10 @@ Each registered repo gets one directory symlink, `<repo>/.harness -> ~/.harness/
 
 - `src/super_harness/`: the package; each module has `docs/modules/<module>/README.md`
 - `scripts/`: repository checks (`check_md_caps.py`, `check_docs_sync.py`), run by `make docs`, pre-commit and CI
-- `tests/`: the pytest suite (`make test`)
+- `evals/`: skill eval scenarios (`make evals`, never in `make check`)
+- `tests/`: the pytest suite (`make test`); `tests/live/` runs the real CLIs (`make live`, never in `make check`)
 - `docs/`: index in `docs/README.md`
-- `skills/` and `.claude-plugin/`: arrive in SP4
+- `skills/`: installed skills (data; force-included in the wheel); `.claude-plugin/` and `.antigravity-plugin/`: plugin manifests
 
 ## Sub-projects
 
@@ -68,9 +69,9 @@ Each registered repo gets one directory symlink, `<repo>/.harness -> ~/.harness/
 |---|---|---|
 | 1 | Foundation | done: `docs/superpowers/plans/2026-10-22-foundation.md`; CI runs after the first push |
 | 2 | Store + `harness` CLI | done: M1 store core, M2 settings, memory, journal, M3 plans and tickets; plans in `docs/superpowers/plans/` |
-| 3 | Engine | in progress: spec `docs/superpowers/specs/2026-10-22-sp3-engine-design.md`; M1 engine rules, M2 providers and git, M3 workers and controls built; M4 plan review, compaction and live smoke next |
-| 4 | Skills | planned |
-| 5 | Web UI | planned |
+| 3 | Engine | done: spec `docs/superpowers/specs/2026-10-22-sp3-engine-design.md`; M1 engine rules, M2 providers and git, M3 workers and controls, M4 plan review, compaction and live smoke (green for claude and agy on 2026-10-23; codex once installed) |
+| 4 | Skills | done: spec `docs/superpowers/specs/2026-10-23-sp4-skills-design.md`; M1 skill toolkit and role skills, M2 eval runner, M3 the five installed skills (evals green on claude and agy on 2026-10-23; codex once installed) |
+| 5 | Web UI | done: spec `docs/superpowers/specs/2026-10-23-sp5-ui-design.md`; M1 server and monitor screens, M2 inspect and configure screens, canvas parity, M3 the `open-ui` skill (eval green on claude and agy on 2026-10-24) and the parity checklist |
 
 ## Agent context files
 

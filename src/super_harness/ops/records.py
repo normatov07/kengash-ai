@@ -78,6 +78,19 @@ def project_tickets(paths: StorePaths, slug: str) -> dict[str, Doc[Ticket]]:
     return tickets
 
 
+def project_plans(paths: StorePaths, slug: str) -> dict[str, Doc[Plan]]:
+    """The project's valid plans by id; `harness doctor` reports the invalid ones."""
+    plans: dict[str, Doc[Plan]] = {}
+    for path, kind in documents.iter_documents(paths.project(slug)):
+        if kind == "plan":
+            try:
+                doc = documents.load_plan(path)
+            except (UserError, ValidationError):
+                continue
+            plans[doc.meta.id] = doc
+    return plans
+
+
 def load_plan(path: Path) -> Doc[Plan]:
     try:
         return documents.load_plan(path)

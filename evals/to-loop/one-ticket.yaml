@@ -1,0 +1,40 @@
+skill: to-loop
+description: the conductor runs a ready ticket through its workers and merges it once the user agrees
+notes: >-
+  RED 2026-10-23: claude (haiku) claimed no ticket; agy found next, run and wait on its own,
+  waited for the user's yes and merged. GREEN exposed an engine gap, not a skill one: an agy
+  implementer ran a terminal command despite the edit line and the ticket failed; denied
+  actions now get one repair turn (ops.calls.denied).
+files:
+  calc.py: "\"\"\"Small arithmetic helpers.\"\"\"\n\n\ndef sub(a: int, b: int) -> int:\n    return a - b\n"
+settings: |
+  merge.mode: ask
+  step_timeout_min: 10
+  plan.reviewer: {cli}
+  project.test_cmd: "python3 -c 'import calc; assert calc.add(2, 3) == 5'"
+  agents:
+    planner: {cli: {cli}, skill: plan, fallback: []}
+    plan-reviewer: {cli: {cli}, skill: review-plan, fallback: []}
+    implementer: {cli: {cli}, skill: implement, fallback: []}
+    code-reviewer: {cli: {cli}, skill: review-code, fallback: []}
+    security-reviewer: {cli: {cli}, skill: review-security, fallback: []}
+setup:
+  - args: [plan, new, --mode, quick, --title, "Add add()"]
+    stdin: "Add add(a, b) to calc.py."
+    save: plan
+  - args: [ticket, add, --plan, "{plan}"]
+    stdin: |
+      - title: Add add(a, b) to calc.py
+        importance: simple
+        touches: [calc.py]
+        scope: "Add add(a: int, b: int) -> int to calc.py; it returns a + b."
+        acceptance: ["calc.add(2, 3) == 5"]
+    save: ticket
+turns:
+  - "/to-loop"
+  - "Yes, merge it."
+expect:
+  journal: [ticket.claimed, step.end, ticket.merged]
+  tickets: {count: 1, fields: {status: done/merged}}
+  clean: true
+timeout_s: 2400

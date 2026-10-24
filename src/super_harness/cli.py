@@ -14,13 +14,18 @@ from super_harness import __version__
 from super_harness.model import Folder, HarnessError, PlanMode, UserError
 from super_harness.ops import (
     changes,
+    compaction,
     controls,
+    evals,
     merging,
     plans,
     projects,
     queue,
+    reviews,
+    skills,
     status,
     tickets,
+    ui_server,
     waiting,
     workspace,
 )
@@ -246,8 +251,32 @@ def memory_add(
         typer.echo(f"{result.file}: already recorded")
     else:
         typer.echo(f"{result.file} +1 line ({result.lines}/{result.cap})")
-        if result.over_cap:
+        if result.compacting:
+            typer.echo(
+                f"{result.file} is over its {result.cap}-line cap; compacting it in the background"
+            )
+        elif result.over_cap:
             typer.echo(f"warning: {result.file} is over its {result.cap}-line cap; compact it soon")
+
+
+@memory_app.command("compact")
+def memory_compact(
+    timeout: Annotated[
+        float, typer.Option("--timeout", min=0, help="Seconds to wait for the result (exit 3).")
+    ] = 540,
+    as_json: AsJson = False,
+) -> None:
+    """Compact MEMORY.md on `memory.compactor` and wait; pinned lines always survive."""
+    with _errors():
+        outcome = compaction.compact_memory(timeout=timeout)
+    if as_json:
+        _emit_json(outcome)
+    elif outcome.accepted:
+        typer.echo(f"MEMORY.md {outcome.before} → {outcome.after} lines")
+    else:
+        typer.echo(f"MEMORY.md kept ({outcome.before} lines): {outcome.reason}", err=True)
+    if not outcome.accepted:
+        raise typer.Exit(1)
 
 
 @memory_app.command("show")
@@ -343,6 +372,32 @@ def plan_show(plan_id: PlanId, project: Only = None, as_json: AsJson = False) ->
         _emit_json(doc)
     else:
         typer.echo(doc.text, nl=False)
+
+
+@plan_app.command("review")
+def plan_review(
+    plan_id: PlanId,
+    timeout: Annotated[
+        float, typer.Option("--timeout", min=0, help="Seconds to wait for the round (exit 3).")
+    ] = 540,
+    project: Only = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Run the plan's next review round, on another provider, and wait for its verdict."""
+    with _errors():
+        result = reviews.review_plan(plan_id, project=project, by=by, timeout=timeout)
+    if as_json:
+        typer.echo(json.dumps({**dataclasses.asdict(result), "used_up": result.used_up}, indent=2))
+    else:
+        count = _plural(len(result.findings), "finding")
+        lines = [f"plan {result.id} round {result.round}: {result.verdict}, {count}"]
+        lines += [f"warning: {result.warning}"] if result.warning else []
+        for line in _capped([*lines, *result.findings], f"harness plan show {result.id}"):
+            typer.echo(line)
+    if result.used_up:
+        typer.echo(reviews.used_up_message(result.round, result.max), err=True)
+        raise typer.Exit(5)
 
 
 @plan_app.command("approve")
@@ -684,13 +739,13 @@ def wait(
     ] = 540,
     as_json: AsJson = False,
 ) -> None:
-    """Block until a ticket needs the conductor; `idle` when nothing runs."""
+    """Block until a ticket or a plan review needs the conductor; `idle` when nothing runs."""
     with _errors():
         result = waiting.wait(project, timeout=timeout)
     if as_json:
         _emit_json(result)
     elif result.events:
-        lines = [f"{e.id} {e.status} loop {e.loop}/{e.loop_max}: {e.detail}" for e in result.events]
+        lines = [_wait_line(event) for event in result.events]
         for line in _capped(lines, "harness wait --json"):
             typer.echo(line)
     elif result.idle:
@@ -698,6 +753,14 @@ def wait(
     if result.timed_out:
         typer.echo(f"wait timed out after {timeout:g} s", err=True)
         raise typer.Exit(3)
+
+
+def _wait_line(event: waiting.WaitEvent) -> str:
+    if event.kind == "plan":
+        return (
+            f"plan {event.id} round {event.loop}/{event.loop_max}: {event.status}, {event.detail}"
+        )
+    return f"{event.id} {event.status} loop {event.loop}/{event.loop_max}: {event.detail}"
 
 
 @ticket_app.command("changes")
@@ -737,3 +800,152 @@ def ticket_attach(
         _emit_json(found)
         return
     typer.echo(found.command)
+
+
+skills_app = typer.Typer(help="Skills: lint, install and eval.", no_args_is_help=True)
+app.add_typer(skills_app, name="skills")
+
+
+def _command_tree() -> set[str]:
+    """Every command name, plus `<group> <command>` for the commands of each group."""
+    root: Any = typer.main.get_command(app)  # typer's vendored click: groups have `commands`
+    names: set[str] = set()
+    for name, command in root.commands.items():
+        names.add(name)
+        names |= {f"{name} {sub}" for sub in getattr(command, "commands", {})}
+    return names
+
+
+@skills_app.command("lint")
+def skills_lint(
+    paths: Annotated[
+        list[Path] | None,
+        typer.Argument(help="SKILL.md files or folders; default: every packaged skill."),
+    ] = None,
+    as_json: AsJson = False,
+) -> None:
+    """Check skills against the writing standard; prints problems only."""
+    with _errors():
+        problems = skills.lint_skills(paths or [], commands=_command_tree())
+    if as_json:
+        typer.echo(json.dumps([dataclasses.asdict(p) for p in problems], indent=2))
+    else:
+        for problem in problems:
+            typer.echo(f"{problem.path}: {problem.message}")
+    if problems:
+        raise typer.Exit(1)
+
+
+@skills_app.command("install")
+def skills_install(
+    agent: Annotated[
+        str, typer.Option("--agent", help="claude, codex, antigravity (agy); comma-separated.")
+    ],
+    global_: Annotated[
+        bool, typer.Option("--global", help="Install for every project, in your home folder.")
+    ] = False,
+    path: Annotated[
+        Path | None, typer.Option("--path", help="A folder in the repo; default: this folder.")
+    ] = None,
+    cli_name: Annotated[
+        str, typer.Option("--cli-name", help="The command the skills call, e.g. hrn.")
+    ] = "harness",
+    yes: Annotated[bool, typer.Option("--yes", help="Replace skills that differ.")] = False,
+    as_json: AsJson = False,
+) -> None:
+    """Install the skills into your agents' skills folders; never replaces an edited one
+    without --yes."""
+    with _errors():
+        result = skills.install_skills(
+            agent.split(","), global_=global_, path=path or Path.cwd(), cli_name=cli_name, yes=yes
+        )
+    if as_json:
+        typer.echo(
+            json.dumps(
+                {**dataclasses.asdict(result), "needs_yes": result.needs_yes}, default=str, indent=2
+            )
+        )
+    else:
+        lines = [f"{e.agent} {e.name}: {e.state} → {e.folder}" for e in result.entries]
+        for line in _capped(lines, "harness skills install --json"):
+            typer.echo(line)
+        for diff in result.diffs.values():
+            typer.echo(diff, nl=False)
+    if result.needs_yes:
+        count = _plural(len(result.diffs), "skill")
+        typer.echo(
+            f"{count} differ from the installed copies; rerun with --yes to replace them", err=True
+        )
+        raise typer.Exit(5)
+
+
+@skills_app.command("eval")
+def skills_eval(
+    skill: Annotated[str | None, typer.Argument(help="The skill whose scenarios to run.")] = None,
+    all_: Annotated[bool, typer.Option("--all", help="Every skill's scenarios.")] = False,
+    agent: Annotated[
+        str | None, typer.Option("--agent", help="claude, codex, antigravity; default: all usable.")
+    ] = None,
+    model: Annotated[
+        str | None, typer.Option("--model", help="Conductor model; default: the cheapest.")
+    ] = None,
+    baseline: Annotated[
+        bool, typer.Option("--baseline", help="Run without installing the skills (RED).")
+    ] = False,
+    folder: Annotated[
+        Path | None, typer.Option("--dir", help="Scenario folder; default: the checkout's evals/.")
+    ] = None,
+    keep: Annotated[
+        Path | None, typer.Option("--keep", help="Write each run's store and transcripts here.")
+    ] = None,
+    as_json: AsJson = False,
+) -> None:
+    """Replay eval scenarios headless on real agents; spends subscription quota."""
+    with _errors():
+        if skill is None and not all_:
+            raise UserError("name a skill, or pass --all")
+        runs, base = evals.run_evals(
+            None if all_ else skill,
+            agents_=agent.split(",") if agent else None,
+            model=model,
+            baseline=baseline,
+            root=folder or evals.EVALS_DIR,
+            keep=keep,
+        )
+    if as_json:
+        typer.echo(json.dumps([dataclasses.asdict(run) for run in runs], default=str, indent=2))
+    else:
+        for run in runs:
+            verdict = "pass" if run.passed else f"fail: {run.failure}"
+            typer.echo(f"{run.name} {run.agent}: {verdict}")
+        typer.echo(f"transcripts: {base}")
+    if not all(run.passed for run in runs):
+        raise typer.Exit(1)
+
+
+ui_app = typer.Typer(help="The local web UI.", no_args_is_help=True)
+app.add_typer(ui_app, name="ui")
+
+
+@ui_app.command("open")
+def ui_open(
+    no_browser: Annotated[
+        bool, typer.Option("--no-browser", help="Print the link without opening it.")
+    ] = False,
+    as_json: AsJson = False,
+) -> None:
+    """Start the UI, or reuse the running one, and open it in the browser."""
+    with _errors():
+        server = ui_server.open_ui(browser=not no_browser)
+    if as_json:
+        _emit_json(server)
+    else:
+        typer.echo(server.url)
+
+
+@ui_app.command("stop")
+def ui_stop() -> None:
+    """Stop the UI server."""
+    with _errors():
+        stopped = ui_server.stop_ui()
+    typer.echo("stopped" if stopped else "not running")

@@ -20,6 +20,12 @@ READ_ONLY_LINE = (
     "This is a read-only step: read files with your file-viewing tools only; "
     "never run terminal commands."
 )
+# Headless accept-edits mode denies terminal commands, and a denied first command ends the
+# turn with no output (live run 2026-10-23), so editing steps are told up front.
+EDIT_LINE = (
+    "Terminal commands are not available in this step: read and edit files with your "
+    "file tools only, and do not run tests; review steps check the result."
+)
 MODE = {"read_only": "plan", "edit_worktree": "accept-edits"}
 
 
@@ -35,6 +41,8 @@ class Antigravity(CliProvider):
         text = f"{req.skill}\n\n{req.prompt}" if req.skill and not req.resume else req.prompt
         if req.profile == "read_only":
             text = f"{text}\n\n{READ_ONLY_LINE}"
+        elif not req.bypass:
+            text = f"{text}\n\n{EDIT_LINE}"
         argv = [self.binary, "-p", positional(text)]
         if req.resume:
             argv += ["--conversation", str(req.session_id)]

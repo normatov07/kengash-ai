@@ -15,6 +15,12 @@ FENCE = "---\n"
 
 def parse(text: str, names: Sequence[str]) -> tuple[dict[str, Any], dict[str, str]]:
     """Split a document into its frontmatter mapping and its known sections."""
+    meta, body = split_frontmatter(text)
+    return meta, _split(body, names)
+
+
+def split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
+    """The frontmatter mapping and the text after it (skills and documents alike)."""
     if not text.startswith(FENCE):
         raise UserError("document has no frontmatter")
     end = text.find("\n" + FENCE, len(FENCE) - 1)
@@ -23,7 +29,7 @@ def parse(text: str, names: Sequence[str]) -> tuple[dict[str, Any], dict[str, st
     meta = load_yaml(text[len(FENCE) : end + 1], "frontmatter") or {}
     if not isinstance(meta, dict):
         raise UserError("frontmatter is not a mapping")
-    return meta, _split(text[end + 1 + len(FENCE) :], names)
+    return meta, text[end + 1 + len(FENCE) :]
 
 
 def render(meta: dict[str, Any], sections: dict[str, str], names: Sequence[str]) -> str:
