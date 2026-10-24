@@ -91,6 +91,8 @@ class Gate:
     loop: int
     loop_max: int
     reason: str
+    kind: str = ""  # loop_cap, token_cap, approve_step, stalled, failed, awaiting_merge
+    step: str = ""
 
 
 @dataclass
@@ -106,6 +108,9 @@ class Overview:
     paused: bool = False  # `harness pause` without a project
     links_broken: int = 0  # projects whose folder or memory link needs a fix
     tickets_total: int = 0
+    grant: int = 2  # loops one approval adds (`loop_grant`)
+    avg_loops_done: float = 0.0  # mean loops of the tickets done today
+    avg_ticket_cost: int = 0  # mean tokens of the tickets done in the window
     agents_on: int = 0  # roles switched on in the user's defaults
     agents_total: int = 0
     sessions: list[Session] = field(default_factory=list)
@@ -392,6 +397,8 @@ def overview(paths: StorePaths | None = None, *, window: Window = "today") -> Ov
                     ticket.loop,
                     ticket.loop_max,
                     reasons.get(ticket.id, ""),
+                    _gate_kind(paths, ticket),
+                    ticket.step or "",
                 )
             )
         elif ticket.folder is Folder.in_process and ticket.sub_status not in WAITING:
@@ -410,17 +417,29 @@ def overview(paths: StorePaths | None = None, *, window: Window = "today") -> Ov
                     ticket.updated,
                 )
             )
-    today = utc_now().date()
-    found.done_today = sum(1 for event in events if _done(event) and event.ts.date() == today)
+    tickets = {doc.meta.id: doc.meta for _, doc in _tickets(paths, None)}
+    today, since = _since("today"), _since(window)
+    done_today = {event.ticket for event in events if _done(event) and event.ts >= today}
+    found.done_today = len(done_today)
+    loops = [tickets[tid].loop for tid in done_today if tid in tickets]
+    found.avg_loops_done = round(sum(loops) / len(loops), 1) if loops else 0.0
+    done_window = {event.ticket for event in events if _done(event) and event.ts >= since}
+    costs = [tickets[tid].tokens for tid in done_window if tid in tickets]
+    found.avg_ticket_cost = round(sum(costs) / len(costs)) if costs else 0
     found.spend = _spend(events, window)
     found.slots = _slots(paths)
     with contextlib.suppress(HarnessError):
-        roster = settings.load(paths).agents
-        found.agents_on = sum(agent.on for agent in roster.values())
-        found.agents_total = len(roster)
+        resolved = settings.load(paths)
+        found.agents_on = sum(agent.on for agent in resolved.agents.values())
+        found.agents_total = len(resolved.agents)
+        found.grant = resolved.loop_grant
     fresh = utc_now() - FRESH_PING
     found.conductors = [ping for ping in runtime.load_pings(paths) if ping.time >= fresh]
-    found.tail = [event.model_dump(mode="json", exclude_none=True) for event in events[-TAIL:]]
+    for event in events[-TAIL:]:
+        line = event.model_dump(mode="json", exclude_none=True)
+        if event.ticket in tickets:
+            line["loop_max"] = tickets[event.ticket].loop_max
+        found.tail.append(line)
     return found
 
 
@@ -868,12 +887,23 @@ def _done(event: Event) -> bool:
 
 
 def _since(window: Window) -> datetime:
+    """Where a window starts; "today" is the machine's local day, as the user lives it."""
     now = utc_now()
+    local = now.astimezone()
     return {
-        "today": datetime.combine(now.date(), datetime.min.time(), now.tzinfo),
+        "today": datetime.combine(local.date(), datetime.min.time(), local.tzinfo),
         "7d": now - timedelta(days=7),
         "all": datetime.min.replace(tzinfo=now.tzinfo),
     }[window]
+
+
+def _gate_kind(paths: StorePaths, ticket: Ticket) -> str:
+    if ticket.sub_status == "needs_approval":
+        approval = runtime.load_ticket_state(paths, ticket.id).approval
+        if approval is None and ticket.loop >= ticket.loop_max:
+            return "loop_cap"
+        return approval or "approve_step"
+    return ticket.sub_status
 
 
 def _spend(events: list[Event], window: Window) -> dict[str, int]:

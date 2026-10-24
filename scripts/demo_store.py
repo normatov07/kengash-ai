@@ -259,6 +259,7 @@ def main(root: Path) -> int:
                 "loop_max": item["max"],
                 "touches": item["touches"],
                 "branch": f"hrn/{item['id']}",
+                "tokens": (9000 + 3400 * item["loop"]) * item["loop"],
                 "created": now - timedelta(hours=3),
                 "updated": updated,
             }
@@ -303,6 +304,8 @@ def main(root: Path) -> int:
                         "tokens": {"in": 9000 + 1300 * loop, "out": 2100 * loop},
                         "added": 40 * loop if loop % 2 else 0,
                         "removed": 6 * loop if loop % 2 else 0,
+                        "files": (1 + loop % 3) if loop % 2 else 0,
+                        "fingerprints": [] if loop % 2 else ["f1", "f2", "f3"][: 1 + loop % 3],
                     }
                 )
             )

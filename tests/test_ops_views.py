@@ -1,7 +1,8 @@
 """Read models for the UI screens (SP5 spec §3)."""
 
-from collections.abc import Callable
-from datetime import timedelta
+import time
+from collections.abc import Callable, Iterator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -338,3 +339,45 @@ def test_the_overview_counts_tickets_and_enabled_agents(seeded: StorePaths) -> N
     found = views.overview(seeded, window="today")
     assert found.tickets_total == 5
     assert (found.agents_on, found.agents_total) == (5, 7)
+
+
+@pytest.fixture
+def tashkent(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """The machine's clock at UTC+5, as on the user's laptop."""
+    monkeypatch.setenv("TZ", "Asia/Tashkent")
+    time.tzset()
+    yield
+    monkeypatch.delenv("TZ")
+    time.tzset()
+
+
+def test_today_is_the_machines_day_not_utcs(
+    registered_repo: Path, store_paths: StorePaths, tashkent: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seeded = store_paths
+    local_morning = datetime(2026, 10, 24, 1, 0, tzinfo=UTC)  # 06:00 in Tashkent
+    monkeypatch.setattr(views, "utc_now", lambda: local_morning)
+    early = datetime(2026, 10, 23, 19, 30, tzinfo=UTC)  # 00:30 in Tashkent, the same local day
+    late = datetime(2026, 10, 23, 18, 30, tzinfo=UTC)  # 23:30 the evening before
+    for ts, ticket in ((early, "aaaaaaa3"), (late, "aaaaaaa2")):
+        event = step_end(ticket, "codex", 100)
+        journal.append(seeded, Event.model_validate({**event.model_dump(), "ts": ts}))
+    assert views.overview(seeded, window="today").spend == {"codex": 100}
+
+
+def test_the_overview_reports_gate_kinds_and_averages(seeded: StorePaths) -> None:
+    state = runtime.load_ticket_state(seeded, "aaaaaaa4")
+    state.approval = "loop_cap"
+    runtime.save_ticket_state(seeded, "aaaaaaa4", state)
+    found = views.overview(seeded, window="all")
+    assert {gate.ticket: gate.kind for gate in found.gates} == {"aaaaaaa4": "loop_cap"}
+    assert found.grant == 2
+    assert found.avg_loops_done == 1.0  # aaaaaaa5 merged today at loop 1
+    assert found.avg_ticket_cost == 0  # no done ticket spent tokens
+    step = next(event for event in found.tail if event["type"] == "step.end")
+    assert step["loop_max"] == 6  # the ticket's cap rides along for the journal line
+
+
+def test_a_gate_at_its_loop_cap_reads_as_a_loop_cap(seeded: StorePaths) -> None:
+    gates = {gate.ticket: gate.kind for gate in views.overview(seeded).gates}
+    assert gates["aaaaaaa4"] == "loop_cap"  # loop 6 of 6, no approval recorded in its state
