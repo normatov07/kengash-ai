@@ -70,3 +70,9 @@ def test_the_fonts_ship_with_the_screens(registered_repo: Path) -> None:
     assert client.get("/static/fonts/inter.woff2").headers["content-type"] == "font/woff2"
     css = (STATIC / "app.css").read_text()
     assert 'url("/static/fonts/inter.woff2")' in css and "fonts.googleapis" not in css
+
+
+def test_screens_are_revalidated_so_an_upgrade_shows_at_once(registered_repo: Path) -> None:
+    client = TestClient(ui_app.create_app(token="t", port=1), base_url="http://127.0.0.1:1")
+    assert client.get("/static/app.js").headers["cache-control"] == "no-cache"
+    assert client.get("/static/fonts/inter.woff2").headers["cache-control"] == "no-cache"

@@ -1,174 +1,313 @@
-// Ticket detail: the ticket's header and actions, what it changed, its findings, prompt,
-// acceptance and dependencies, its step timeline and file, and the agent chain beside them.
+// Ticket detail (canvas board Ticket): a sheet over the dimmed page with the ticket's header
+// and gate action, tabs Overview · Changes · Timeline · Memory file, and a rail with the
+// agent chain, metadata and actions. Closes back to where it was opened (× or Escape).
 import { get } from "../api.js";
-import { clock, elapsed, stepLabel, tokens } from "../format.js";
+import { STEPS, clock, elapsed, shortTime, tokens } from "../format.js";
 import { html } from "../html.js";
+import { icon } from "../icons.js";
 import { armed } from "../scope.js";
 
-const state = { id: "", tab: "overview", diff: null, plan: null };
+const state = { id: "", tab: "overview", diff: null, file: "", plan: null, park: false, paths: false };
+const IMPORTANCE = { critical: ["#3A2024", "#EF7A72"], standard: ["#2A2320", "#D8B24C"], simple: ["#1B2733", "#68A4E0"] };
+const SEVERITY = { high: ["HIGH", "red"], critical: ["CRIT", "red"], medium: ["MED", "warn"], med: ["MED", "warn"], low: ["LOW", "info"] };
+const GATED = ["needs_approval", "stalled", "failed", "awaiting_merge"];
 
 export async function load(app, id) {
-  if (state.id !== id) Object.assign(state, { id, tab: "overview", diff: null, plan: null });
-  return get(`/api/tickets/${encodeURIComponent(id)}`);
+  if (state.id !== id) Object.assign(state, { id, tab: "overview", diff: null, file: "", plan: null, park: false, paths: false });
+  const data = await get(`/api/tickets/${encodeURIComponent(id)}`);
+  if (state.tab === "changes" && state.diff === null && data.changes.length) state.diff = await loadDiff(id);
+  return data;
 }
 
-const TABS = [["overview", "Overview"], ["changes", "Changes"], ["timeline", "Timeline"], ["file", "Ticket file"]];
-
-function bullets(text) {
-  const lines = (text || "").split("\n").map((line) => line.trim()).filter(Boolean);
-  return lines.map((line) => line.replace(/^[-*]\s*(\[[ xX]\]\s*)?/, ""));
+async function loadDiff(id) {
+  try {
+    return (await get(`/api/tickets/${encodeURIComponent(id)}/diff`)).diff;
+  } catch {
+    return "";
+  }
 }
 
-function changesTable(data) {
-  if (!data.changes.length) return html`<div class="empty">No commits under this ticket yet.</div>`;
-  const added = data.changes.reduce((sum, c) => sum + (c.added ?? 0), 0);
-  const removed = data.changes.reduce((sum, c) => sum + (c.removed ?? 0), 0);
-  return html`<div class="table"><div class="rows">
-    <div class="thead"><div class="cell-grow">FILE</div><div class="cell-diff">DIFF</div><div class="cell-agent">WRITTEN BY</div><div class="cell-num">LOOP</div></div>
-    ${data.changes.map(
-      (c) => html`<div class="trow"><div class="cell-grow mono">${c.path}</div><div class="cell-diff mono"><span class="add">+${c.added ?? "?"}</span> <span class="del">−${c.removed ?? "?"}</span></div><div class="cell-agent mono faint">${c.model}</div><div class="cell-num mono">${c.loop}</div></div>`,
-    )}
-    <div class="trow"><div class="cell-grow faint">${data.changes.length} ${data.changes.length === 1 ? "file" : "files"}</div><div class="cell-diff mono"><span class="add">+${added}</span> <span class="del">−${removed}</span></div><div class="cell-agent"></div><div class="cell-num"><button class="btn small" type="button" data-diff>${state.diff ? "Hide diff" : "Open full diff"}</button></div></div>
-  </div></div>
-  ${state.diff ? html`<pre class="diff mono">${state.diff.split("\n").map((line) => html`<span class="${line.startsWith("+") && !line.startsWith("+++") ? "add" : line.startsWith("-") && !line.startsWith("---") ? "del" : line.startsWith("@@") ? "hunk" : ""}">${line || " "}</span>`)}</pre>` : ""}`;
+// The ticket diff (one `git show` per commit) cut into per-file hunks.
+function byFile(diff) {
+  const files = {};
+  let current = null;
+  for (const line of (diff || "").split("\n")) {
+    const head = /^diff --git a\/(.+) b\/(.+)$/.exec(line);
+    if (head) {
+      current = head[2];
+      files[current] ??= [];
+      continue;
+    }
+    if (/^[0-9a-f]{40}$/.test(line)) {
+      current = null;
+      continue;
+    }
+    if (!current || /^(index |--- |\+\+\+ |new file|deleted file|similarity|rename )/.test(line)) continue;
+    files[current].push(line);
+  }
+  return files;
 }
 
-function links(items, empty) {
-  if (!items.length) return html`<span class="faint">${empty}</span>`;
-  return items.map((item) => html`<div class="dep"><a class="mono" href="#/ticket/${item.id}">${item.id}</a><span>${item.title}</span><span class="faint mono">${item.status}</span></div>`);
+function findings(text) {
+  return (text || "")
+    .split("\n")
+    .filter((line) => line.trim().startsWith("- "))
+    .map((line) => {
+      const parts = line.trim().slice(2).split(" · ");
+      const [severity, where, issue, fix] = parts.length >= 4 ? parts : ["", "", parts.join(" · "), ""];
+      const [label, tone] = SEVERITY[severity.toLowerCase()] ?? [severity.toUpperCase() || "NOTE", "plain"];
+      return { label, tone, where, issue, fix };
+    });
+}
+
+function acceptance(text) {
+  return (text || "")
+    .split("\n")
+    .map((line) => /^\s*[-*]\s*(\[( |x|X)\]\s*)?(.+)$/.exec(line))
+    .filter(Boolean)
+    .map((m) => ({ done: (m[2] || "").toLowerCase() === "x", text: m[3] }));
+}
+
+function statusPill(meta) {
+  const sub = meta.status.split("/")[1];
+  const step = STEPS[meta.step];
+  if (meta.status.startsWith("done/")) return html`<span class="spill" style="background: #1E2A20; color: #5FC08B"><span style="background: #5FC08B"></span>${sub.replace("_", " ")}</span>`;
+  if (meta.status.startsWith("in_queue/")) return html`<span class="spill" style="background: #22262C; color: #A7B0BC"><span style="background: #A7B0BC"></span>${sub}</span>`;
+  const color = GATED.includes(sub) ? (sub === "awaiting_merge" ? "#5FC08B" : "#EF7A72") : step ? step.color : "#A7B0BC";
+  return html`<span class="spill" style="background: #22262C; color: ${color}"><span style="background: ${color}"></span>${GATED.includes(sub) ? sub.replace("_", " ") : step?.label ?? sub.replaceAll("_", " ")}</span>`;
+}
+
+function gateAction(meta, data) {
+  const sub = meta.status.split("/")[1];
+  if (sub === "needs_approval") return html`<button class="btn accent big" type="button" data-act="approve">${meta.loop >= meta.loop_max ? `Grant +${data.grant} loops` : "Approve"}</button>`;
+  if (sub === "awaiting_merge") return html`<button class="btn accent big" type="button" data-act="merge">Merge</button>`;
+  if (["stalled", "failed"].includes(sub) || meta.status === "in_queue/ready") return html`<button class="btn accent big" type="button" data-act="run">${meta.status === "in_queue/ready" ? "Run" : "Run again"}</button>`;
+  return "";
 }
 
 function overviewTab(data) {
-  const findings = bullets(data.sections.Findings);
-  const acceptance = bullets(data.sections.Acceptance);
-  const parallel = data.meta.touches.length > 0;
+  const meta = data.meta;
+  const crit = acceptance(data.sections.Acceptance);
+  const siblings = data.siblings.map((s) => s.id);
+  const index = [...siblings, meta.id].sort().indexOf(meta.id) + 1;
   return html`
-    <section class="panel"><div class="panel-head"><h2>Changes made under this ticket</h2></div>${changesTable(data)}</section>
-    <section class="panel ${findings.length ? "alert" : ""}"><div class="panel-head"><h2>Open findings</h2><span class="end mono faint">${findings.length}</span></div>
-      <div class="panel-body">${findings.length ? html`<ul class="list">${findings.map((line) => html`<li>${line}</li>`)}</ul>` : html`<span class="faint">No open findings.</span>`}</div></section>
-    <section class="panel"><div class="panel-head"><h2>Original prompt</h2>${data.plan.found ? html`<button class="btn ghost small end" type="button" data-plan>${state.plan ? "Hide the plan" : `Read plan ${data.plan.id}`}</button>` : ""}</div>
-      <div class="panel-body">${data.plan.found ? html`<p class="prompt">${data.plan.prompt || "(the plan has no Prompt section)"}</p><div class="faint" style="font-size: 12px">from plan ${data.plan.id} · ${data.plan.title}${data.siblings.length ? ` · ${data.siblings.length} sibling ${data.siblings.length === 1 ? "ticket" : "tickets"}` : ""}</div>` : html`<span class="faint">Plan ${data.plan.id} is not in the store.</span>`}
-      ${data.sections.Scope ? html`<h3 class="sub">Scope</h3><p class="prompt">${data.sections.Scope}</p>` : ""}
-      ${state.plan ? Object.entries(state.plan.sections).filter(([name]) => name !== "Prompt").map(([name, text]) => html`<h3 class="sub">plan · ${name}</h3><p class="prompt">${text}</p>`) : ""}</div></section>
-    <section class="panel"><div class="panel-head"><h2>Acceptance criteria</h2></div><div class="panel-body">${acceptance.length ? html`<ul class="list checks-list">${acceptance.map((line) => html`<li>${line}</li>`)}</ul>` : html`<span class="faint">None written.</span>`}</div></section>
-    <section class="panel"><div class="panel-head"><h2>Dependencies</h2></div><div class="panel-body deps">
-      <div><span class="badge info">waits on</span>${links(data.depends_on, "nothing")}</div>
-      <div><span class="badge warn">blocks</span>${links(data.blocks, "nothing")}</div>
-      <div><span class="badge ${parallel ? "ok" : "danger"}">${parallel ? "parallel" : "serial"}</span><span class="faint">${parallel ? `touches ${data.meta.touches.join(", ")}; runs beside tickets that touch other paths` : "touches nothing named, so it claims the whole repo and runs alone"}</span></div>
-      ${data.siblings.length ? html`<div><span class="badge">siblings</span>${links(data.siblings, "")}</div>` : ""}
-    </div></section>`;
+    <h2 class="t-h">Original prompt</h2>
+    ${data.plan.found ? html`<blockquote class="prompt-quote">${data.plan.prompt || "The plan has no Prompt section."}</blockquote>` : html`<blockquote class="prompt-quote faint">Plan ${data.plan.id} is not in the store any more.</blockquote>`}
+    <div class="t-meta mono"><span>cut from plan <span class="muted">${data.plan.id}</span> · ticket ${index} of ${siblings.length + 1}</span>${siblings.length ? html`<span>sibling tickets: ${data.siblings.map((s, i) => html`${i ? ", " : ""}<a href="#/ticket/${s.id}">${s.id}</a>`)}</span>` : ""}${data.plan.found ? html`<button class="linkish" type="button" data-plan>${state.plan ? "hide the plan" : "read the whole plan"}</button>` : ""}</div>
+    ${state.plan ? html`<div class="plan-sections">${Object.entries(state.plan.sections).filter(([name]) => name !== "Prompt" && name !== "Review log").map(([name, text]) => html`<h3>${name}</h3><p>${text}</p>`)}</div>` : ""}
+    ${data.sections.Scope ? html`<h2 class="t-h">Scope</h2><p class="t-p">${data.sections.Scope}</p>` : ""}
+    <h2 class="t-h">Acceptance criteria</h2>
+    ${crit.length ? html`<div class="crit">${crit.map((c) => html`<label><input type="checkbox" ${c.done ? "checked" : ""} data-readonly aria-readonly="true">${c.text}</label>`)}</div>` : html`<p class="t-p faint">None written in the ticket.</p>`}
+    <h2 class="t-h">Dependencies</h2>
+    <div class="deps-list">
+      ${data.depends_on.map((d) => html`<a class="dep-row" href="#/ticket/${d.id}"><span class="dep-tag">WAITS ON</span><span class="mono muted">${d.id}</span><span class="ellipsis">${d.title}</span><span class="end mono faint">${d.status}</span></a>`)}
+      ${data.blocks.map((d) => html`<a class="dep-row" href="#/ticket/${d.id}"><span class="dep-tag">BLOCKS</span><span class="mono muted">${d.id}</span><span class="ellipsis">${d.title}</span><span class="end mono faint">${d.status}</span></a>`)}
+      <div class="dep-row"><span class="dep-tag">${meta.touches.length ? "PARALLEL" : "SERIAL"}</span><span class="muted">${meta.touches.length ? `touches ${meta.touches.join(", ")}; runs beside tickets that touch other paths` : "names no paths it touches, so it claims the whole repo and runs alone"}</span></div>
+    </div>`;
+}
+
+function changesTab(data) {
+  const added = data.changes.reduce((sum, c) => sum + (c.added ?? 0), 0);
+  const removed = data.changes.reduce((sum, c) => sum + (c.removed ?? 0), 0);
+  const files = byFile(state.diff);
+  const chosen = state.file || data.changes[0]?.path || "";
+  const list = findings(data.sections.Findings);
+  const who = data.timeline.filter((r) => r.kind === "step.end").at(-1)?.role;
+  const shown = state.file === "*" ? Object.keys(files) : [chosen];
+  return html`
+    <div class="t-row"><h2 class="t-h" style="margin: 0">Changes made under this ticket</h2>${data.changes.length ? html`<span class="mono" style="font-size: 12px"><span class="add">+${added}</span> <span class="del">−${removed}</span></span><button class="btn small end" type="button" data-fulldiff>${state.file === "*" ? "Show one file" : "Open full diff"}</button>` : ""}</div>
+    ${data.changes.length
+      ? html`<div class="box"><div class="box-head"><div class="f-file">FILE</div><div class="f-diff">DIFF</div><div class="f-who">WRITTEN BY</div><div class="f-loop">LOOP</div></div>
+          ${data.changes.map((c) => html`<button type="button" class="box-row ${c.path === chosen && state.file !== "*" ? "on" : ""}" data-file="${c.path}"><div class="f-file mono ellipsis" title="${c.path}">${c.path}</div><div class="f-diff mono"><span class="add">+${c.added ?? "?"}</span> <span class="${c.removed ? "del" : "faint"}">−${c.removed ?? "?"}</span></div><div class="f-who mono muted ellipsis">${c.model.replace("/", " · ")}</div><div class="f-loop mono faint">${c.loop}</div></button>`)}
+        </div>
+        ${shown.map((path) => {
+          const lines = files[path];
+          const meta = data.changes.find((c) => c.path === path);
+          return html`<div class="box"><div class="box-head diff-head"><span class="mono muted">${path}</span><span class="end mono faint">${meta ? `loop ${meta.loop} · ${meta.commit.slice(0, 7)}` : ""}</span></div>
+            <div class="diff-body">${state.diff === null ? html`<span class="faint">Loading the diff…</span>` : lines?.length ? html`<div class="diff-lines">${lines.map((l) => html`<span class="${l.startsWith("@@") ? "hunk" : l.startsWith("+") ? "add" : l.startsWith("-") ? "del" : ""}">${l || " "}</span>`)}</div>` : html`<span class="faint">No textual diff for this file.</span>`}</div></div>`;
+        })}`
+      : html`<div class="box"><div class="empty">No commits under this ticket yet; the implementer's commits appear here with their loop and model.</div></div>`}
+    <h2 class="t-h">Open findings${who ? ` from the ${who}` : ""}</h2>
+    ${list.length
+      ? html`<div class="findings">${list.map((f) => html`<div class="finding ${f.tone}"><span class="sev ${f.tone}">${f.label}</span><div><div class="f-title">${f.issue}</div><div class="f-desc">${f.fix}${f.where ? html` <span class="mono">${f.where}</span>` : ""}</div></div></div>`)}</div>`
+      : html`<p class="t-p faint">No open findings.</p>`}`;
 }
 
 function timelineTab(data) {
-  if (!data.timeline.length) return html`<section class="panel"><div class="empty">No step has run yet.</div></section>`;
-  const steps = data.timeline.filter((row) => row.kind === "step.end");
-  const seconds = steps.reduce((sum, row) => sum + (row.duration_s ?? 0), 0);
-  return html`<section class="panel"><div class="panel-head"><h2>Step timeline</h2><span class="end faint">${data.timeline.length} events · ${steps.length} steps · ${Math.round(seconds / 60)}m of session time</span></div>
-    <div class="table"><div class="rows">${data.timeline.map((row) =>
-      row.kind === "step.end"
-        ? html`<div class="trow"><div class="cell-time mono faint">${clock(row.ts)}</div><div class="cell-step">${row.step.replaceAll("_", " ")}</div><div class="cell-agent mono faint">${row.provider}${row.model ? ` · ${row.model}` : ""}</div><div class="cell-grow">${row.verdict}${row.loop ? html` <span class="faint">loop ${row.loop}</span>` : ""}</div><div class="cell-num mono">${tokens(row.tokens)}</div><div class="cell-num mono faint">${row.duration_s != null ? `${Math.floor(row.duration_s / 60)}m ${String(Math.round(row.duration_s % 60)).padStart(2, "0")}s` : ""}</div></div>`
-        : html`<div class="trow"><div class="cell-time mono faint">${clock(row.ts)}</div><div class="cell-step"><span class="badge">${row.kind.replace("ticket.", "").replaceAll("_", " ")}</span></div><div class="cell-grow faint">${row.note}</div></div>`,
-    )}</div></div></section>`;
+  const steps = data.timeline.filter((r) => r.kind === "step.end");
+  const seconds = steps.reduce((sum, r) => sum + (r.duration_s ?? 0), 0);
+  const loops = Math.max(0, ...steps.map((r) => r.loop ?? 0));
+  return html`<div class="t-row"><h2 class="t-h" style="margin: 0">Step timeline</h2><span class="faint" style="font-size: 12px">${data.timeline.length} events · ${loops} ${loops === 1 ? "loop" : "loops"} · ${shortTime(seconds)} of session time</span></div>
+    ${data.timeline.length
+      ? html`<div class="tl">${data.timeline.map((r, i) => {
+          if (r.kind !== "step.end") {
+            const red = ["ticket.needs_approval", "ticket.stalled", "ticket.failed"].includes(r.kind);
+            return html`<div class="tl-row ${red ? "gate" : i % 2 ? "" : "alt"}"><span class="tl-time mono">${clock(r.ts).slice(0, 5)}</span><span class="tl-step" style="color: ${red ? "var(--danger)" : "var(--faint)"}">${r.kind.replace("ticket.", "").replaceAll("_", " ")}</span><span class="tl-who mono muted"></span><span class="tl-text ${red ? "danger-text" : "muted"}">${r.note}</span><span class="tl-dur mono faint"></span></div>`;
+          }
+          const step = STEPS[r.step];
+          const fail = r.verdict === "fail";
+          return html`<div class="tl-row ${i % 2 ? "" : "alt"}"><span class="tl-time mono">${clock(r.ts).slice(0, 5)}</span><span class="tl-step" style="color: ${step?.color ?? "var(--muted)"}">${r.step.replaceAll("_", " ")}</span><span class="tl-who mono muted ellipsis">${r.provider}${r.model ? ` · ${r.model}` : ""}</span><span class="tl-text ${fail ? "danger-text" : r.verdict === "pass" ? "ok-text" : "muted"}">${r.verdict || "done"}${r.loop ? html` <span class="faint">· loop ${r.loop}</span>` : ""}${r.tokens ? html` <span class="faint">· ${tokens(r.tokens)} tok</span>` : ""}</span><span class="tl-dur mono faint">${r.duration_s != null ? `${Math.floor(r.duration_s / 60)}m ${String(Math.round(r.duration_s % 60)).padStart(2, "0")}s` : ""}</span></div>`;
+        })}</div>`
+      : html`<div class="box"><div class="empty">No step has run yet. The timeline fills as workers plan, implement and review.</div></div>`}`;
 }
 
 function fileTab(data) {
-  return html`<section class="panel"><div class="panel-head"><h2>Ticket file</h2><span class="end faint" style="font-size: 12px">one file, two paths: the repo sees the store through its folder link</span></div>
-    <div class="panel-body"><div class="paths mono"><div><span class="faint">store</span> ${data.store_path}</div><div><span class="faint">repo</span> ${data.repo_path}</div></div>
-    <pre class="file-view mono">${data.file.split("\n").map((line) => html`<span class="line">${line || " "}</span>`)}</pre></div></section>`;
+  const storeRel = data.store_path.split(`/projects/${data.project}/`)[1] ?? data.store_path;
+  const repoRel = data.repo_path.split("/.harness/")[1] ?? data.repo_path;
+  const colour = { importance: IMPORTANCE[data.meta.importance]?.[1], status: "var(--warn)" };
+  let fence = 0;
+  return html`<div class="t-row"><h2 class="t-h" style="margin: 0">Ticket file</h2><span class="mono faint ellipsis" style="font-size: 11px; flex: 1 1 200px" title="${data.store_path}">${state.paths ? data.store_path : `~/.harness/projects/${data.project}/${storeRel}`} · in the repo: ${state.paths ? data.repo_path : `.harness/${repoRel}`}</span><button class="btn small end" type="button" data-paths>${state.paths ? "Short paths" : "Show both paths"}</button></div>
+    <div class="file-box"><div class="file-lines">${data.file.split("\n").map((line) => {
+      if (line === "---") {
+        fence += 1;
+        return html`<span class="faint">---</span>`;
+      }
+      const kv = fence === 1 ? /^([\w-]+):(.*)$/.exec(line) : null;
+      return kv ? html`<span>${kv[1]}:<span style="color: ${colour[kv[1]] ?? "var(--text)"}">${kv[2]}</span></span>` : html`<span>${line || " "}</span>`;
+    })}</div></div>
+    <h2 class="t-h">Written to shared memory</h2>
+    ${data.memory_writes.length
+      ? html`<div class="deps-list">${data.memory_writes.map((w) => html`<div class="dep-row"><span class="mono" style="font-size: 11px">${w.file}</span><span class="muted ellipsis" style="font-size: 12px">${String(w.line).replace(/^- /, "")}</span><span class="end mono faint" style="font-size: 10px">${clock(w.ts).slice(0, 5)}</span></div>`)}</div>`
+      : html`<p class="t-p faint">Nothing written to MEMORY.md or DECISIONS.md for this ticket yet.</p>`}`;
 }
 
-function gateActions(meta, gate) {
-  const sub = meta.status.split("/")[1];
-  const out = [];
-  if (sub === "needs_approval") out.push(html`<button class="btn primary small" type="button" data-act="approve">Grant +${gate} loops</button>`);
-  if (sub === "awaiting_merge") out.push(html`<button class="btn primary small" type="button" data-act="merge">Merge</button>`);
-  if (["stalled", "failed"].includes(sub) || meta.status === "in_queue/ready") out.push(html`<button class="btn small" type="button" data-act="run">${meta.status === "in_queue/ready" ? "Run" : "Run again"}</button>`);
-  return out;
-}
-
-function chainView(data) {
-  if (!data.chain.length) return html`<span class="faint">No workflow ${data.meta.workflow} in the settings.</span>`;
-  return html`<ol class="chain">${data.chain.map(
-    (step) => html`<li class="chain-${step.state.replace(" ", "-")}"><span class="mono">${step.step.replaceAll("_", " ")}</span><span class="faint mono">${step.role ?? "you"}${step.runs ? ` ×${step.runs}` : ""}</span><span class="chain-state">${step.state}</span></li>`,
-  )}</ol>`;
-}
-
-export function view(data, app) {
+function rail(data) {
   const meta = data.meta;
   const done = meta.status.startsWith("done/");
-  const running = meta.status.startsWith("in_process/") && !["needs_approval", "stalled", "failed", "awaiting_merge"].includes(meta.status.split("/")[1]);
-  const gate = app.overview?.gates?.find((item) => item.ticket === meta.id);
+  const sub = meta.status.split("/")[1];
+  const running = meta.status.startsWith("in_process/") && !GATED.includes(sub);
+  const lastRun = (step) => data.timeline.filter((r) => r.kind === "step.end" && r.step === step).at(-1);
+  const chain = [...data.chain, { step: "done", role: null, runs: 0, state: done ? "done" : "pending" }];
+  const label = { done: "done", running: "running", waiting: "waiting", "needs you": sub === "awaiting_merge" ? "ready" : "blocked", pending: "pending" };
+  const sessions = Object.keys(meta.sessions).length;
+  return html`<aside class="rail">
+    <div><div class="rail-title">AGENT CHAIN</div><div class="chain-list">${chain.map((c, i) => {
+      const last = lastRun(c.step);
+      const who = last ? (last.model && last.model !== "default" ? last.model : last.provider) : "";
+      const right = (c.state === "done" || c.state === "pending") && c.runs ? `${who} ×${c.runs}` : label[c.state];
+      return html`<div class="chain-row s-${c.state.replace(" ", "-")}"><span class="num">${i + 1}</span><span class="name">${c.step.replaceAll("_", " ")}</span><span class="end mono">${right}</span></div>`;
+    })}</div></div>
+    <div class="rail-rule"></div>
+    <div><div class="rail-title">METADATA</div><div class="meta-rows">
+      <div><span>workflow</span><span class="mono">${meta.workflow}</span></div>
+      <div><span>parallel</span><span class="mono ${meta.touches.length ? "ok-text" : "danger-text"}">${meta.touches.length ? "true" : "false"}</span></div>
+      <div><span>tokens</span><span class="mono">${tokens(meta.tokens)}${meta.tokens_max ? ` / ${tokens(meta.tokens_max)}` : ""}</span></div>
+      <div><span>sessions</span><span class="mono">${sessions ? `${sessions} reused` : "none yet"}</span></div>
+      <div><span>gate</span><span class="mono">${meta.gate}</span></div>
+      <div><span>updated</span><span class="mono">${clock(meta.updated)}</span></div>
+    </div>${meta.tags.length ? html`<div class="tag-pills">${meta.tags.map((t) => html`<span>${t}</span>`)}</div>` : ""}</div>
+    <div class="rail-rule"></div>
+    <div class="rail-actions">
+      ${data.attach ? html`<button class="rail-btn" type="button" data-copy="${data.attach}" data-note="Copied: run it in a terminal to open the live CLI session.">Attach to live CLI session</button>` : ""}
+      ${running ? html`<button class="rail-btn" type="button" data-act="stop" data-armed-label="Confirm: stop the step">Stop the running step</button>` : ""}
+      ${done
+        ? ""
+        : html`<button class="rail-btn" type="button" data-act="move" data-to="in_queue">Send back to in_queue</button>
+          ${state.park ? html`<form class="park-form" data-park><label class="sr-only" for="why">Why park it</label><input id="why" class="inline-input" name="why" placeholder="why park it?" required><button class="btn small" type="submit">Park</button></form>` : html`<button class="rail-btn" type="button" data-park-open>Park…</button>`}
+          <button class="rail-btn danger" type="button" data-act="move" data-to="done" data-armed-label="Confirm: move to done">Force move to done</button>`}
+    </div>
+  </aside>`;
+}
+
+export function top(data, app) {
   const folder = data.store_path.split("/tasks/")[1]?.split("/")[0] ?? "";
+  const from = app.from.replace("#/", "").split("/")[0] || "overview";
+  const back = { board: "Task board", overview: "Overview", memory: "Memory", workflow: "Workflow", agents: "Agents", settings: "Settings" }[from] ?? "Task board";
+  return html`<a class="crumb" href="${app.from}">${back}</a><span class="crumb-sep">/</span><span class="mono crumb-id">${data.meta.id}</span><span class="end mono faint crumb-path">projects/${data.project}/tasks/${folder}/</span>`;
+}
+
+export function view(data) {
+  const meta = data.meta;
+  const imp = IMPORTANCE[meta.importance] ?? IMPORTANCE.standard;
+  const atCap = meta.loop >= meta.loop_max;
   const counts = { changes: data.changes.length, timeline: data.timeline.length };
-  const body = { overview: overviewTab, changes: (d) => html`<section class="panel"><div class="panel-head"><h2>Changes</h2></div>${changesTable(d)}</section>`, timeline: timelineTab, file: fileTab }[state.tab](data);
-  return html`<div class="page">
-    <div class="crumbs mono"><a href="#/board">Task board</a> / ${meta.id} <span class="faint">projects/${data.project}/tasks/${folder}/</span></div>
-    <div class="page-head ticket-head">
-      <div>
-        <div class="ticket-tags"><span class="imp imp-${meta.importance}">${meta.importance}</span><span class="chip">${stepLabel(meta.status)}</span><span class="faint mono" style="font-size: 11px">${meta.uuid}</span></div>
-        <h1>${meta.title}</h1>
-        <p class="mono faint" style="font-size: 12px">${data.project}${meta.touches.length ? ` · ${meta.touches.join(", ")}` : ""}${meta.branch ? ` · ${meta.branch}` : ""} · opened ${clock(meta.created)} · ${elapsed(meta.created)} ago</p>
-      </div>
-      <div class="head-actions"><span class="mono ${meta.loop >= meta.loop_max ? "danger-text" : "faint"}">loop ${meta.loop}/${meta.loop_max}${gate?.reason ? ` · ${gate.reason}` : ""}</span>${gateActions(meta, data.grant)}</div>
-    </div>
-    <div class="split">
-      <div class="grow stack">
-        <div class="segmented tabs" role="tablist">${TABS.map(([key, label]) => html`<button type="button" role="tab" data-tab="${key}" aria-pressed="${state.tab === key ? "true" : "false"}">${label}${counts[key] ? html` <span class="faint">${counts[key]}</span>` : ""}</button>`)}</div>
-        ${body}
-      </div>
-      <div class="side">
-        <section class="panel"><div class="panel-head"><h2>Written to shared memory</h2></div><div class="panel-body">${data.memory_writes.length ? data.memory_writes.map((w) => html`<div class="memo"><span class="mono">${w.file}</span><span>${String(w.line).replace(/^- /, "")}</span><span class="faint mono">${clock(w.ts)}</span></div>`) : html`<span class="faint">Nothing written for this ticket.</span>`}</div></section>
-        <section class="panel"><div class="panel-head"><h2>Agent chain</h2><span class="end faint mono">${meta.workflow}</span></div><div class="panel-body">${chainView(data)}</div></section>
-        <section class="panel"><div class="panel-head"><h2>Metadata</h2></div><div class="panel-body meta-list">
-          <div><span class="faint">workflow</span><span class="mono">${meta.workflow}</span></div>
-          <div><span class="faint">gate</span><span class="mono">${meta.gate}</span></div>
-          <div><span class="faint">tokens</span><span class="mono">${tokens(meta.tokens)}${meta.tokens_max ? ` / ${tokens(meta.tokens_max)}` : ""}</span></div>
-          <div><span class="faint">sessions</span><span class="mono">${Object.keys(meta.sessions).length ? Object.entries(meta.sessions).map(([role, s]) => `${role}: ${s.provider}/${s.model}`).join(", ") : "none yet"}</span></div>
-          <div><span class="faint">updated</span><span class="mono">${clock(meta.updated)}</span></div>
-          ${meta.tags.length ? html`<div><span class="faint">tags</span><span>${meta.tags.map((tag) => html`<span class="tag">${tag}</span>`)}</span></div>` : ""}
-        </div></section>
-        <section class="panel"><div class="panel-body stack-small">
-          ${data.attach ? html`<button class="btn small" type="button" data-copy="${data.attach}" data-note="Copied; run it in a terminal to open the session.">Attach to the CLI session</button>` : html`<span class="faint" style="font-size: 12px">No CLI session to attach to yet.</span>`}
-          ${running ? html`<button class="btn small" type="button" data-act="stop">Stop the running step</button>` : ""}
-          ${done ? "" : html`<form class="why-form" data-why-form><label class="sr-only" for="why">Why</label><input id="why" class="inline-input" name="why" placeholder="why (needed to park)">
-            <div class="head-actions" style="justify-content: flex-start"><button class="btn small" type="submit" data-act="park">Park</button><button class="btn small" type="button" data-act="move" data-to="in_queue">Send back to in_queue</button><button class="btn small danger" type="button" data-act="move" data-to="done" data-armed-label="Confirm: move to done">Force move to done</button></div></form>`}
-        </div></section>
-      </div>
-    </div>
+  const body = { overview: overviewTab, changes: changesTab, timeline: timelineTab, file: fileTab }[state.tab](data);
+  return html`<div class="sheet-stage">
+    <div class="sheet-ghost" aria-hidden="true"><div></div><div></div><div></div><div></div></div>
+    <div class="sheet-dim" aria-hidden="true" data-close></div>
+    <article class="sheet" aria-labelledby="sheet-title">
+      <header class="sheet-head">
+        <div class="sheet-tags"><span class="ibadge" style="background: ${imp[0]}; color: ${imp[1]}">${meta.importance.toUpperCase()}</span>${statusPill(meta)}<span class="mono faint uuid">${meta.uuid}</span>
+          <button class="close" type="button" data-close aria-label="Close ticket" title="Close (Esc)">${icon("close", { size: 14, width: 1.7 })}</button></div>
+        <div class="sheet-title"><h1 id="sheet-title">${meta.title}</h1><div class="sheet-gate"><span class="loop-pill ${atCap ? "cap" : ""}">loop ${meta.loop}/${meta.loop_max}${atCap ? " · cap hit" : ""}</span>${gateAction(meta, data)}</div></div>
+        <div class="sheet-meta mono"><span>${data.project}</span>${meta.touches.length ? html`<span title="${meta.touches.join(", ")}">${meta.touches[0]}${meta.touches.length > 1 ? ` +${meta.touches.length - 1}` : ""}</span>` : ""}${meta.branch ? html`<span>${meta.branch}</span>` : ""}<span>opened ${clock(meta.created).slice(0, 5)} · ${elapsed(meta.created)} ago</span></div>
+      </header>
+      <div class="tabs-line sheet-tabs" role="tablist">${[["overview", "Overview"], ["changes", "Changes"], ["timeline", "Timeline"], ["file", "Memory file"]].map(
+        ([key, label]) => html`<button type="button" role="tab" data-tab="${key}" aria-selected="${state.tab === key ? "true" : "false"}">${label}${counts[key] ? html`<span class="count mono">${counts[key]}</span>` : ""}</button>`,
+      )}</div>
+      <div class="sheet-body"><div class="sheet-main">${body}</div>${rail(data)}</div>
+    </article>
   </div>`;
 }
 
+let onKey = null; // the Escape listener of the open sheet, replaced on each render
 export function bind(root, app, data) {
   const id = data.meta.id;
+  const close = () => (location.hash = app.from || "#/board");
   const why = () => root.querySelector("#why")?.value.trim() ?? "";
+  if (state.focused !== id) {
+    state.focused = id;
+    root.querySelector(".close")?.focus({ preventScroll: true });
+  }
+  if (onKey) document.removeEventListener("keydown", onKey);
+  onKey = (event) => {
+    if (event.key !== "Escape" || document.body.dataset.screen !== "ticket" || event.target.closest?.("input, textarea")) return;
+    document.removeEventListener("keydown", onKey);
+    onKey = null;
+    close();
+  };
+  document.addEventListener("keydown", onKey);
   root.addEventListener("click", async (event) => {
+    if (event.target.closest("[data-readonly]")) return event.preventDefault();
+    if (event.target.closest("[data-close]")) return close();
     const tab = event.target.closest("[data-tab]");
     if (tab) {
       state.tab = tab.dataset.tab;
+      if (state.tab === "changes" && state.diff === null && data.changes.length) state.diff = await loadDiff(id);
+      return app.refresh();
+    }
+    const file = event.target.closest("[data-file]");
+    if (file) {
+      state.file = file.dataset.file;
+      if (state.diff === null) state.diff = await loadDiff(id);
+      return app.refresh();
+    }
+    if (event.target.closest("[data-fulldiff]")) {
+      state.file = state.file === "*" ? "" : "*";
+      if (state.diff === null) state.diff = await loadDiff(id);
       return app.refresh();
     }
     if (event.target.closest("[data-plan]")) {
-      state.plan = state.plan ? null : (await get(`/api/plans/${data.plan.id}`).catch((error) => app.toast(error.message, true))) ?? null;
+      state.plan = state.plan ? null : ((await get(`/api/plans/${data.plan.id}`).catch((error) => app.toast(error.message, true))) ?? null);
       return app.refresh();
     }
-    if (event.target.closest("[data-diff]")) {
-      state.diff = state.diff ? null : (await get(`/api/tickets/${id}/diff`).catch((error) => app.toast(error.message, true)))?.diff ?? null;
+    if (event.target.closest("[data-paths]")) {
+      state.paths = !state.paths;
       return app.refresh();
+    }
+    if (event.target.closest("[data-park-open]")) {
+      state.park = true;
+      await app.refresh();
+      return document.getElementById("why")?.focus();
     }
     const act = event.target.closest("[data-act]");
     if (!act || act.type === "submit") return;
     if (act.dataset.armedLabel && !armed(act, act.dataset.armedLabel)) return;
-    const body = act.dataset.act === "move" ? { to: act.dataset.to, why: why() || `moved from the UI` } : {};
+    const body = act.dataset.act === "move" ? { to: act.dataset.to, why: `moved from the UI to ${act.dataset.to}` } : {};
     act.disabled = true;
     const result = await app.post(`/api/tickets/${id}/${act.dataset.act}`, body);
     const said = { approve: "approved; its loop restarts", run: "started", stop: "stopped", merge: "merged", move: `moved to ${act.dataset.to}` };
     if (result) app.toast(`${id} ${said[act.dataset.act] ?? act.dataset.act}.`);
     else act.disabled = false;
   });
-  root.querySelector("[data-why-form]")?.addEventListener("submit", async (event) => {
+  root.addEventListener("submit", async (event) => {
+    if (!event.target.closest("[data-park]")) return;
     event.preventDefault();
     if (!why()) return app.toast("Say why to park it.", true);
     const result = await app.post(`/api/tickets/${id}/park`, { why: why() });
-    if (result) app.toast(`${id} parked.`);
+    if (result) {
+      state.park = false;
+      app.toast(`${id} parked.`);
+    }
   });
 }

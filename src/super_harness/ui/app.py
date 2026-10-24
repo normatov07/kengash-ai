@@ -95,7 +95,10 @@ def create_app(*, token: str, port: int) -> FastAPI:
                 return JSONResponse({"error": "missing or wrong token"}, status_code=401)
             if request.method != "GET" and request.headers.get("x-harness") != "1":
                 return JSONResponse({"error": "missing X-Harness header"}, status_code=403)
-        return await call_next(request)
+        response = await call_next(request)
+        if request.url.path.startswith("/static/"):
+            response.headers["cache-control"] = "no-cache"  # revalidate: an upgrade shows at once
+        return response
 
     @app.exception_handler(HarnessError)
     async def harness_error(request: Request, exc: HarnessError) -> JSONResponse:
