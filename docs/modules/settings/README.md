@@ -17,10 +17,11 @@ Resolve SETTINGS.md into a validated `Settings` model so agents never parse the 
 - Dotted keys nest (`loop_max.simple: 3`); the same key set twice is an error.
 - Mappings deep-merge, so a project can override one field of one agent; each `workflows.<name>` is replaced whole, so steps and `on_fail` never mix across files.
 - Unknown keys fail with the closest known key as a hint.
-- Reading never writes. Writes (`set_values`) keep comments and every line they do not change; `ops.configure` locks, journals and commits them.
+- Reading never writes. Writes (`set_values`) keep comments, every line they do not change and the file's line ending (CRLF stays CRLF); `ops.configure` locks, journals and commits them.
 
 ## Changes
 
+- 2026-10-24: writes keep a CRLF file's line endings.
 - 2026-10-24: a defaults save is refused when a registered project would no longer validate.
 - 2026-10-23: comment-preserving writes, `scope_keys`, `overrides` (SP5 M2).
 - 2026-10-22: layered load, validation with hints, dotted-key get (SP2 M2).

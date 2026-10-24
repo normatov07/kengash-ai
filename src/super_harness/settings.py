@@ -99,7 +99,7 @@ def set_values(paths: StorePaths, slug: str | None, changes: Mapping[str, Any]) 
     and a defaults save also unless every registered project that resolved before still
     does. Returns the keys that changed."""
     path, source = _scope_file(paths, slug)
-    before = path.read_text(encoding="utf-8") if path.is_file() else ""
+    before = path.read_bytes().decode("utf-8") if path.is_file() else ""  # keeps CRLF
     text, done = before, []
     for key, value in changes.items():
         head, _, rest = key.partition(".")

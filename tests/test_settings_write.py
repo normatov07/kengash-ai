@@ -8,7 +8,7 @@ import pytest
 
 from super_harness import settings
 from super_harness.model import UserError
-from super_harness.store import StorePaths
+from super_harness.store import StorePaths, yamledit
 from super_harness.store.seed import ensure_project, ensure_store
 
 
@@ -174,6 +174,49 @@ def test_a_rewritten_entry_keeps_the_space_after_its_key(
     simple = {"steps": ["plan", "implement"], "on_fail": {}}
     settings.set_values(store_paths, "app", {"workflows.simple": simple})
     assert "  simple:   {steps: [plan, implement], on_fail: {}}\n" in project_file.read_text()
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"loop_max.simple": 5},
+        {"loop_grant": 3},
+        {"agents.implementer.cli": "claude/sonnet"},
+        {"workflows.standard": {"steps": ["plan", "implement"], "on_fail": {}}},
+        {"providers.gemini": {"allow_api_key": False}},
+        {"loop_max.critical": None},
+        {"agents.implementer.fallback": None},
+    ],
+)
+def test_a_crlf_file_keeps_crlf_on_every_line(
+    store_paths: StorePaths, project_file: Path, changes: dict[str, object]
+) -> None:
+    project_file.write_bytes(project_file.read_bytes().replace(b"\n", b"\r\n"))
+    assert settings.set_values(store_paths, "app", changes) == list(changes)
+    after = project_file.read_bytes()
+    assert after.count(b"\n") == after.count(b"\r\n") and b"\r\r" not in after
+    settings.load(store_paths, "app")
+
+
+@pytest.mark.parametrize(
+    ("text", "key", "value", "expected"),
+    [
+        ("version: 1\r\n", "merge.mode", "auto", "version: 1\r\nmerge.mode: auto\r\n"),
+        ("version: 1\r\nmerge.mode: ask", "merge.mode", "auto", "version: 1\r\nmerge.mode: auto"),
+        (
+            "loop_max:\r\n  simple: 5",
+            "loop_max.standard",
+            4,
+            "loop_max:\r\n  simple: 5\r\n  standard: 4",
+        ),
+        ("a: {x: 1}\r\nb: 2", "b", {"y": 3}, "a: {x: 1}\r\nb: {y: 3}"),
+        ("a: 1\nb: 2\n", "c", 3, "a: 1\nb: 2\nc: 3\n"),
+    ],
+)
+def test_an_edit_writes_the_text_s_own_line_ending(
+    text: str, key: str, value: object, expected: str
+) -> None:
+    assert yamledit.set_key(text, key, value) == expected
 
 
 def test_a_defaults_save_that_breaks_a_project_writes_nothing(
