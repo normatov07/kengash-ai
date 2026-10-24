@@ -113,7 +113,7 @@ export function view(data, app) {
     <div class="tiles">
       ${tile("STORE SIZE", value, ` ${unit}`, `${data.ticket_files} ticket files · ${data.files.length} md files`)}
       ${tile("TICKETS", data.ticket_files, "", `${t.in_queue} queued · ${t.in_process} running · ${t.done} done`)}
-      ${tile("FOLDER LINKS", links.intact, `/${links.total}`, broken ? `${broken} broken · ${brokenNames.join(", ")}` : "every link intact", broken > 0)}
+      ${tile("FOLDER LINKS", links.intact, `/${links.total}`, broken ? `${broken} broken · ${brokenNames.join(", ")}` : links.total ? "every link intact" : "no project linked yet", broken > 0)}
       ${tile("READ COST", tokens(memory?.tokens ?? 0), "", "tokens of MEMORY.md per agent start")}
     </div>
     <div class="mem-row">

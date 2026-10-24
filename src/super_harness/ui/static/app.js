@@ -112,7 +112,12 @@ async function show() {
     shown = name;
   } catch (error) {
     shown = "";
-    mount(fresh(), html`<div class="page"><div class="panel"><div class="empty">${error.message}</div></div></div>`);
+    if (ticket !== showing) return;
+    mount(document.getElementById("top"), defaultTop());
+    mount(document.getElementById("nav-foot"), "");
+    const back = name === "ticket" ? html`<a href="#/board">Open the task board</a>` : html`<button class="linkish" type="button" data-retry>Try again</button>`;
+    mount(fresh(), html`<div class="page"><div class="panel"><div class="empty error-state">${icon("warning", { size: 15, stroke: "var(--danger)", width: 1.6 })}<span>${error.message.replace(/^\w/, (c) => c.toUpperCase())}.</span>${back}</div></div></div>`);
+    document.querySelector("[data-retry]")?.addEventListener("click", () => show());
   } finally {
     clearTimeout(slow);
   }
@@ -181,7 +186,7 @@ window.addEventListener("hashchange", (event) => {
   if (!before.startsWith("#/ticket/")) app.from = before || "#/overview";
   show();
 });
-get("/api/meta").then((meta) => {
-  app.version = meta.version;
-  show();
-});
+get("/api/meta")
+  .then((meta) => (app.version = meta.version))
+  .catch(() => {})
+  .finally(show);

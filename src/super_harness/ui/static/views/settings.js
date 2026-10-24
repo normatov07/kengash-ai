@@ -132,7 +132,7 @@ function memorySection(data, scope) {
   const broken = links.total - links.intact;
   return html`<section class="settings-memory">
     <div class="mem-head"><h2>Memory</h2><p>One store outside the repos; each project sees it through one folder link, so both paths stay live.</p>
-      <span class="pill ${broken ? "danger" : "ok"}">${icon(broken ? "warning" : "check", { size: 12, width: 1.8 })}${links.intact} of ${links.total} links intact</span></div>
+      ${links.total ? html`<span class="pill ${broken ? "danger" : "ok"}">${icon(broken ? "warning" : "check", { size: 12, width: 1.8 })}${links.intact} of ${links.total} links intact</span>` : html`<span class="pill plain-pill">no project linked yet</span>`}</div>
     ${fileCards(memory, scope)}
     <div class="tree-row">
       <div class="tree-panel"><div class="tree-head"><b>Shared store</b><span class="end mono faint">~/.harness/</span></div>${storeTree(memory)}</div>

@@ -23,10 +23,14 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 - Imports only `ops` and `model` (import-linter); every action goes through `ops` with `by="ui"`.
 - No network fetches, no build step: the screens are static ES modules and one stylesheet.
 - `/static/*` answers with `Cache-Control: no-cache`, so an upgraded harness shows its new screens at once.
+- The sign-in cookie is named per server (`harness_token_<port>`): cookies ignore ports, so two UIs on one machine keep their own sign-in.
+- The journal stream closes on `pagehide` and reopens on `pageshow`, so stale tabs never hold one of the browser's few connections to the server.
+- Below 860 px the sidebar becomes a scrolling top nav and gutters shrink to 16 px; a failed load shows what went wrong and a way back.
 - Every `/api` request needs the run's token; foreign `Host` and `Origin` headers are refused (system spec §10); `POST` needs `X-Harness: 1`.
 
 ## Changes
 
+- 2026-10-24: canvas parity on all seven screens; per-server cookie name; the stream closes with the page; narrow-screen layout.
 - 2026-10-24: canvas parity foundation: bundled fonts, icons, tokens, per-screen top bar and sidebar card slots.
 - 2026-10-24: M2 Chrome pass: table headers in one type, memory lines without their bullet, project commands on Settings.
 - 2026-10-23: Memory store, Ticket detail, Settings, Agents and Workflow screens, scope tabs and settings saves (SP5 M2).

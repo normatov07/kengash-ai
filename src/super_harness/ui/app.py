@@ -34,7 +34,7 @@ from super_harness.ops import (
 )
 
 STATIC = Path(__file__).parent / "static"
-COOKIE = "harness_token"
+COOKIE = "harness_token_{port}"  # one per server: cookies ignore ports
 BY = "ui"
 PING_S = 15.0
 LOCKED = (
@@ -73,10 +73,11 @@ def create_app(*, token: str, port: int) -> FastAPI:
     """The app for one server run: `token` guards every API call, `port` the Host check."""
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+    cookie = COOKIE.format(port=port)
     origins = [f"http://{host}" for host in sorted(hosts)]
 
     def authorized(request: Request) -> bool:
-        given = request.cookies.get(COOKIE, "")
+        given = request.cookies.get(cookie, "")
         header = request.headers.get("authorization", "")
         if header.startswith("Bearer "):
             given = header.removeprefix("Bearer ")
@@ -111,7 +112,7 @@ def create_app(*, token: str, port: int) -> FastAPI:
             if not hmac.compare_digest(link.encode(), token.encode()):
                 return HTMLResponse(LOCKED, status_code=401)
             response = RedirectResponse("/", status_code=303)
-            response.set_cookie(COOKIE, token, httponly=True, samesite="strict", path="/")
+            response.set_cookie(cookie, token, httponly=True, samesite="strict", path="/")
             return response
         if not authorized(request):
             return HTMLResponse(LOCKED, status_code=401)

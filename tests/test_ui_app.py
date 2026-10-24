@@ -243,3 +243,9 @@ def test_compaction_starts_once_from_the_ui(
     assert client.post("/api/memory/compact", headers=POST).json() == {"started": True}
     assert started == ["compact"]
     assert client.get("/api/memory").json()["cap"] == 200
+
+
+def test_two_servers_on_one_host_keep_their_own_sign_in(registered_repo: Path) -> None:
+    first = TestClient(ui_app.create_app(token=TOKEN, port=PORT), base_url=BASE)
+    cookie = first.get(f"/?token={TOKEN}", follow_redirects=False).headers["set-cookie"]
+    assert cookie.startswith(f"harness_token_{PORT}=")  # cookies ignore ports; the name must not
