@@ -150,10 +150,7 @@ document.addEventListener("change", (event) => {
   }
 });
 document.addEventListener("input", (event) => {
-  if (event.target.id === "q") {
-    app.query = event.target.value;
-    if (route().name === "board") show();
-  }
+  if (event.target.id === "q") app.query = event.target.value;
 });
 document.addEventListener("keydown", (event) => {
   if (event.target.id === "q" && event.key === "Enter" && route().name !== "board") location.hash = "#/board";

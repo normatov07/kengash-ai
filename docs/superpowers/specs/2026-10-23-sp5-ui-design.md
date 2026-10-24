@@ -56,11 +56,11 @@ Endpoints (all JSON; `POST` bodies are JSON):
 
 ## 4. Parity checklist (canvas → build)
 
-Each canvas element is built, built differently because the system spec says otherwise, or left out because nothing in the system backs it. M3 closes the list. On 2026-10-23 the canvas itself (version 23) was reworded to folder links on the Settings, Memory, Ticket and Board boards, with the real store layout (`memory/`, `projects/<slug>/tasks/`), so the link rows below now match it.
+Each canvas element is built, built differently because the system spec says otherwise, or left out because nothing in the system backs it. Closed on 2026-10-24: every "Built" item was checked against the running screens (headless captures at 1440, 1093 and 390 px beside the canvas boards, demo and empty stores). On 2026-10-23 the canvas itself (version 23) was reworded to folder links on the Settings, Memory, Ticket and Board boards, with the real store layout (`memory/`, `projects/<slug>/tasks/`), so the link rows below now match it.
 
 | Screen | Built | Built differently | Left out |
 |---|---|---|---|
-| all | sidebar (Overview, Task board, Workflow, Agents, Memory, Settings) with counts (Agents "n/m" enabled: M3); CLI pool; search (`ticket find`); `/to-ticket` and `/to-loop` hints | "loop engine running" → live conductors (system spec §9) | — |
+| all | sidebar (Overview, Task board, Workflow, Agents, Memory, Settings) with counts (tickets, agents on/total, broken links); CLI pool; search (the top-bar box filters the board by id, title, tag or project); `/to-ticket` and `/to-loop` hints | "loop engine running" → live conductors (system spec §9) | — |
 | Overview | stat tiles, live sessions table, approvals with Grant loops / Park, token spend, journal tail with follow; window Today · 7 days · All; Pause all | "PLAN STALLED: read both plans" → links to the ticket's plan and Findings | "avg skill read" (not measured) |
 | Task board | board top bar (project, importance and agent filters, filter, Board · List, `/to-loop`), columns per step with counts and footers, cards (importance, parallel or serial, loop dots, provider, diff size, findings, gate chip), group by status, project or importance, List view, importance legend | "wip cap" → the step's slot use; gated tickets stay in their step's column with a chip (decision 14) | "Add ticket" (tickets come from `/to-ticket`; the footer says so) |
 | Ticket detail | sheet over the dimmed page with breadcrumb, header with actions, tabs Overview · Changes · Timeline · Memory file, changes table and per-file diff, findings cards, prompt, acceptance checkboxes, dependencies, step timeline, ticket file, memory writes, numbered agent chain, metadata, attach command, send back, force move | "Reveal hard link" → both paths of the ticket file: the store's and the repo's through its folder link; the prompt panel shows the whole plan on demand | — |
@@ -71,9 +71,9 @@ Each canvas element is built, built differently because the system spec says oth
 
 ## 5. Acceptance (SP5 exit)
 
-- [ ] `harness ui open` starts or reuses the server, prints the URL, opens the browser; `harness ui stop` ends it; without the extra it exits 4 naming the install command.
-- [ ] Requests without the token, with a foreign `Host`, or a `POST` without `X-Harness` are refused.
-- [ ] The seven screens render a seeded store in Chrome and update live over SSE.
-- [ ] Every UI action goes through `ops` (import-linter keeps `ui` off the store) and is journaled with `by: ui`.
-- [ ] Settings saves keep comments and untouched keys.
-- [ ] The parity checklist (§4) is complete; the `open-ui` eval passes on claude and agy.
+- [x] `harness ui open` starts or reuses the server, prints the URL, opens the browser; `harness ui stop` ends it; without the extra it exits 4 naming the install command.
+- [x] Requests without the token, with a foreign `Host`, or a `POST` without `X-Harness` are refused.
+- [x] The seven screens render a seeded store in Chrome and update live over SSE.
+- [x] Every UI action goes through `ops` (import-linter keeps `ui` off the store) and is journaled with `by: ui`.
+- [x] Settings saves keep comments and untouched keys.
+- [x] The parity checklist (§4) is complete; the `open-ui` eval passes on claude and agy.

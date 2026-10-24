@@ -30,6 +30,7 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 
 ## Changes
 
+- 2026-10-24: the top-bar search hands its text to the board's filter.
 - 2026-10-24: canvas parity on all seven screens; per-server cookie name; the stream closes with the page; narrow-screen layout.
 - 2026-10-24: canvas parity foundation: bundled fonts, icons, tokens, per-screen top bar and sidebar card slots.
 - 2026-10-24: M2 Chrome pass: table headers in one type, memory lines without their bullet, project commands on Settings.

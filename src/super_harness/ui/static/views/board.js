@@ -30,6 +30,7 @@ const WARN_CHIPS = new Set(["stalled", "blocked", "parked"]);
 const OK_CHIPS = new Set(["ready to merge"]);
 
 export async function load(app) {
+  if (app.query && app.query !== state.text) state.text = app.query; // the search box elsewhere hands over
   return get(`/api/board${app.project ? `?project=${encodeURIComponent(app.project)}` : ""}`);
 }
 
@@ -192,6 +193,7 @@ export function bind(root, app, data, bar) {
   const syncBar = () => bar.querySelectorAll("[data-view]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.view === state.view ? "true" : "false"));
   bar.querySelector("#bq")?.addEventListener("input", (event) => {
     state.text = event.target.value;
+    app.query = state.text;
     paint();
   });
   bar.querySelector("#imp-filter")?.addEventListener("change", (event) => {
