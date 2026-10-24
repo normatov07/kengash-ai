@@ -2,6 +2,7 @@
 // project, SP5 spec decision 8), set-here marks, and the edit → Save · Discard · Reset flow.
 import { get } from "./api.js";
 import { html } from "./html.js";
+import { icon } from "./icons.js";
 
 export function pick(values, key) {
   return key.split(".").reduce((node, part) => (node == null ? undefined : node[part]), values);
@@ -48,6 +49,20 @@ export function tabs(app, projects) {
   )}</div>`;
 }
 
+// The canvas's config top bar: scope select, a note, the overrides badge, Discard/Reset, Save.
+export function configBar(app, projects, setHere, { note, save = "Save to SETTINGS.md", reset = false } = {}) {
+  const scope = scopeOf(app);
+  const count = setHere.length;
+  return html`<label class="sr-only" for="scope">Scope</label>
+    <select id="scope" class="select" data-scope-select>${[["", "defaults"], ...projects.map((p) => [p, p])].map(([value, label]) => html`<option value="${value}" ${value === scope ? "selected" : ""}>${label}</option>`)}</select>
+    ${scope ? html`<span class="pill ok">${icon("check", { size: 11, width: 1.8 })}${count} ${count === 1 ? "override" : "overrides"}</span>` : ""}
+    <span class="note">${note ?? (scope ? "inherits defaults unless overridden" : "editing the defaults every new project copies")}</span>
+    <span class="spacer"></span>
+    ${reset && scope && count ? html`<button class="btn quiet" type="button" data-reset>Reset</button>` : ""}
+    <button class="btn quiet" type="button" data-discard disabled>Discard</button>
+    <button class="btn accent sans-btn" type="button" data-save disabled>${save}</button>`;
+}
+
 export function actions(app, setHere) {
   const scope = scopeOf(app);
   const count = setHere.length;
@@ -82,9 +97,10 @@ export function changes(root) {
 
 // extra(): further changes a screen tracks outside its inputs (the workflow graph);
 // clear(): forget them, on Discard, a scope switch or a save.
-export function bindScope(root, app, { setHere = [], extra = () => ({}), clear = () => {} } = {}) {
-  const save = root.querySelector("[data-save]");
-  const discard = root.querySelector("[data-discard]");
+export function bindScope(root, app, { setHere = [], extra = () => ({}), clear = () => {}, bar = null } = {}) {
+  const find = (selector) => root.querySelector(selector) ?? bar?.querySelector(selector);
+  const save = find("[data-save]");
+  const discard = find("[data-discard]");
   const all = () => ({ ...changes(root), ...extra() });
   const dirty = () => {
     const count = Object.keys(all()).length;
@@ -94,14 +110,16 @@ export function bindScope(root, app, { setHere = [], extra = () => ({}), clear =
   };
   root.addEventListener("input", dirty);
   root.addEventListener("change", dirty);
-  root.querySelectorAll("[data-scope]").forEach((button) =>
-    button.addEventListener("click", () => {
-      app.scope = button.dataset.scope;
-      app.dirty = false;
-      clear();
-      app.refresh();
-    }),
-  );
+  const switchTo = (scope) => {
+    app.scope = scope;
+    app.dirty = false;
+    clear();
+    app.refresh();
+  };
+  [root, bar].filter(Boolean).forEach((place) => {
+    place.querySelectorAll("[data-scope]").forEach((button) => button.addEventListener("click", () => switchTo(button.dataset.scope)));
+    place.querySelector("[data-scope-select]")?.addEventListener("change", (event) => switchTo(event.target.value));
+  });
   discard?.addEventListener("click", () => {
     app.dirty = false;
     clear();
@@ -121,11 +139,12 @@ export function bindScope(root, app, { setHere = [], extra = () => ({}), clear =
     const keys = Object.keys(found);
     post({ changes: found }, `Saved ${keys.length} ${keys.length === 1 ? "setting" : "settings"} to SETTINGS.md.`);
   });
-  const reset = root.querySelector("[data-reset]");
+  const reset = find("[data-reset]");
   reset?.addEventListener("click", () => {
     if (!armed(reset, "Confirm reset")) return;
     post({ changes: Object.fromEntries(setHere.map((key) => [key, null])) }, "Overrides removed; the defaults apply.");
   });
+  dirty();
   return { dirty };
 }
 

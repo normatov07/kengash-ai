@@ -1,12 +1,15 @@
-// The workflow graph (SP5 spec decision 10): automatic left-to-right layout from the trigger
-// through each step to done; solid edges pass forward, dashed on_fail edges send a ticket back.
+// The workflow graph (SP5 spec decision 10, canvas board Workflow): automatic layout from the
+// trigger down through each step to done on a dotted canvas; solid edges pass forward, dashed
+// on_fail edges leave a step's right port and run up a lane on the right to an earlier step.
 import { html } from "./html.js";
+import { STEP_ICONS, icon } from "./icons.js";
 
-const W = 150;
-const H = 64;
-const GAP = 46;
-const PAD = 24;
-const DIP = 46; // how far below the row a send-back edge curves
+const X = 112;
+const W = 240;
+const H = 76;
+const PITCH = 140;
+const TOP = 24;
+const LANE = 80;
 
 export const LABELS = {
   trigger: "Trigger",
@@ -21,46 +24,79 @@ export const LABELS = {
   approve: "Human approval",
 };
 
+// Icon tile colours per step: [tile background, stroke].
+export const TONES = {
+  trigger: ["#22262C", "#A7B0BC"],
+  plan: ["#1B2733", "#68A4E0"],
+  review_plan: ["#241F33", "#B191E8"],
+  implement: ["#2A1E10", "#F0883E"],
+  review_code: ["#241F33", "#B191E8"],
+  security: ["#2A2320", "#D8B24C"],
+  run_tests: ["#1E2A20", "#5FC08B"],
+  docs: ["#1E2A20", "#5FC08B"],
+  approve: ["#3A2024", "#EF7A72"],
+  done: ["#1E2A20", "#5FC08B"],
+};
+
+const PASS = { review_plan: "pass", review_code: "pass", security: "signed off", run_tests: "green" };
+const BACK = { review_plan: "revise", review_code: "findings", security: "blocked", run_tests: "failing", approve: "rejected" };
+
+// Rows from the trigger to done, one pass edge between neighbours, one back edge per on_fail.
 export function layout(steps, onFail) {
   const ids = ["trigger", ...steps, "done"];
-  const nodes = ids.map((id, col) => ({ id, col, x: PAD + col * (W + GAP), y: PAD }));
+  const nodes = ids.map((id, col) => ({ id, col, x: X, y: TOP + col * PITCH }));
   const edges = [];
   for (let i = 0; i + 1 < ids.length; i++) edges.push({ from: ids[i], to: ids[i + 1], kind: "pass" });
   for (const [from, to] of Object.entries(onFail)) edges.push({ from, to, kind: "back" });
-  const backs = edges.filter((edge) => edge.kind === "back").length;
-  return { columns: ids.length, nodes, edges, width: PAD * 2 + ids.length * W + (ids.length - 1) * GAP, height: PAD * 2 + H + (backs ? DIP : 0) };
+  return { columns: ids.length, nodes, edges };
 }
 
-function backPath(from, to, index) {
-  const x1 = from.x + W / 2 - 10;
-  const x2 = to.x + W / 2 + 10;
-  const y = from.y + H;
-  const depth = DIP - 8 + index * 6;
-  return `M${x1} ${y} C${x1} ${y + depth} ${x2} ${y + depth} ${x2} ${y + 6}`;
-}
-
-// sub(id): the node's second line, e.g. the step's CLI; off(id): the step is skipped.
-export function svg(graph, { selected = "", sub = () => "", off = () => false } = {}) {
+function geometry(graph) {
   const at = Object.fromEntries(graph.nodes.map((node) => [node.id, node]));
-  const backs = graph.edges.filter((edge) => edge.kind === "back");
-  return html`<svg class="graph" width="${graph.width}" height="${graph.height}" viewBox="0 0 ${graph.width} ${graph.height}" role="img" aria-label="Workflow graph">
-    <defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="#5A646F"/></marker>
-    <marker id="arrow-back" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="#F0883E"/></marker></defs>
-    ${graph.edges.filter((edge) => edge.kind === "pass").map((edge) => {
-      const from = at[edge.from];
-      const to = at[edge.to];
-      return html`<line x1="${from.x + W}" y1="${from.y + H / 2}" x2="${to.x - 3}" y2="${to.y + H / 2}" stroke="#5A646F" stroke-width="1.4" marker-end="url(#arrow)"/>`;
-    })}
-    ${backs.map((edge, i) => html`<path d="${backPath(at[edge.from], at[edge.to], i)}" fill="none" stroke="#F0883E" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#arrow-back)"><title>${LABELS[edge.from] ?? edge.from} sends back to ${LABELS[edge.to] ?? edge.to}</title></path>`)}
+  const backs = graph.edges
+    .filter((edge) => edge.kind === "back" && at[edge.from] && at[edge.to])
+    .map((edge) => ({ ...edge, span: Math.abs(at[edge.from].col - at[edge.to].col) }))
+    .sort((a, b) => a.span - b.span)
+    .map((edge, lane) => ({ ...edge, lane: X + W + 40 + lane * LANE }));
+  const width = Math.max(720, (backs.at(-1)?.lane ?? X + W) + 140);
+  const height = TOP * 2 + (graph.nodes.length - 1) * PITCH + H;
+  return { at, backs, width, height };
+}
+
+// sub(id): the node's second line; off(id): the step is skipped; ghost: a step shown as
+// "not wired in" beside done.
+export function canvas(graph, { selected = "", sub = () => "", off = () => false, gate = () => false, ghost = "" } = {}) {
+  const { at, backs, width, height } = geometry(graph);
+  const pass = graph.edges.filter((edge) => edge.kind === "pass");
+  const done = at.done;
+  return html`<div class="wf-canvas" style="width: ${width}px; height: ${height}px">
+    <svg class="wf-edges" width="${width}" height="${height}" aria-hidden="true">
+      <defs><marker id="wf-pass" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#5A646F"/></marker>
+      <marker id="wf-back" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#8E6B5E"/></marker></defs>
+      ${pass.map((edge) => {
+        const [a, b] = [at[edge.from], at[edge.to]];
+        return html`<line x1="${a.x + W / 2}" y1="${a.y + H + 5}" x2="${b.x + W / 2}" y2="${b.y - 9}" stroke="#5A646F" stroke-width="2" stroke-linecap="round" marker-end="url(#wf-pass)"/>`;
+      })}
+      ${backs.map((edge) => {
+        const [a, b] = [at[edge.from], at[edge.to]];
+        const [y1, y2] = [a.y + 52, b.y + 22];
+        return html`<path d="M${a.x + W + 5} ${y1} H${edge.lane} V${y2} H${b.x + W + 12}" fill="none" stroke="#8E6B5E" stroke-width="2" stroke-dasharray="6 5" stroke-linejoin="round" marker-end="url(#wf-back)"><title>${LABELS[edge.from] ?? edge.from} sends back to ${LABELS[edge.to] ?? edge.to}</title></path>`;
+      })}
+    </svg>
+    ${pass.map((edge) => (PASS[edge.from] ? html`<div class="wf-label" style="left: ${X + W / 2 + 12}px; top: ${at[edge.from].y + H + 24}px">${PASS[edge.from]}</div>` : ""))}
+    ${backs.map((edge) => html`<div class="wf-label back" style="left: ${edge.lane + 8}px; top: ${(at[edge.from].y + 52 + at[edge.to].y + 22) / 2 - 8}px">${BACK[edge.from] ?? "send back"}</div>`)}
     ${graph.nodes.map((node, i) => {
       const fixed = node.id === "trigger" || node.id === "done";
-      const classes = ["node", fixed ? "fixed" : "", node.id === selected ? "selected" : "", off(node.id) ? "off" : ""].join(" ");
-      const title = fixed ? LABELS[node.id] : `${i} · ${LABELS[node.id] ?? node.id}`;
-      return html`<g class="${classes}" data-node="${fixed ? "" : node.id}" tabindex="${fixed ? "-1" : "0"}" transform="translate(${node.x} ${node.y})">
-        <rect width="${W}" height="${H}" rx="9"/>
-        <text x="12" y="25" class="node-title">${title}</text>
-        <text x="12" y="45" class="node-sub">${off(node.id) ? "off · skipped" : sub(node.id)}</text>
-      </g>`;
+      const [tile, stroke] = TONES[node.id] ?? TONES.trigger;
+      const outBack = backs.some((edge) => edge.from === node.id);
+      const inBack = backs.some((edge) => edge.to === node.id);
+      const classes = ["wf-node", node.id === "trigger" ? "trigger" : "", node.id === "done" ? "done" : "", gate(node.id) ? "gate" : "", node.id === selected ? "selected" : "", off(node.id) ? "off" : ""].join(" ");
+      return html`<div class="${classes}" style="left: ${node.x}px; top: ${node.y}px" ${fixed ? "" : html`data-node="${node.id}" tabindex="0" role="button" aria-pressed="${node.id === selected ? "true" : "false"}"`}>
+        ${node.id !== "trigger" ? html`<span class="port p-top"></span>` : ""}${inBack ? html`<span class="port p-in"></span>` : ""}${outBack ? html`<span class="port p-out"></span>` : ""}${node.id !== "done" ? html`<span class="port p-bottom ${node.id === selected ? "lit" : ""}"></span>` : ""}
+        <span class="wf-icon" style="background: ${tile}">${icon(STEP_ICONS[node.id] ?? "plan", { size: 15, stroke, width: 1.6 })}</span>
+        <span class="wf-text"><b>${fixed ? LABELS[node.id] : `${i} · ${LABELS[node.id] ?? node.id}`}</b><span class="mono ${gate(node.id) ? "gate-sub" : ""}">${off(node.id) ? "off · skipped" : sub(node.id)}</span></span>
+      </div>`;
     })}
-  </svg>`;
+    ${ghost && done ? html`<div class="wf-node ghost" style="left: ${X + W + 88}px; top: ${done.y}px" data-ghost="${ghost}" role="button" tabindex="0" title="Add ${LABELS[ghost]} to this workflow"><span class="port p-top"></span><span class="wf-icon">${icon(STEP_ICONS[ghost], { size: 15, stroke: "#5A646F", width: 1.6 })}</span><span class="wf-text"><b>${LABELS[ghost]}</b><span class="mono">off · not wired in</span></span></div>` : ""}
+  </div>`;
 }

@@ -285,6 +285,9 @@ class WorkflowsView:
     skills: dict[str, str] = field(default_factory=dict)
     off: list[str] = field(default_factory=list)  # roles switched off: their steps are skipped
     plan_review: bool = True  # False at plan.review_max 0: review_plan is skipped
+    review_diff_only: bool = True
+    sessions_reuse: bool = True
+    blocking: list[str] = field(default_factory=list)  # roles that stop a ticket until they pass
     library: list[str] = field(default_factory=lambda: list(STEP_ROLES))
     roles: dict[str, str | None] = field(default_factory=lambda: dict(STEP_ROLES))
     set_here: list[str] = field(default_factory=list)
@@ -758,6 +761,9 @@ def workflows_view(paths: StorePaths | None = None, *, project: str | None) -> W
     found.skills = {role: agent.skill for role, agent in resolved.agents.items()}
     found.off = [role for role, agent in resolved.agents.items() if not agent.on]
     found.plan_review = resolved.plan.review_max > 0
+    found.review_diff_only = resolved.review.diff_only
+    found.sessions_reuse = resolved.sessions.reuse
+    found.blocking = [role for role, agent in resolved.agents.items() if agent.blocking]
     return found
 
 

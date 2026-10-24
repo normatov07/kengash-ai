@@ -287,6 +287,8 @@ def test_workflows_show_the_steps_that_would_run(
     assert found.agents["planner"] == "claude/opus" and "approve" in found.library
     assert found.set_here == ["agents.code-reviewer.on"]
     assert "code-reviewer" in found.off and "test-runner" in found.off and found.plan_review
+    assert (found.review_diff_only, found.sessions_reuse) == (True, True)
+    assert found.blocking == ["security-reviewer"]
 
 
 def test_a_sparse_ticket_renders_empty_sections(
