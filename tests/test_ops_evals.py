@@ -9,7 +9,7 @@ import pytest
 from conftest import FakeClis
 
 from super_harness.model import EvalScenario, UserError
-from super_harness.ops import evals
+from super_harness.ops import evals, lifecycle
 
 SCENARIO = """\
 skill: to-plan
@@ -232,3 +232,32 @@ def test_a_clean_expectation_names_changed_files(
     fake_clis.queue("claude", stdout=claude_reply(), shell=f"{PLAN_NEW}\necho x > notes.md")
     result = run(work, source, scenario(expect={"clean": True}))
     assert (result.passed, result.failure) == (False, "the repo has changes: notes.md")
+
+
+START_UI = (
+    'mkdir -p "$HARNESS_HOME/runtime" && setsid sleep 60 >/dev/null 2>&1 & '
+    'echo "{\\"pid\\": $!, \\"port\\": 1, \\"token\\": \\"t\\"}" '
+    '> "$HARNESS_HOME/runtime/ui.json"; '
+    'echo $! > "$HARNESS_HOME/../ui.pid"'
+)
+
+
+def test_a_ui_expectation_needs_a_running_server(
+    work: Path, source: Path, fake_clis: FakeClis
+) -> None:
+    fake_clis.queue("claude", stdout=claude_reply())
+    result = run(work, source, scenario(expect={"ui": True}))
+    assert (result.passed, result.failure) == (False, "the UI server is not running")
+
+
+def test_a_ui_the_conductor_starts_is_stopped_after_the_run(
+    work: Path, source: Path, fake_clis: FakeClis
+) -> None:
+    fake_clis.queue("claude", stdout=claude_reply(), shell=START_UI)
+    result = run(work, source, scenario(expect={"ui": True}))
+    assert (result.passed, result.failure) == (True, "")
+    record = work / "home" / ".harness" / "runtime" / "ui.json"
+    pid = int((work / "home" / "ui.pid").read_text())
+    assert not record.exists() and not lifecycle.pid_alive(pid)
+    (call,) = fake_clis.calls("claude")
+    assert call["env"]["BROWSER"] == "true"  # `harness ui open` opens no window in an eval

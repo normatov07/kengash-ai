@@ -32,6 +32,7 @@ class Expect(_Eval):
     decisions: list[str] = Field(default_factory=list)
     reply: list[str] = Field(default_factory=list)  # text the last reply must hold
     clean: bool = False  # the conductor leaves the repo's files alone
+    ui: bool = False  # the sandbox store's UI server is running at the end
 
 
 class EvalScenario(_Eval):

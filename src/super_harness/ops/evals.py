@@ -9,6 +9,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,7 +23,7 @@ from super_harness.adapters.base import positional
 from super_harness.adapters.env import worker_env
 from super_harness.adapters.process import run_process
 from super_harness.model import EvalScenario, Expect, NeedsSetup, RecordsExpect, UserError
-from super_harness.ops import agents, records, skills
+from super_harness.ops import agents, lifecycle, records, skills
 from super_harness.store import runtime
 from super_harness.store.paths import StorePaths
 from super_harness.store.registry import load_registry
@@ -212,6 +213,27 @@ def run_scenario(
             values[step.save] = found.group(0)
     if not baseline:
         skills.install([agent], root=repo, source=source)
+    try:
+        return _turns(name, scenario, agent, work, model, values, paths, slug, repo, env)
+    finally:
+        _stop_ui(paths)  # a UI the conductor started never outlives the run
+
+
+def _turns(
+    name: str,
+    scenario: EvalScenario,
+    agent: str,
+    work: Path,
+    model: str | None,
+    values: dict[str, str],
+    paths: StorePaths,
+    slug: str,
+    repo: Path,
+    env: dict[str, str],
+) -> EvalRun:
+    def failed(reason: str) -> EvalRun:
+        return EvalRun(name, agent, False, reason, work)
+
     session: str | None = None
     reply = ""
     before = _changes(repo)  # installed skills are the runner's, not the conductor's
@@ -261,6 +283,10 @@ def check(
         for text in texts:
             if fill(text, values) not in content:
                 return f'{file} lacks "{text}"'
+    if expect.ui:
+        record = runtime.load_ui(paths)
+        if record is None or not lifecycle.pid_alive(record.pid):
+            return "the UI server is not running"
     for text in expect.reply:
         if fill(text, values) not in reply:
             return f'the reply lacks "{text}"'
@@ -302,6 +328,7 @@ def _env(agent: str, home: Path, work: Path) -> dict[str, str]:
     env = worker_env(os.environ, agent, agent, allow_api_key=False)
     env |= {"HARNESS_HOME": str(home), "GIT_CONFIG_GLOBAL": str(config), "GIT_CONFIG_NOSYSTEM": "1"}
     env["PATH"] = os.pathsep.join([str(BIN), env.get("PATH", "")])
+    env["BROWSER"] = "true"  # `harness ui open` opens no window on the user's desktop
     return env
 
 
@@ -340,6 +367,20 @@ def _changes(repo: Path) -> set[str]:
         check=False,
     )
     return {line[3:] for line in status.stdout.splitlines() if line.strip()}
+
+
+def _stop_ui(paths: StorePaths) -> None:
+    """End the sandbox store's UI server, if the conductor started one."""
+    record = runtime.load_ui(paths)
+    if record is None:
+        return
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.killpg(record.pid, signal.SIGTERM)
+    for _ in range(50):
+        if not lifecycle.pid_alive(record.pid):
+            break
+        time.sleep(0.05)
+    runtime.drop_ui(paths)
 
 
 def _stop_workers(paths: StorePaths) -> None:

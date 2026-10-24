@@ -23,6 +23,7 @@ expect:
   memory: ["text MEMORY.md must hold"]
   reply: ["text the last reply must hold"]
   clean: true                         # the conductor changes no file in the repo
+  ui: true                            # the store's UI server runs (the runner stops it after)
 timeout_s: 900                        # per turn
 ```
 
