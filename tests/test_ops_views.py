@@ -332,3 +332,9 @@ def test_the_memory_view_counts_files_tickets_and_models(seeded: StorePaths) -> 
     assert rows["aaaaaaa5"].closed is not None and rows["aaaaaaa1"].closed is None
     assert found.writes[0]["type"] == "memory.compacted"  # newest first
     assert found.cap == 200 and found.links.total == 1
+
+
+def test_the_overview_counts_tickets_and_enabled_agents(seeded: StorePaths) -> None:
+    found = views.overview(seeded, window="today")
+    assert found.tickets_total == 5
+    assert (found.agents_on, found.agents_total) == (5, 7)

@@ -105,6 +105,9 @@ class Overview:
     projects: list[str] = field(default_factory=list)
     paused: bool = False  # `harness pause` without a project
     links_broken: int = 0  # projects whose folder or memory link needs a fix
+    tickets_total: int = 0
+    agents_on: int = 0  # roles switched on in the user's defaults
+    agents_total: int = 0
     sessions: list[Session] = field(default_factory=list)
     queue: Counts = field(default_factory=Counts)
     gates: list[Gate] = field(default_factory=list)
@@ -376,6 +379,7 @@ def overview(paths: StorePaths | None = None, *, window: Window = "today") -> Ov
     reasons = _reasons(events)
     for slug, doc in _tickets(paths, None):
         ticket = doc.meta
+        found.tickets_total += 1
         if ticket.folder is Folder.in_queue:
             _queue(found.queue, ticket)
         elif ticket.folder is Folder.in_process and ticket.sub_status in GATES:
@@ -410,6 +414,10 @@ def overview(paths: StorePaths | None = None, *, window: Window = "today") -> Ov
     found.done_today = sum(1 for event in events if _done(event) and event.ts.date() == today)
     found.spend = _spend(events, window)
     found.slots = _slots(paths)
+    with contextlib.suppress(HarnessError):
+        roster = settings.load(paths).agents
+        found.agents_on = sum(agent.on for agent in roster.values())
+        found.agents_total = len(roster)
     fresh = utc_now() - FRESH_PING
     found.conductors = [ping for ping in runtime.load_pings(paths) if ping.time >= fresh]
     found.tail = [event.model_dump(mode="json", exclude_none=True) for event in events[-TAIL:]]

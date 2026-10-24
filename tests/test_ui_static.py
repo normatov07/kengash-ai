@@ -61,3 +61,12 @@ def test_the_workflow_graph_lays_steps_out_left_to_right() -> None:
     assert found["cols"] == [0, 1, 2, 3, 4]
     assert found["back"] == [{"from": "review_code", "to": "implement", "kind": "back"}]
     assert found["pass"] == 4
+
+
+def test_the_fonts_ship_with_the_screens(registered_repo: Path) -> None:
+    client = TestClient(ui_app.create_app(token="t", port=1), base_url="http://127.0.0.1:1")
+    for name in ("inter.woff2", "jetbrains-mono.woff2", "OFL.txt"):
+        assert client.get(f"/static/fonts/{name}").status_code == 200
+    assert client.get("/static/fonts/inter.woff2").headers["content-type"] == "font/woff2"
+    css = (STATIC / "app.css").read_text()
+    assert 'url("/static/fonts/inter.woff2")' in css and "fonts.googleapis" not in css
