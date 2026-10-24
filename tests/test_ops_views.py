@@ -103,14 +103,49 @@ def test_the_overview_counts_sessions_queue_gates_and_spend(seeded: StorePaths) 
 
 
 def test_the_board_puts_cards_in_their_columns(seeded: StorePaths) -> None:
-    columns = {c.key: c for c in views.board(seeded, project=None).columns}
+    board = views.board(seeded, project=None)
+    keys = [column.key for column in board.columns]
+    assert keys == ["in_queue", "plan", "implement", "review_code", "security", "done"]
+    assert board.steps == {"simple": 3, "standard": 4, "critical": 5}
+    columns = {c.key: c for c in board.columns}
     assert [card.id for card in columns["in_queue"].cards] == ["aaaaaaa1", "aaaaaaa2"]
     assert [card.id for card in columns["implement"].cards] == ["aaaaaaa3"]
-    assert [card.id for card in columns["needs_you"].cards] == ["aaaaaaa4"]
+    assert [card.id for card in columns["security"].cards] == ["aaaaaaa4"]  # its gate's step
+    assert columns["security"].cards[0].chip == "loop cap hit"
     assert [card.id for card in columns["done"].cards] == ["aaaaaaa5"]
     card: Any = columns["implement"].cards[0]
-    assert (card.added, card.removed, card.provider) == (130, 2, "codex")
+    assert (card.added, card.removed, card.provider, card.chip) == (130, 2, "codex", "")
     assert columns["in_queue"].cards[0].title == "<script>x</script>"  # escaped by the UI
+    assert columns["in_queue"].cards[1].chip == "blocked"
+    assert columns["done"].cards[0].done_at is not None
+
+
+def test_board_footers_name_each_steps_sessions(seeded: StorePaths) -> None:
+    columns = {c.key: c for c in views.board(seeded, project=None).columns}
+    assert columns["plan"].footer == "planner · 0 sessions"
+    assert columns["implement"].footer == "implementer · 1 session · codex 1/3 slots"
+    assert columns["security"].footer == "security-reviewer · blocking gate"
+    assert columns["in_queue"].footer == "" and columns["done"].footer == ""
+
+
+def test_waiting_and_merge_ready_tickets_keep_a_step_column(
+    seeded: StorePaths, make_ticket: Make
+) -> None:
+    project = seeded.project("payments-api")
+    for doc in (
+        make_ticket("bbbbbbb1", status="in_process/waiting_slot", step="review_code"),
+        make_ticket("bbbbbbb2", status="in_process/awaiting_merge", workflow="simple"),
+        make_ticket("bbbbbbb3", status="in_process/under_test", step="run_tests"),
+    ):
+        documents.save_ticket(project, doc)
+    event = step_end("bbbbbbb1", "codex", 1)
+    rejected = {**event.model_dump(), "step": "review_plan", "verdict": "fail"}
+    journal.append(seeded, Event.model_validate(rejected))
+    columns = {c.key: c for c in views.board(seeded, project=None).columns}
+    review = {card.id: card for card in columns["review_code"].cards}
+    assert review["bbbbbbb1"].chip == "waiting slot" and review["bbbbbbb1"].rejected == 1
+    assert review["bbbbbbb2"].chip == "ready to merge"  # no step: its workflow's last
+    assert [card.id for card in columns["run_tests"].cards] == ["bbbbbbb3"]  # shown once used
 
 
 def test_links_report_each_projects_link_and_its_fix(

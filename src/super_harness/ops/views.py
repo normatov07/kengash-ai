@@ -20,6 +20,7 @@ from super_harness.model import (
     HarnessError,
     JournalCursor,
     ProviderStatus,
+    Settings,
     Ticket,
     Workflow,
     split_cli,
@@ -53,10 +54,23 @@ COLUMNS = (
     ("security", "Security"),
     ("run_tests", "Tests"),
     ("docs", "Docs"),
-    ("waiting", "Waiting"),
-    ("needs_you", "Needs you"),
+    ("approve", "Approval"),
     ("done", "Done"),
 )
+CORE_STEPS = frozenset({"plan", "implement", "review_code", "security"})  # shown even when empty
+CHIPS = {
+    "blocked": "blocked",
+    "parked": "parked",
+    "loop_cap": "loop cap hit",
+    "token_cap": "token cap hit",
+    "approve_step": "needs approval",
+    "stalled": "stalled",
+    "failed": "failed",
+    "awaiting_merge": "ready to merge",
+    "waiting_slot": "waiting slot",
+    "waiting_quota": "waiting quota",
+    "paused": "paused",
+}
 
 
 @dataclass
@@ -139,6 +153,10 @@ class Card:
     removed: int
     findings: int
     updated: datetime
+    chip: str = ""  # why it is not moving: a gate, a wait, a block
+    rejected: int = 0  # failed plan reviews
+    done_at: datetime | None = None
+    tags: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -146,11 +164,13 @@ class Column:
     key: str
     title: str
     cards: list[Card] = field(default_factory=list)
+    footer: str = ""  # the step role's live sessions, and for implement its slot use
 
 
 @dataclass
 class Board:
     columns: list[Column] = field(default_factory=list)
+    steps: dict[str, int] = field(default_factory=dict)  # workflow → steps a ticket runs
 
 
 @dataclass
@@ -444,37 +464,110 @@ def overview(paths: StorePaths | None = None, *, window: Window = "today") -> Ov
 
 
 def board(paths: StorePaths | None = None, *, project: str | None = None) -> Board:
-    """The Task board: every ticket of the project (or of all) in its status column."""
+    """The Task board: queued tickets, then each step's column (a ticket at a gate or waiting
+    stays in its step's column with a chip saying why), then done."""
     paths = paths or StorePaths.default()
-    columns = {key: Column(key, title) for key, title in COLUMNS}
-    diffs = _diffs(_events(paths))
+    events = _events(paths)
+    diffs = _diffs(events)
+    rejected: dict[str, int] = defaultdict(int)
+    done_at: dict[str, datetime] = {}
+    for event in events:
+        extra = event.model_extra or {}
+        if event.type == "step.end" and event.ticket and extra.get("step") == "review_plan":
+            rejected[event.ticket] += extra.get("verdict") == "fail"
+        if event.ticket and _done(event):
+            done_at[event.ticket] = event.ts
+    loaded: dict[str, Settings | None] = {}
+    placed: dict[str, list[Card]] = defaultdict(list)
     for slug, doc in _tickets(paths, project):
         ticket = doc.meta
+        if slug not in loaded:
+            try:
+                loaded[slug] = settings.load(paths, slug)
+            except HarnessError:
+                loaded[slug] = None
         added, removed = diffs.get(ticket.id, (0, 0))
         provider, _ = _agent(paths, slug, ticket) if ticket.step else ("", "")
         findings = sum(
             line.startswith("- ") for line in doc.sections.get("Findings", "").splitlines()
         )
-        card = Card(
-            ticket.id,
-            slug,
-            ticket.title,
-            ticket.importance.value,
-            ticket.status,
-            ticket.step,
-            ticket.loop,
-            ticket.loop_max,
-            provider,
-            bool(ticket.touches),
-            added,
-            removed,
-            findings,
-            ticket.updated,
+        key, chip = _place(paths, ticket, loaded[slug])
+        placed[key].append(
+            Card(
+                ticket.id,
+                slug,
+                ticket.title,
+                ticket.importance.value,
+                ticket.status,
+                ticket.step,
+                ticket.loop,
+                ticket.loop_max,
+                provider,
+                bool(ticket.touches),
+                added,
+                removed,
+                findings,
+                ticket.updated,
+                chip,
+                rejected.get(ticket.id, 0),
+                done_at.get(ticket.id) if ticket.folder is Folder.done else None,
+                list(ticket.tags),
+            )
         )
-        columns[_column(ticket)].cards.append(card)
-    for column in columns.values():
-        column.cards.sort(key=lambda card: (card.updated, card.id), reverse=column.key == "done")
-    return Board(list(columns.values()))
+    shown = [
+        key for key, _ in COLUMNS if key in ("in_queue", "done") or key in CORE_STEPS or placed[key]
+    ]
+    titles = dict(COLUMNS)
+    try:
+        resolved: Settings | None = settings.load(paths, project)
+    except HarnessError:
+        resolved = None
+    columns = []
+    for key in shown:
+        cards = sorted(placed[key], key=lambda card: (card.updated, card.id), reverse=key == "done")
+        columns.append(Column(key, titles[key], cards, _footer(paths, key, cards, resolved)))
+    steps = {}
+    if resolved is not None:
+        steps = {
+            name: len(workflow.steps_for(resolved, name, hitl=False)) for name in resolved.workflows
+        }
+    return Board(columns, steps)
+
+
+def _place(paths: StorePaths, ticket: Ticket, resolved: Settings | None) -> tuple[str, str]:
+    """The column a ticket shows in and the chip on its card."""
+    if ticket.folder is Folder.in_queue:
+        return "in_queue", CHIPS.get(ticket.sub_status, "")
+    if ticket.folder is Folder.done:
+        return "done", ""
+    chip = CHIPS.get(
+        _gate_kind(paths, ticket) if ticket.sub_status in GATES else ticket.sub_status, ""
+    )
+    if ticket.step in STEP_ROLES:
+        return str(ticket.step), chip
+    steps: list[str] = []
+    if resolved is not None and ticket.workflow in resolved.workflows:
+        steps = workflow.steps_for(resolved, ticket.workflow, hitl=False)
+    return (steps[-1] if steps else "implement"), chip
+
+
+def _footer(paths: StorePaths, key: str, cards: list[Card], resolved: Settings | None) -> str:
+    role = STEP_ROLES.get(key)
+    if key in ("in_queue", "done") or resolved is None:
+        return ""
+    if role is None:
+        return "you approve"
+    agent = resolved.agents.get(role)
+    if key == "security" and agent is not None and agent.blocking:
+        return f"{role} · blocking gate"
+    running = sum(1 for card in cards if not card.chip)
+    text = f"{role} · {running} {'session' if running == 1 else 'sessions'}"
+    if key == "implement" and agent is not None:
+        provider, _ = split_cli(agent.cli)
+        held = sum(1 for entry in runtime.load_slots(paths).held if entry.provider == provider)
+        total = resolved.sessions.per_provider.get(provider, 0)
+        text += f" · {provider} {held}/{total} slots"
+    return text
 
 
 def links(paths: StorePaths | None = None, *, nearby: bool = True) -> Links:
@@ -823,18 +916,6 @@ def events_after(cursor: JournalCursor) -> tuple[list[dict[str, Any]], JournalCu
     """Journal events written after `cursor`, as JSON-ready mappings, and the new cursor."""
     events, cursor = journal.read_after(StorePaths.default(), cursor)
     return [event.model_dump(mode="json", exclude_none=True) for event in events], cursor
-
-
-def _column(ticket: Ticket) -> str:
-    if ticket.folder is Folder.in_queue:
-        return "in_queue"
-    if ticket.folder is Folder.done:
-        return "done"
-    if ticket.sub_status in GATES:
-        return "needs_you"
-    if ticket.sub_status in WAITING or ticket.step not in dict(COLUMNS):
-        return "waiting"
-    return str(ticket.step)
 
 
 def _projects(paths: StorePaths) -> list[str]:

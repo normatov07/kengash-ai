@@ -75,7 +75,7 @@ def test_overview_and_board_are_json(client: TestClient) -> None:
     assert overview["projects"] == ["payments-api"] and overview["sessions"] == []
     assert client.get("/api/overview?window=year").status_code == 422
     board = client.get("/api/board").json()
-    assert [column["key"] for column in board["columns"]][:2] == ["in_queue", "plan"]
+    assert [column["key"] for column in board["columns"]][:3] == ["in_queue", "plan", "implement"]
 
 
 def test_errors_come_back_as_json(client: TestClient) -> None:
