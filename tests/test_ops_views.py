@@ -369,6 +369,8 @@ def test_the_memory_view_counts_files_tickets_and_models(seeded: StorePaths) -> 
     assert rows["aaaaaaa3"].models == ["claude", "codex", "codex/gpt-5-codex"]
     assert rows["aaaaaaa5"].closed is not None and rows["aaaaaaa1"].closed is None
     assert found.writes[0]["type"] == "memory.compacted"  # newest first
+    assert memory.text == found.memory_text and memory.text.startswith("# MEMORY.md")
+    assert (found.last_before, found.last_after) == (210, 150)
     assert found.cap == 200 and found.links.total == 1
 
 

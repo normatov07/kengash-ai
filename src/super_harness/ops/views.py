@@ -367,6 +367,7 @@ class MemoryFile:
     tokens: int  # a read's rough cost: characters / 4
     compacted: datetime | None
     updated: datetime | None
+    text: str = ""
 
 
 @dataclass
@@ -395,6 +396,8 @@ class MemoryView:
     memory_text: str = ""
     cap: int = 200
     compacting: bool = False
+    last_before: int = 0  # line counts of the last accepted compaction
+    last_after: int = 0
     index: list[IndexRow] = field(default_factory=list)
     writes: list[dict[str, Any]] = field(default_factory=list)
 
@@ -853,6 +856,8 @@ def memory_view(paths: StorePaths | None = None, *, project: str | None) -> Memo
             closed[event.ticket] = event.ts
         elif event.type == "memory.compacted" and extra.get("accepted"):
             compacted = event.ts
+            found.last_before = int(extra.get("before") or 0)
+            found.last_after = int(extra.get("after") or 0)
     for slug, doc in _tickets(paths, None):
         ticket = doc.meta
         found.ticket_files += 1
@@ -909,7 +914,7 @@ def _memory_file(
     updated = datetime.fromtimestamp(path.stat().st_mtime, tz=utc_now().tzinfo)
     entries = sum(line.startswith("- ") for line in lines)
     return MemoryFile(
-        name, scope, str(path), len(lines), entries, len(text) // 4, compacted, updated
+        name, scope, str(path), len(lines), entries, len(text) // 4, compacted, updated, text
     )
 
 
