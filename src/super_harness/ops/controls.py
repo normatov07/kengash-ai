@@ -1,9 +1,6 @@
 """Claim tickets and steer running ones (SP3 spec decisions 8, 18, 21, 22)."""
 
-import contextlib
 import os
-import signal
-import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -30,7 +27,6 @@ from super_harness.store.registry import load_registry
 
 RESUMABLE = ("in_queue/ready", "in_process/failed", "in_process/stalled", "in_process/paused")
 NO_SLOT = ("shell", "user")
-STOP_GRACE_S = 10
 SANDBOXED = (
     "harness run cannot start workers inside a network-less codex sandbox; "
     "run it outside the sandbox"
@@ -197,13 +193,9 @@ def stop_ticket(ticket_id: str, *, project: str | None, by: str) -> str:
     """Kill the ticket's worker now, then mark the ticket failed "stopped"."""
     paths = StorePaths.default()
     slug, _ = records.locate_ticket(paths, ticket_id, project)
-    record = runtime.load_worker(paths, ticket_id)
-    if record is None or not lifecycle.pid_alive(record.pid):
+    if not jobs.end(paths, ticket_id):
         raise UserError(f"{ticket_id} has no running worker")
-    _end_group(record.pid)
-    status = steps.fail_ticket(paths, slug, ticket_id, "stopped", kind="ticket.stopped")
-    runtime.drop_worker(paths, ticket_id)
-    return status
+    return steps.fail_ticket(paths, slug, ticket_id, "stopped", kind="ticket.stopped")
 
 
 def pause(project: str | None, *, by: str) -> Paused:
@@ -339,21 +331,6 @@ def _live(paths: StorePaths, ticket_id: str) -> bool:
         return False
     fresh = (utc_now() - record.heartbeat).total_seconds() < lifecycle.DEAD_AFTER_S
     return fresh and lifecycle.pid_alive(record.pid)
-
-
-def _end_group(pid: int) -> None:
-    """SIGTERM the worker's process group, then SIGKILL it after STOP_GRACE_S."""
-    try:
-        os.killpg(pid, signal.SIGTERM)
-    except (ProcessLookupError, PermissionError):
-        return
-    deadline = time.monotonic() + STOP_GRACE_S
-    while lifecycle.pid_alive(pid):
-        if time.monotonic() >= deadline:
-            with contextlib.suppress(ProcessLookupError, PermissionError):
-                os.killpg(pid, signal.SIGKILL)
-            break
-        time.sleep(0.1)
 
 
 def _event(kind: str, slug: str, ticket: Ticket, **fields: object) -> Event:

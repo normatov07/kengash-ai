@@ -6,10 +6,11 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+import pytest
 from conftest import Engine, FakeClis
 
 from super_harness.model import PlanMode, PlanStatus, WorkerRecord
-from super_harness.ops import controls, plans, records
+from super_harness.ops import controls, lifecycle, plans, records, tickets
 from super_harness.store import StorePaths, documents, runtime
 
 
@@ -42,6 +43,29 @@ def test_stop_ends_the_worker_and_its_cli(engine: Engine, fake_clis: FakeClis) -
     assert (
         subprocess.run(["pgrep", "-f", "fake_cli.py claude"], capture_output=True).returncode == 1
     )
+
+
+@pytest.mark.parametrize(
+    ("target", "status"), [("in_queue", "in_queue/ready"), ("done", "done/closed")]
+)
+def test_moving_a_running_ticket_out_of_process_stops_its_worker(
+    engine: Engine, fake_clis: FakeClis, target: str, status: str
+) -> None:
+    fake_clis.queue("claude", fixture="claude/work_resume.json", sleep=60)
+    pid = controls.spawn_worker(engine.paths, engine.slug, "7b55e0c1", None)
+    runtime.save_worker(engine.paths, WorkerRecord(id="7b55e0c1", project=engine.slug, pid=pid))
+    wait_until(lambda: len(fake_clis.calls("claude")) == 1)
+    started = time.monotonic()
+    moved = tickets.move_ticket("7b55e0c1", target, "send it back", project=None, by="user")
+    assert time.monotonic() - started < 12
+    assert (moved.after, moved.stopped) == (status, True)
+    assert not lifecycle.pid_alive(pid)
+    assert runtime.load_worker(engine.paths, "7b55e0c1") is None
+    assert runtime.load_slots(engine.paths).held == []
+    assert (
+        subprocess.run(["pgrep", "-f", "fake_cli.py claude"], capture_output=True).returncode == 1
+    )
+    assert engine.ticket().meta.status == status
 
 
 def test_the_worker_runs_a_plan_review(

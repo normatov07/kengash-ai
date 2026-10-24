@@ -24,7 +24,7 @@ from super_harness.model import (
     UserError,
     utc_now,
 )
-from super_harness.ops import records
+from super_harness.ops import jobs, records, slots
 from super_harness.ops.workspace import resolve_slug
 from super_harness.store import documents
 from super_harness.store.ids import new_id
@@ -70,6 +70,7 @@ class Moved:
     after: str
     ready: list[str] = field(default_factory=list)
     blocked: list[str] = field(default_factory=list)
+    stopped: bool = False  # the move out of in_process stopped the ticket's worker
 
 
 @dataclass
@@ -182,7 +183,8 @@ def find_tickets(text: str, *, project: str | None, cwd: Path) -> list[TicketLin
 
 
 def move_ticket(ticket_id: str, target: str, why: str, *, project: str | None, by: str) -> Moved:
-    """Move a ticket to FOLDER[/SUB]; queued tickets then turn ready or blocked to match."""
+    """Move a ticket to FOLDER[/SUB]; queued tickets then turn ready or blocked to match.
+    A move out of in_process stops the ticket's worker first and frees its slots."""
     reason = records.one_line(why, "why")
     paths = StorePaths.default()
     slug, path = records.locate_ticket(paths, ticket_id, project)
@@ -195,6 +197,10 @@ def move_ticket(ticket_id: str, target: str, why: str, *, project: str | None, b
         before, after = ticket.status, _target(target, ticket, tickets, steps)
         if after == before:
             return Moved(ticket.id, slug, before, after)
+        stopped = False
+        if ticket.folder is Folder.in_process and not after.startswith("in_process/"):
+            stopped = jobs.end(paths, ticket.id)
+            slots.release(paths, ticket.id)
         ticket.status = after
         if ticket.folder is Folder.done:
             ticket.step = None  # a done ticket runs no step; parked or requeued ones resume
@@ -206,7 +212,7 @@ def move_ticket(ticket_id: str, target: str, why: str, *, project: str | None, b
     events += [_moved(slug, tid, QUEUED[1], QUEUED[0], note, "harness") for tid in ready]
     events += [_moved(slug, tid, QUEUED[0], QUEUED[1], note, "harness") for tid in blocked]
     records.record(paths, f"harness: ticket move {ticket.id}", *events)
-    return Moved(ticket.id, slug, before, after, ready, blocked)
+    return Moved(ticket.id, slug, before, after, ready, blocked, stopped)
 
 
 def set_fields(ticket_id: str, pairs: Sequence[str], *, project: str | None, by: str) -> Updated:

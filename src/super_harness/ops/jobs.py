@@ -6,7 +6,9 @@ A job journals one terminal event: its result (`plan.reviewed`, `memory.compacte
 the job starts.
 """
 
+import contextlib
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -21,6 +23,7 @@ from super_harness.store.paths import StorePaths
 
 COMPACT = "compact"  # the compaction job's worker id; plan reviews use the plan id
 SLOT_POLL_S = 5
+STOP_GRACE_S = 10
 sleep = time.sleep
 
 
@@ -57,6 +60,17 @@ def alive(paths: StorePaths, job_id: str) -> WorkerRecord | None:
     if (utc_now() - record.heartbeat).total_seconds() >= lifecycle.DEAD_AFTER_S:
         return None
     return record
+
+
+def end(paths: StorePaths, job_id: str) -> bool:
+    """Kill the job's worker while its process runs (SIGTERM to its process group, SIGKILL
+    after STOP_GRACE_S), then drop its record; False when no worker runs."""
+    record = runtime.load_worker(paths, job_id)
+    if record is None or not lifecycle.pid_alive(record.pid):
+        return False
+    _end_group(record.pid)
+    runtime.drop_worker(paths, job_id)
+    return True
 
 
 def heartbeat(job_id: str) -> None:
@@ -127,3 +141,18 @@ def died(paths: StorePaths, record: WorkerRecord) -> None:
     """Clean up after a job whose worker died: free its slot and journal its end."""
     slots.release(paths, record.id)
     journal.append(paths, exited(record.job, record.id, record.project, "worker died"))
+
+
+def _end_group(pid: int) -> None:
+    """SIGTERM the worker's process group, then SIGKILL it after STOP_GRACE_S."""
+    try:
+        os.killpg(pid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError):
+        return
+    deadline = time.monotonic() + STOP_GRACE_S
+    while lifecycle.pid_alive(pid):
+        if time.monotonic() >= deadline:
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.killpg(pid, signal.SIGKILL)
+            break
+        time.sleep(0.1)
