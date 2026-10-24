@@ -2,7 +2,7 @@
 
 Run many projects at once with the coding-agent subscriptions you already pay for (Claude Code, Codex, Antigravity), through their official CLIs, never API keys.
 
-> Status: early development, sub-projects 1–4 of 5 done (foundation, store and CLI, engine, skills). The local web UI is next.
+> Status: early development; all five sub-projects are built (foundation, store and CLI, engine, skills, web UI).
 
 ## How it works
 
@@ -10,7 +10,7 @@ Run many projects at once with the coding-agent subscriptions you already pay fo
 2. `/to-ticket`: the plan becomes small tickets with importance, dependencies and touched paths.
 3. `/to-loop`: tickets run through importance-based agent loops (plan, review, implement, review, security) in parallel across projects, each in its own git worktree, with loop caps you approve.
 4. `harness-memory`: lasting preferences and decisions are kept for every agent and session.
-5. Coming with the UI: `/open-ui`, a local board of every ticket, step, model, token count and code change.
+5. `/open-ui`: a local web UI with an overview of live sessions and gates, a task board, each ticket's changes and timeline, the workflow editor, agents and providers, settings, and the memory store; it updates live and saves settings without losing a comment.
 
 ## Install
 
@@ -26,6 +26,12 @@ Or add the skills another way:
 - Any agent: `npx skills add normatov07/super-harness`
 
 Then run `harness init` inside each project.
+
+The web UI is an optional extra:
+
+    uv tool install --force 'super-harness[ui] @ git+https://github.com/normatov07/super-harness'
+    harness ui open   # starts or reuses it on 127.0.0.1 and prints a private link
+    harness ui stop
 
 ## Develop
 

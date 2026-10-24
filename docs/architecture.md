@@ -71,7 +71,7 @@ Each registered repo gets one directory symlink, `<repo>/.harness -> ~/.harness/
 | 2 | Store + `harness` CLI | done: M1 store core, M2 settings, memory, journal, M3 plans and tickets; plans in `docs/superpowers/plans/` |
 | 3 | Engine | done: spec `docs/superpowers/specs/2026-10-22-sp3-engine-design.md`; M1 engine rules, M2 providers and git, M3 workers and controls, M4 plan review, compaction and live smoke (green for claude and agy on 2026-10-23; codex once installed) |
 | 4 | Skills | done: spec `docs/superpowers/specs/2026-10-23-sp4-skills-design.md`; M1 skill toolkit and role skills, M2 eval runner, M3 the five installed skills (evals green on claude and agy on 2026-10-23; codex once installed) |
-| 5 | Web UI | in progress: spec `docs/superpowers/specs/2026-10-23-sp5-ui-design.md`; M1 server and monitor screens, M2 inspect and configure screens built; M3 `open-ui` and parity next |
+| 5 | Web UI | done: spec `docs/superpowers/specs/2026-10-23-sp5-ui-design.md`; M1 server and monitor screens, M2 inspect and configure screens, canvas parity, M3 the `open-ui` skill (eval green on claude and agy on 2026-10-24) and the parity checklist |
 
 ## Agent context files
 
