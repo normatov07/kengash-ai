@@ -174,3 +174,23 @@ def test_a_rewritten_entry_keeps_the_space_after_its_key(
     simple = {"steps": ["plan", "implement"], "on_fail": {}}
     settings.set_values(store_paths, "app", {"workflows.simple": simple})
     assert "  simple:   {steps: [plan, implement], on_fail: {}}\n" in project_file.read_text()
+
+
+def test_a_defaults_save_that_breaks_a_project_writes_nothing(
+    store_paths: StorePaths, registered_repo: Path
+) -> None:
+    auditor = {"cli": "claude", "skill": "review-code"}
+    settings.set_values(store_paths, None, {"agents.auditor": auditor})
+    store_paths.project("payments-api").settings.write_text("agents.auditor.on: false\n")
+    defaults = store_paths.defaults / "SETTINGS.md"
+    before = defaults.read_bytes()
+    with pytest.raises(UserError, match=r"project payments-api .*: agents\.auditor\.cli"):
+        settings.set_values(store_paths, None, {"agents.auditor": None})
+    assert defaults.read_bytes() == before
+
+
+def test_a_project_already_invalid_does_not_block_defaults_saves(
+    store_paths: StorePaths, registered_repo: Path
+) -> None:
+    store_paths.project("payments-api").settings.write_text("loop_max.simple: 0\n")
+    assert settings.set_values(store_paths, None, {"sessions.max": 4}) == ["sessions.max"]

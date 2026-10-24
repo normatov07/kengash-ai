@@ -13,6 +13,7 @@ from super_harness.model import Settings, UserError
 from super_harness.store import yamledit
 from super_harness.store.files import atomic_write
 from super_harness.store.paths import StorePaths
+from super_harness.store.registry import load_registry
 from super_harness.store.seed import package_default
 from super_harness.store.yamlio import load_yaml
 
@@ -94,8 +95,9 @@ def problems(paths: StorePaths, slug: str | None = None) -> list[str]:
 
 def set_values(paths: StorePaths, slug: str | None, changes: Mapping[str, Any]) -> list[str]:
     """Write `changes` (dotted key → value; None removes the key) into one scope's
-    SETTINGS.md, touching only their lines; nothing is written unless the result is valid.
-    Returns the keys that changed."""
+    SETTINGS.md, touching only their lines; nothing is written unless the result is valid,
+    and a defaults save also unless every registered project that resolved before still
+    does. Returns the keys that changed."""
     path, source = _scope_file(paths, slug)
     before = path.read_text(encoding="utf-8") if path.is_file() else ""
     text, done = before, []
@@ -114,15 +116,40 @@ def set_values(paths: StorePaths, slug: str | None, changes: Mapping[str, Any]) 
         found[-1] = _parse(text, source)
     else:
         found.append(_parse(text, source))
+    problem = _first_problem(found)
+    if problem:
+        raise UserError(f"settings: {problem}")
+    if slug is None:
+        _check_projects(paths, found)
+    atomic_write(path, text)
+    return done
+
+
+def _check_projects(paths: StorePaths, defaults: list[dict[str, Any]]) -> None:
+    """Refuse new defaults (package and user layers) under which a registered project that
+    resolves today would stop resolving."""
+    if not paths.registry.exists():
+        return
+    for slug in sorted(load_registry(paths).projects):
+        own = paths.project(slug).settings
+        if not own.is_file() or problems(paths, slug):
+            continue  # nothing of its own, or already broken: the defaults check covers it
+        layer = _parse(own.read_text(encoding="utf-8"), f"projects/{slug}/SETTINGS.md")
+        problem = _first_problem([*defaults, layer])
+        if problem:
+            raise UserError(f"settings: project {slug} would no longer validate: {problem}")
+
+
+def _first_problem(found: list[dict[str, Any]]) -> str | None:
+    """The first schema problem of the merged layers, or None when they validate."""
     resolved: dict[str, Any] = {}
     for layer in found:
         resolved = merge(resolved, layer)
     try:
         Settings.model_validate(resolved)
     except ValidationError as exc:
-        raise UserError(f"settings: {_describe(exc.errors()[0])}") from exc
-    atomic_write(path, text)
-    return done
+        return _describe(exc.errors()[0])
+    return None
 
 
 def scope_keys(paths: StorePaths, slug: str | None) -> list[str]:
