@@ -418,3 +418,12 @@ def test_the_overview_reports_gate_kinds_and_averages(seeded: StorePaths) -> Non
 def test_a_gate_at_its_loop_cap_reads_as_a_loop_cap(seeded: StorePaths) -> None:
     gates = {gate.ticket: gate.kind for gate in views.overview(seeded).gates}
     assert gates["aaaaaaa4"] == "loop_cap"  # loop 6 of 6, no approval recorded in its state
+
+
+def test_agents_render_before_detection_runs(seeded: StorePaths, detected: list[str]) -> None:
+    found = views.agents_view(seeded, project=None, window="today", detect=False)
+    assert detected == [] and not any(card.checked for card in found.providers)
+    views.agents_view(seeded, project=None, window="today")  # detection runs and is kept
+    again = views.agents_view(seeded, project=None, window="today", detect=False)
+    assert all(card.checked for card in again.providers)
+    assert {card.name: card.signed_in for card in again.providers}["claude"] is True

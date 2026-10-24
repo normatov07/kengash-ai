@@ -74,14 +74,18 @@ export function actions(app, setHere) {
   </div>`;
 }
 
+const list = (text) => String(text).split(",").map((item) => item.trim()).filter(Boolean);
+
 function current(input) {
   if (input.dataset.kind === "bool") return input.checked;
+  if (input.dataset.kind === "list") return list(input.value);
   if (input.dataset.kind === "number") return input.value === "" ? null : Number(input.value);
   return input.value;
 }
 
 function initial(input) {
   if (input.dataset.kind === "bool") return input.dataset.initial === "1";
+  if (input.dataset.kind === "list") return list(input.dataset.initial);
   if (input.dataset.kind === "number") return Number(input.dataset.initial);
   return input.dataset.initial;
 }
@@ -90,7 +94,8 @@ export function changes(root) {
   const found = {};
   root.querySelectorAll("[data-key]").forEach((input) => {
     const value = current(input);
-    if (value !== initial(input) && value !== null) found[input.dataset.key] = value;
+    const same = Array.isArray(value) ? JSON.stringify(value) === JSON.stringify(initial(input)) : value === initial(input);
+    if (!same && value !== null) found[input.dataset.key] = value;
   });
   return found;
 }

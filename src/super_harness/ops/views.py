@@ -234,6 +234,7 @@ class ProviderCard:
     slots_used: int
     slots_total: int
     spend: int
+    checked: bool = True  # False until the CLI's sign-in check has run
 
 
 @dataclass
@@ -672,9 +673,11 @@ def agents_view(
     project: str | None,
     window: Window = "today",
     refresh: bool = False,
+    detect: bool = True,
 ) -> AgentsView:
     """The Agents screen; provider detection runs each CLI's sign-in check, so it is kept
-    for DETECT_S unless `refresh`."""
+    for DETECT_S unless `refresh`; with `detect=False` nothing runs and unchecked
+    providers come back with `checked=False`."""
     paths = paths or StorePaths.default()
     if project is not None:
         records.scope(paths, project)
@@ -690,18 +693,19 @@ def agents_view(
     held: dict[str, int] = defaultdict(int)
     for entry in runtime.load_slots(paths).held:
         held[entry.provider] += 1
-    for name, status in _statuses(paths, refresh).items():
+    for name, status in _statuses(paths, refresh, detect).items():
         found.providers.append(
             ProviderCard(
                 name,
-                status.installed,
-                status.signed_in,
+                status.installed if status else False,
+                status.signed_in if status else False,
                 name not in agents.UNSUPPORTED,
-                status.version,
-                status.hint,
+                status.version if status else None,
+                status.hint if status else "",
                 held[name],
                 resolved.sessions.per_provider.get(name, 0),
                 spend.get(name, 0),
+                status is not None,
             )
         )
     tokens = _role_tokens(events, window)
@@ -1042,15 +1046,18 @@ def _agent(paths: StorePaths, slug: str, ticket: Ticket) -> tuple[str, str]:
     return provider, model or "default"
 
 
-def _statuses(paths: StorePaths, refresh: bool) -> dict[str, ProviderStatus]:
-    detect = agents.detector(paths)
+def _statuses(
+    paths: StorePaths, refresh: bool, run: bool = True
+) -> dict[str, ProviderStatus | None]:
     now = time.monotonic()
-    found: dict[str, ProviderStatus] = {}
+    found: dict[str, ProviderStatus | None] = {}
+    detect = agents.detector(paths) if run else None
     for name in PROVIDERS:
         cached = _detected.get(name)
-        if refresh or cached is None or now - cached[0] > DETECT_S:
+        stale = refresh or cached is None or now - cached[0] > DETECT_S
+        if stale and detect is not None:
             cached = _detected[name] = (now, detect(name))
-        found[name] = cached[1]
+        found[name] = cached[1] if cached is not None else None
     return found
 
 

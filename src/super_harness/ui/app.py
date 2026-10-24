@@ -192,9 +192,14 @@ def create_app(*, token: str, port: int) -> FastAPI:
 
     @app.get("/api/agents")
     def agents_view(
-        project: str = "", window: Literal["today", "7d", "all"] = "today", refresh: bool = False
+        project: str = "",
+        window: Literal["today", "7d", "all"] = "today",
+        refresh: bool = False,
+        detect: bool = True,
     ) -> views.AgentsView:
-        return views.agents_view(project=project or None, window=window, refresh=refresh)
+        return views.agents_view(
+            project=project or None, window=window, refresh=refresh, detect=detect
+        )
 
     @app.get("/api/workflows")
     def workflows_view(project: str = "") -> views.WorkflowsView:
