@@ -17,7 +17,7 @@ Status: all 7 sub-projects done (Foundation; Store + `harness` CLI; Engine; Skil
 
 ## Hard rules
 
-1. The spec `docs/superpowers/specs/2026-10-22-super-harness-design.md` is the contract. Where it differs from `full prompt of app.md` (the original request), the spec wins. Change the spec before changing a contract.
+1. The spec `docs/superpowers/specs/2026-10-22-kengash-design.md` is the contract. Where it differs from `full prompt of app.md` (the original request), the spec wins. Change the spec before changing a contract.
 2. A change to `src/kengash_ai/<module>` updates `docs/modules/<module>/README.md` in the same commit; `make docs` and the pre-commit hook enforce it.
 3. Each project links to the store through one directory symlink. Never use hard links: they cannot link directories and break on status-folder moves and atomic saves.
 4. Only `harness` writes store files; agents never hand-edit plan or ticket state.
