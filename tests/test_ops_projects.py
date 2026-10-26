@@ -1,4 +1,5 @@
 import os
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -215,3 +216,15 @@ def test_a_real_memory_folder_in_a_project_is_reported_not_replaced(
     report = projects.doctor(fix=True, scan=None)
     assert any("memory is a real folder" in p.message for p in report.problems)
     assert (link / "notes.md").read_text() == "mine\n"
+
+
+def test_doctor_fix_prunes_old_logs(store_paths: StorePaths, repo: Path) -> None:
+    projects.init_project(repo)
+    store_paths.logs.mkdir(parents=True, exist_ok=True)
+    old = store_paths.logs / "7b55e0c1-1.out"
+    old.write_text("x")
+    os.utime(old, (time.time() - 40 * 86400,) * 2)
+    projects.doctor()
+    assert old.exists()  # a plain check removes nothing
+    projects.doctor(fix=True)
+    assert not old.exists()

@@ -108,6 +108,10 @@ class MemoryCaps(_Section):
         return _known(value)
 
 
+class Logs(_Section):
+    keep_days: int = Field(30, ge=0)  # 0 keeps every log
+
+
 class ReviewPolicy(_Section):
     diff_only: bool = True
 
@@ -194,6 +198,7 @@ class Settings(_Section):
     skill: SkillCaps = Field(default_factory=SkillCaps)
     memory: MemoryCaps = Field(default_factory=MemoryCaps)
     review: ReviewPolicy = Field(default_factory=ReviewPolicy)
+    logs: Logs = Field(default_factory=Logs)
     providers: dict[str, ProviderOptions] = Field(default_factory=dict)
     agents: dict[str, Agent] = Field(default_factory=dict)
     steps: dict[str, CustomStep] = Field(default_factory=dict)

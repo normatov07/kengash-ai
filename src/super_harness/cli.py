@@ -42,7 +42,15 @@ app = typer.Typer(
 AsJson = Annotated[bool, typer.Option("--json", help="Print machine-readable JSON.")]
 
 
+def _require_posix() -> None:
+    """harness drives process groups and folder links: Linux and macOS (system spec §1)."""
+    if sys.platform == "win32":
+        typer.echo("harness runs on Linux and macOS; on Windows use WSL", err=True)
+        raise typer.Exit(4)
+
+
 def _print_version(value: bool) -> None:
+    _require_posix()
     if value:
         typer.echo(f"super-harness {__version__}")
         raise typer.Exit()
@@ -61,6 +69,7 @@ def main(
     ] = False,
 ) -> None:
     """Run many projects at once with subscription coding-agent CLIs."""
+    _require_posix()
 
 
 @contextmanager

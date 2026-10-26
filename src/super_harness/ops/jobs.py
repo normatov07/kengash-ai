@@ -15,8 +15,16 @@ import time
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from super_harness import journal
-from super_harness.model import Event, JournalCursor, SlotEntry, WorkerRecord, utc_now
+from super_harness import journal, settings
+from super_harness.model import (
+    Event,
+    HarnessError,
+    JournalCursor,
+    Logs,
+    SlotEntry,
+    WorkerRecord,
+    utc_now,
+)
 from super_harness.ops import lifecycle, slots
 from super_harness.store import runtime
 from super_harness.store.paths import StorePaths
@@ -29,8 +37,9 @@ sleep = time.sleep
 
 def spawn(paths: StorePaths, args: Sequence[str], log_name: str) -> int:
     """Start `python -m super_harness.worker <args>` detached, logging to
-    runtime/logs/<log_name>.log."""
+    runtime/logs/<log_name>.log; logs older than `logs.keep_days` go first."""
     paths.logs.mkdir(parents=True, exist_ok=True)
+    prune_logs(paths, keep_days(paths))
     argv = [sys.executable, "-m", "super_harness.worker", *args]
     with (paths.logs / f"{log_name}.log").open("ab") as log:
         process = subprocess.Popen(
@@ -71,6 +80,29 @@ def end(paths: StorePaths, job_id: str) -> bool:
     _end_group(record.pid)
     runtime.drop_worker(paths, job_id)
     return True
+
+
+def keep_days(paths: StorePaths) -> int:
+    """`logs.keep_days` of the user's defaults; the package default when they are broken."""
+    try:
+        return settings.load(paths).logs.keep_days
+    except HarnessError:
+        return Logs().keep_days
+
+
+def prune_logs(paths: StorePaths, keep_days: int, *, now: float | None = None) -> int:
+    """Remove files in runtime/logs untouched for more than `keep_days` days (SP7 spec
+    decision 7); 0 keeps everything. Returns how many were removed."""
+    if keep_days <= 0 or not paths.logs.is_dir():
+        return 0
+    cutoff = (time.time() if now is None else now) - keep_days * 86400
+    removed = 0
+    for path in paths.logs.iterdir():
+        with contextlib.suppress(OSError):  # gone already, or written to right now
+            if path.is_file() and path.stat().st_mtime < cutoff:
+                path.unlink()
+                removed += 1
+    return removed
 
 
 def heartbeat(job_id: str) -> None:

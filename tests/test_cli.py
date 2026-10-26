@@ -32,3 +32,11 @@ def test_console_scripts_print_version(command: str) -> None:
         [executable, "--version"], check=True, capture_output=True, text=True
     ).stdout
     assert output.strip() == f"super-harness {__version__}"
+
+
+def test_native_windows_stops_with_the_wsl_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("super_harness.cli.sys.platform", "win32")
+    for args in (["--version"], ["status"]):
+        result = runner.invoke(app, args)
+        assert result.exit_code == 4
+        assert "harness runs on Linux and macOS; on Windows use WSL" in result.output

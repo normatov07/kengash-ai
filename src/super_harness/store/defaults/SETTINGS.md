@@ -32,6 +32,7 @@ skill.max_lines: 80
 skill.max_words: 400
 memory.compact_at_lines: 200
 memory.compactor: claude/haiku   # provider/model that compacts MEMORY.md
+logs.keep_days: 30               # worker logs untouched this long are removed; 0 keeps all
 review.diff_only: true
 
 # providers: allow_api_key keeps API-key variables in worker environments;

@@ -29,6 +29,7 @@ Everything under `~/.harness`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
+- 2026-10-26: defaults SETTINGS.md documents `logs.keep_days` (SP7).
 - 2026-10-26: `memo` parse caches; cached document loads; C-accelerated safe YAML (SP7).
 - 2026-10-24: `yamledit` keeps a CRLF file's line ending on every line it writes.
 - 2026-10-23: `yamledit` (SP5 M2 settings writes).
