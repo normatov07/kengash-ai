@@ -95,7 +95,7 @@ def _emit_json(result: Any) -> None:
 
 
 def _emit_link(verb: str, result: projects.InitResult) -> None:
-    typer.echo(f"{verb} {result.slug}: {result.repo / '.harness'} -> {result.link_target}")
+    typer.echo(f"{verb} {result.slug}: {result.link} -> {result.link_target}")
     for warning in result.warnings:
         typer.echo(f"warning: {warning}")
 

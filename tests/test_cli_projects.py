@@ -14,7 +14,7 @@ def test_init_then_doctor(store_paths: StorePaths, repo: Path) -> None:
     first = runner.invoke(app, ["init", str(repo)])
     assert (first.exit_code, first.stdout) == (
         0,
-        f"initialized payments-api: {repo / '.harness'} -> {target}\n",
+        f"initialized payments-api: {repo / '.kengash'} -> {target}\n",
     )
     second = runner.invoke(app, ["init", str(repo)])
     assert second.stdout == "ok payments-api: already initialized\n"
@@ -25,7 +25,7 @@ def test_init_then_doctor(store_paths: StorePaths, repo: Path) -> None:
 
 def test_doctor_exit_code_signals_problems(store_paths: StorePaths, repo: Path) -> None:
     runner.invoke(app, ["init", str(repo)])
-    (repo / ".harness").unlink()
+    (repo / ".kengash").unlink()
     result = runner.invoke(app, ["doctor"])
     assert (result.exit_code, result.stdout) == (
         1,
@@ -36,10 +36,10 @@ def test_doctor_exit_code_signals_problems(store_paths: StorePaths, repo: Path) 
 
 
 def test_errors_go_to_stderr_with_spec_exit_codes(store_paths: StorePaths, repo: Path) -> None:
-    (repo / ".harness").mkdir()
+    (repo / ".kengash").mkdir()
     result = runner.invoke(app, ["init", str(repo)])
     assert result.exit_code == 4
-    assert result.stderr == f"{repo / '.harness'} is a real folder; run: harness adopt {repo}\n"
+    assert result.stderr == f"{repo / '.kengash'} is a real folder; run: harness adopt {repo}\n"
 
 
 def test_link_and_adopt(store_paths: StorePaths, repo: Path, tmp_path: Path) -> None:
@@ -48,9 +48,9 @@ def test_link_and_adopt(store_paths: StorePaths, repo: Path, tmp_path: Path) -> 
     repo.rename(moved)
     linked = runner.invoke(app, ["link", "payments-api", str(moved)])
     target = store_paths.project("payments-api").root
-    assert linked.stdout == f"linked payments-api: {moved / '.harness'} -> {target}\n"
+    assert linked.stdout == f"linked payments-api: {moved / '.kengash'} -> {target}\n"
     legacy = tmp_path / "legacy"
-    (legacy / ".harness").mkdir(parents=True)
+    (legacy / ".kengash").mkdir(parents=True)
     adopted = runner.invoke(app, ["adopt", str(legacy)])
     assert adopted.exit_code == 0
     assert adopted.stdout.startswith("adopted legacy: 0 new, 0 conflicts; original kept in ")

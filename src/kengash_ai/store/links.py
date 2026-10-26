@@ -1,12 +1,14 @@
-"""The per-repo `.harness` directory symlink into the store (system spec §4.2)."""
+"""The per-repo `.kengash` directory symlink into the store (system spec §4.2); 0.1.0 named
+it `.harness` (SP8 spec decision 3)."""
 
 import os
 import subprocess
 from enum import StrEnum
 from pathlib import Path
 
-LINK = ".harness"
-EXCLUDE_ENTRY = "/.harness"
+LINK = ".kengash"
+LEGACY_LINK = ".harness"
+EXCLUDE_ENTRY = "/.kengash"
 
 
 class LinkState(StrEnum):
@@ -18,7 +20,7 @@ class LinkState(StrEnum):
 
 
 def obstruction(repo: Path) -> LinkState | None:
-    """`real_dir` or `blocked` when something other than a symlink sits at `.harness`."""
+    """`real_dir` or `blocked` when something other than a symlink sits at `.kengash`."""
     return _obstruction(repo / LINK)
 
 
@@ -41,8 +43,25 @@ def _obstruction(link: Path) -> LinkState | None:
     return LinkState.real_dir if link.is_dir() else LinkState.blocked
 
 
+def real_folder(repo: Path) -> Path | None:
+    """A real `.kengash/` folder in `repo`, else a real 0.1.0 `.harness/` one, else None."""
+    for name in (LINK, LEGACY_LINK):
+        candidate = repo / name
+        if candidate.is_dir() and not candidate.is_symlink():
+            return candidate
+    return None
+
+
+def legacy_link(repo: Path, target: Path) -> Path | None:
+    """`<repo>/.harness` when it is a 0.1.0 symlink to `target`; a link elsewhere is not ours."""
+    link = repo / LEGACY_LINK
+    if link.is_symlink() and link.resolve() == target.resolve():
+        return link
+    return None
+
+
 def make_link(repo: Path, target: Path) -> None:
-    """Point `<repo>/.harness` at `target`, replacing a stale symlink."""
+    """Point `<repo>/.kengash` at `target`, replacing a stale symlink."""
     link = repo / LINK
     if link.is_symlink():
         link.unlink()
@@ -68,7 +87,7 @@ def _exclude_file(repo: Path) -> Path | None:
 
 
 def is_excluded(repo: Path) -> bool | None:
-    """Whether info/exclude lists `/.harness`; None when `repo` is not a git work tree."""
+    """Whether info/exclude lists `/.kengash`; None when `repo` is not a git work tree."""
     path = _exclude_file(repo)
     if path is None:
         return None
@@ -76,7 +95,7 @@ def is_excluded(repo: Path) -> bool | None:
 
 
 def ensure_excluded(repo: Path) -> bool:
-    """Add `/.harness` to info/exclude once; False when `repo` is not a git work tree."""
+    """Add `/.kengash` to info/exclude once; False when `repo` is not a git work tree."""
     path = _exclude_file(repo)
     if path is None:
         return False
