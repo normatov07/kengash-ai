@@ -1,5 +1,6 @@
 """Edit one dotted key of a YAML file in place (SP5 spec decision 7). Round-trip YAML only
-locates the lines; every line the edit does not touch stays byte-identical."""
+locates the lines; every line the edit does not touch stays byte-identical, and every line
+it writes ends as the text's first line does (CRLF stays CRLF)."""
 
 import json
 import re
@@ -25,6 +26,15 @@ def set_key(text: str, key: str, value: Any, *, source: str = "YAML") -> str:
     `loop_max`). A scalar replacing a one-line scalar is swapped in place; anything else
     rewrites the nearest entry of a block mapping on one line, in flow style.
     """
+    cr = "\r" if "\n" in text and text.partition("\n")[0].endswith("\r") else ""
+    if not text or text.endswith("\n"):
+        return _set(text, key, value, source, cr)
+    # an unterminated last line is ended while editing, so every line written gets the ending
+    return _set(f"{text}{cr}\n", key, value, source, cr).removesuffix(f"{cr}\n")
+
+
+def _set(text: str, key: str, value: Any, source: str, cr: str) -> str:
+    """`set_key` on a text whose last line is ended; `cr` ends each line written."""
     try:
         root = YAML(typ="rt").load(text)
     except YAMLError as exc:
@@ -40,21 +50,21 @@ def set_key(text: str, key: str, value: Any, *, source: str = "YAML") -> str:
             return text
         holder = found[-1][0][found[-1][1]] if found else root
         if found and holder.fa.flow_style():
-            return _rewrite(lines, found, rest, value)
-        return _insert(lines, holder, ".".join(rest), value, top=not found)
+            return _rewrite(lines, found, rest, value, cr)
+        return _insert(lines, holder, ".".join(rest), value, cr, top=not found)
     mapping, leaf = found[-1]
     current = mapping[leaf]
     if value is not None and _plain(current) == value:
         return text
     if value is None:
-        return _remove(lines, found)
+        return _remove(lines, found, cr)
     if _scalar(current) and _scalar(value):
         swapped = _swap(lines, mapping, leaf)
         if swapped is not None:
             line, start, end = swapped
             lines[line] = lines[line][:start] + flow(value) + lines[line][end:]
             return "\n".join(lines)
-    return _rewrite(lines, found, [], value)
+    return _rewrite(lines, found, [], value, cr)
 
 
 def flow(value: Any) -> str:
@@ -105,8 +115,9 @@ def _swap(lines: list[str], mapping: CommentedMap, leaf: str) -> tuple[int, int,
     return None if end is None else (line, start, end)
 
 
-def _rewrite(lines: list[str], found: Path_, rest: list[str], value: Any) -> str:
-    """Rewrite the deepest block-mapping entry above the change, on one line."""
+def _rewrite(lines: list[str], found: Path_, rest: list[str], value: Any, cr: str) -> str:
+    """Rewrite the deepest block-mapping entry above the change, on one line ending in
+    `cr` (the `\r` of a CRLF text, else empty)."""
     depth = _block_depth(found)
     mapping, name = found[depth]
     plain = _plain(mapping[name])
@@ -128,11 +139,11 @@ def _rewrite(lines: list[str], found: Path_, rest: list[str], value: Any) -> str
     comment = _comment_at(lines[last])
     if comment is not None:
         text = text.ljust(comment - 1) + " " + lines[last][comment:]
-    lines[first : last + 1] = [text]
+    lines[first : last + 1] = [text.removesuffix("\r") + cr]
     return "\n".join(lines)
 
 
-def _remove(lines: list[str], found: Path_) -> str:
+def _remove(lines: list[str], found: Path_, cr: str) -> str:
     mapping, name = found[-1]
     if mapping.fa.flow_style():
         depth = _block_depth(found)
@@ -142,25 +153,27 @@ def _remove(lines: list[str], found: Path_) -> str:
         for _, part in found[depth + 1 : -1]:
             node = node[part]
         del node[name]
-        return _rewrite(lines, found[: depth + 1], [], plain)
+        return _rewrite(lines, found[: depth + 1], [], plain, cr)
     if len(mapping) == 1 and len(found) > 1:  # the block would be left empty: drop it too
-        return _remove(lines, found[:-1])
+        return _remove(lines, found[:-1], cr)
     first, last = _unit(lines, mapping, name)
     del lines[first : last + 1]
     return "\n".join(lines)
 
 
-def _insert(lines: list[str], mapping: CommentedMap, key: str, value: Any, *, top: bool) -> str:
+def _insert(
+    lines: list[str], mapping: CommentedMap, key: str, value: Any, cr: str, *, top: bool
+) -> str:
     """Add `key: value` after the last entry of a block mapping (top level: file end)."""
     if top:
         if lines and lines[-1] == "":
             lines.pop()
-        lines += [f"{flow(key)}: {flow(value)}", ""]
+        lines += [f"{flow(key)}: {flow(value)}{cr}", ""]
         return "\n".join(lines)
     last_key = list(mapping)[-1]
     _, last = _unit(lines, mapping, last_key)
     column = mapping.lc.key(last_key)[1]
-    lines.insert(last + 1, " " * column + f"{flow(key)}: {flow(value)}")
+    lines.insert(last + 1, " " * column + f"{flow(key)}: {flow(value)}{cr}")
     return "\n".join(lines)
 
 

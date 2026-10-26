@@ -2,6 +2,7 @@
 every interpolated value (SP5 spec decision 1)."""
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -76,3 +77,26 @@ def test_screens_are_revalidated_so_an_upgrade_shows_at_once(registered_repo: Pa
     client = TestClient(ui_app.create_app(token="t", port=1), base_url="http://127.0.0.1:1")
     assert client.get("/static/app.js").headers["cache-control"] == "no-cache"
     assert client.get("/static/fonts/inter.woff2").headers["cache-control"] == "no-cache"
+
+
+def css_rule(selector: str) -> dict[str, str]:
+    """The declarations of the stylesheet's first top-level rule for `selector`."""
+    css = (STATIC / "app.css").read_text()
+    found = re.search(rf"^{re.escape(selector)} \{{([^}}]*)\}}", css, re.MULTILINE)
+    assert found, selector
+    pairs = (part.split(":", 1) for part in found[1].split(";") if part.strip())
+    return {name.strip(): value.strip() for name, value in pairs}
+
+
+def test_seven_board_columns_fit_a_1440_px_screen() -> None:
+    strip, column = css_rule(".cols"), css_rule(".col")
+    width, gap = (
+        int(strip["--col-min"].removesuffix("px")),
+        int(strip["--col-gap"].removesuffix("px")),
+    )
+    assert 150 <= width <= 160  # narrow enough for seven, wide enough for a card
+    assert column["min-width"] == "var(--col-min)" and strip["gap"] == "var(--col-gap)"
+    board = 1440 - 237 - 2 * 20  # the sidebar and its border, the board's side padding
+    assert 7 * width + 6 * gap <= board
+    assert "--n: ${cols.length}" in (STATIC / "views" / "board.js").read_text()
+    assert css_rule(".card-top")["flex-wrap"] == "wrap"  # a narrow card wraps its loop dots

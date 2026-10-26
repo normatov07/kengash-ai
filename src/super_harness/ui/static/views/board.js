@@ -92,7 +92,7 @@ function column(col, tint = TINTS[col.key] ?? TINTS.in_queue) {
   const gate = col.footer.includes("blocking gate");
   return html`<section class="col" style="border-color: ${tint.col[0]}; background: ${tint.col[1]}" aria-label="${col.title}">
     <div class="col-bar" style="background: ${tint.bar}"></div>
-    <div class="col-head"><h2 style="color: ${tint.title}">${col.title.toUpperCase()}</h2><span class="col-count" style="background: ${tint.pill[0]}; color: ${tint.pill[1]}">${cards.length}</span>
+    <div class="col-head"><h2 style="color: ${tint.title}" title="${col.title}">${col.title.toUpperCase()}</h2><span class="col-count" style="background: ${tint.pill[0]}; color: ${tint.pill[1]}">${cards.length}</span>
       <button class="col-more" type="button" data-only="${col.key}" aria-label="Show ${col.title} as a list" title="Show as a list">${icon("more", { size: 13, stroke: "none", width: 0 })}</button></div>
     <div class="col-cards">${cards.map((item) => card(item, col.key))}${gate && !cards.length ? html`<div class="col-empty">Blocking gate: a ticket stops here until it passes</div>` : !cards.length ? html`<div class="col-empty">${state.text || state.importance || state.agent ? "nothing matches" : "empty"}</div>` : ""}</div>
     <div class="col-foot" style="border-top-color: ${tint.foot[0]}">${columnFoot(col)}</div>
@@ -114,7 +114,7 @@ function groups(data) {
 function boardBody(data) {
   if (state.view === "list") return listBody(data);
   const cols = groups(data);
-  return html`<div class="cols" style="min-width: ${cols.length * 194}px">${cols.map((col) => {
+  return html`<div class="cols" style="--n: ${cols.length}">${cols.map((col) => {
     const imp = IMPORTANCE[col.title];
     return column(col, col.key.startsWith("imp-") ? { ...TINTS.in_queue, bar: imp.color, title: imp.color, pill: [imp.soft, imp.color] } : undefined);
   })}</div>`;
