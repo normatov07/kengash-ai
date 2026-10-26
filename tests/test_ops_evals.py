@@ -2,6 +2,7 @@
 
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -234,8 +235,11 @@ def test_a_clean_expectation_names_changed_files(
     assert (result.passed, result.failure) == (False, "the repo has changes: notes.md")
 
 
+# a detached stand-in server in its own session, as `harness ui open` starts one; Python's
+# setsid because macOS has no setsid command
 START_UI = (
-    'mkdir -p "$HARNESS_HOME/runtime" && setsid sleep 60 >/dev/null 2>&1 & '
+    'mkdir -p "$HARNESS_HOME/runtime" && '
+    f"'{sys.executable}' -c 'import os, time; os.setsid(); time.sleep(60)' >/dev/null 2>&1 & "
     'echo "{\\"pid\\": $!, \\"port\\": 1, \\"token\\": \\"t\\"}" '
     '> "$HARNESS_HOME/runtime/ui.json"; '
     'echo $! > "$HARNESS_HOME/../ui.pid"'

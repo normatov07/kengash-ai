@@ -1,3 +1,4 @@
+import re
 import shutil
 import subprocess
 
@@ -19,7 +20,8 @@ def test_version_names_the_package() -> None:
 def test_help_lists_the_version_option() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    assert "--version" in result.output
+    # Typer forces Rich colours under GITHUB_ACTIONS, so CI help text carries escape codes
+    assert "--version" in re.sub(r"\x1b\[[0-9;]*m", "", result.output)
 
 
 @pytest.mark.parametrize("command", ["harness", "hrn"])
