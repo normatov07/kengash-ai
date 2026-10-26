@@ -73,7 +73,7 @@ def test_merge_refuses_other_states_and_a_dirty_tree(
     with pytest.raises(UserError, match="main working tree has uncommitted changes"):
         merging.merge_ticket("7b55e0c1", project=None, by="user")
     assert (
-        merging.merge_if_clean(engine.paths, engine.slug, "7b55e0c1", by="harness")
+        merging.merge_if_clean(engine.paths, engine.slug, "7b55e0c1", by="kengash")
         == "in_process/awaiting_merge"
     )
 

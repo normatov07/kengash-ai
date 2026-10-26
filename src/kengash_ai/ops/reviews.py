@@ -120,7 +120,7 @@ def review_plan(
                     "by": by,
                 }
             )
-            records.record(paths, f"harness: plan review {plan_id}", started)
+            records.record(paths, f"kengash: plan review {plan_id}", started)
 
     def ended(event: Event) -> bool:
         if event.plan != plan_id:
@@ -232,7 +232,7 @@ def run_review(plan_id: str, *, project: str | None) -> str:
             state.totals[ROLE] = result.total_usage
             runtime.save_ticket_state(paths, plan_id, state)
         event = _reviewed(slug, plan, output, reviewer, result, called.usage)
-        records.record(paths, f"harness: plan review {plan_id} round {number}", event)
+        records.record(paths, f"kengash: plan review {plan_id} round {number}", event)
     return f"{plan_id}: round {number} {output.verdict}"
 
 

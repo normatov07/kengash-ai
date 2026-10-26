@@ -112,7 +112,7 @@ def _merge_now(job: _Job, end: JobEnd) -> JobEnd:
     """After the lock is released: merge a ticket whose last step passed under `auto`."""
     if not job.merge_pending:
         return end
-    status = merging.merge_if_clean(job.paths, job.slug, job.ticket_id, by="harness")
+    status = merging.merge_if_clean(job.paths, job.slug, job.ticket_id, by="kengash")
     return JobEnd(status, "merged" if status == "done/merged" else end.reason)
 
 
@@ -142,7 +142,7 @@ def fail_ticket(
         ticket.tokens += tokens
         event = _set_status(paths, slug, doc, "in_process/failed", reason, kind=kind)
         slots.release(paths, ticket_id)
-        records.record(paths, f"harness: {ticket_id} failed", event)
+        records.record(paths, f"kengash: {ticket_id} failed", event)
         return ticket.status
 
 
@@ -515,7 +515,7 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
             end = JobEnd(status, reason)
         runtime.save_ticket_state(paths, job.ticket_id, state)
         slots.release(paths, job.ticket_id)
-        records.record(paths, f"harness: {job.ticket_id} {step}", *events)
+        records.record(paths, f"kengash: {job.ticket_id} {step}", *events)
     return end
 
 
@@ -523,7 +523,7 @@ def _halt(job: _Job, doc: Doc[Ticket], status: str, reason: str) -> JobEnd:
     """Stop the job at `status` (caller holds the project lock)."""
     event = _set_status(job.paths, job.slug, doc, status, reason)
     slots.release(job.paths, job.ticket_id)
-    records.record(job.paths, f"harness: {job.ticket_id} {doc.meta.sub_status}", event)
+    records.record(job.paths, f"kengash: {job.ticket_id} {doc.meta.sub_status}", event)
     return JobEnd(status, reason)
 
 

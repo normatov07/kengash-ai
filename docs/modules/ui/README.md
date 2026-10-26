@@ -30,6 +30,7 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 
 ## Changes
 
+- 2026-10-26: changes need the `X-Kengash` header (the 0.1.0 `X-Harness` is refused); the cookie is `kengash_token_<port>` (SP8).
 - 2026-10-26: the server reads its token from `KENGASH_UI_TOKEN` (SP8).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-26: three provider cards (claude, codex, antigravity); the not-supported card is gone (SP7).

@@ -88,7 +88,7 @@ def test_writes_are_journaled_and_committed(store: StorePaths, run_git: Callable
         "said so",
         "claude",
     )
-    assert "harness: memory add MEMORY.md" in run_git(store.home, "log", "--format=%s")
+    assert "kengash: memory add MEMORY.md" in run_git(store.home, "log", "--format=%s")
 
 
 def test_cap_is_reported(store: StorePaths) -> None:
@@ -197,9 +197,9 @@ def test_apply_compaction_replaces_memory_and_journals(
         "memory.compacted",
         True,
         "claude",
-        "harness",
+        "kengash",
     )
-    assert run_git(store.home, "log", "-1", "--format=%s").strip() == "harness: memory compact"
+    assert run_git(store.home, "log", "-1", "--format=%s").strip() == "kengash: memory compact"
 
 
 def test_a_rejected_compaction_leaves_memory_alone(store: StorePaths) -> None:

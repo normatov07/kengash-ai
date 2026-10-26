@@ -62,7 +62,7 @@ def merge_ticket(ticket_id: str, *, project: str | None, by: str) -> Merged:
         merged = lifecycle.status_event(slug, ticket, before, reason, by=by)
         events = [merged.model_copy(update={"commits": commits})]
         events += [_unblocked(slug, dependent, ticket_id) for dependent in ready]
-        records.record(paths, f"harness: merge {ticket_id}", *events)
+        records.record(paths, f"kengash: merge {ticket_id}", *events)
     return Merged(ticket_id, slug, commits, entry.base)
 
 
@@ -127,7 +127,7 @@ def _send_back(
     ticket.updated = utc_now()
     documents.save_ticket(paths.project(slug), doc)
     runtime.save_ticket_state(paths, ticket.id, state)
-    records.record(paths, f"harness: merge conflict {ticket.id}", event)
+    records.record(paths, f"kengash: merge conflict {ticket.id}", event)
     return message
 
 
@@ -140,7 +140,7 @@ def _unblocked(slug: str, ticket_id: str, merged: str) -> Event:
             "from": "in_queue/blocked",
             "to": "in_queue/ready",
             "why": f"{merged} merged",
-            "by": "harness",
+            "by": "kengash",
         }
     )
 

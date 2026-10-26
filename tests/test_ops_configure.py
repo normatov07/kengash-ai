@@ -26,7 +26,7 @@ def test_a_save_is_journaled_and_committed(
         "ui",
     )
     log = run_git(store_paths.home, "log", "--format=%s")
-    assert "harness: settings payments-api" in log
+    assert "kengash: settings payments-api" in log
 
 
 def test_an_empty_save_journals_nothing(registered_repo: Path, journal_events: Events) -> None:

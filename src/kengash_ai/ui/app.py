@@ -35,7 +35,7 @@ from kengash_ai.ops import (
 )
 
 STATIC = Path(__file__).parent / "static"
-COOKIE = "harness_token_{port}"  # one per server: cookies ignore ports
+COOKIE = "kengash_token_{port}"  # one per server: cookies ignore ports
 BY = "ui"
 PING_S = 15.0
 # Sent with every response (SP7 spec decision 4). Inline style attributes are part of the
@@ -130,8 +130,8 @@ def create_app(*, token: str, port: int) -> FastAPI:
         if request.url.path.startswith("/api/"):
             if not authorized(request):
                 return JSONResponse({"error": "missing or wrong token"}, status_code=401)
-            if request.method != "GET" and request.headers.get("x-harness") != "1":
-                return JSONResponse({"error": "missing X-Harness header"}, status_code=403)
+            if request.method != "GET" and request.headers.get("x-kengash") != "1":
+                return JSONResponse({"error": "missing X-Kengash header"}, status_code=403)
         response = await call_next(request)
         if request.url.path.startswith("/static/"):
             response.headers["cache-control"] = "no-cache"  # revalidate: an upgrade shows at once

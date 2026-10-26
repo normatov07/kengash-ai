@@ -28,7 +28,7 @@ def test_init_registers_links_and_seeds(
     assert (repo / ".kengash" / "memory" / "MEMORY.md").is_file()
     assert links.is_excluded(repo) is True
     assert load_registry(store_paths).projects["payments-api"].path == repo
-    assert "harness: init payments-api" in run_git(store_paths.home, "log", "--format=%s")
+    assert "kengash: init payments-api" in run_git(store_paths.home, "log", "--format=%s")
 
 
 def test_init_is_idempotent_and_keeps_edits(store_paths: StorePaths, repo: Path) -> None:

@@ -21,6 +21,7 @@ The agents' long-term memory: MEMORY.md (who the user is, how they work, what th
 
 ## Changes
 
+- 2026-10-26: store commits `kengash: memory …`; compaction events `by: kengash` (SP8).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-23: DECISIONS archive (SP3 M4).
 - 2026-10-23: compaction checks and writes (SP3 M4).

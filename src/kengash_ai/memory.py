@@ -91,7 +91,7 @@ def add(
     if moved:
         detail["archived"] = len(moved)
     journal.append(paths, Event.model_validate(detail))
-    storegit.commit_store(paths, f"harness: memory add {name}")
+    storegit.commit_store(paths, f"kengash: memory add {name}")
     return AddResult(name, entry, len(lines), cap, added=True)
 
 
@@ -157,11 +157,11 @@ def apply_compaction(
         "accepted": outcome.accepted,
         "reason": problem,
         **detail,
-        "by": "harness",
+        "by": "kengash",
     }
     journal.append(paths, Event.model_validate(event))
     if outcome.accepted:
-        storegit.commit_store(paths, "harness: memory compact")
+        storegit.commit_store(paths, "kengash: memory compact")
     return outcome
 
 

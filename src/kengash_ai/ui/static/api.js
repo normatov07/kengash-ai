@@ -1,4 +1,4 @@
-// The UI's API client: the token cookie rides along; POSTs carry the X-Harness header.
+// The UI's API client: the token cookie rides along; POSTs carry the X-Kengash header.
 async function read(response) {
   if (response.status === 401) throw new Error("This page is signed out: open the link that harness ui open printed");
   const data = await response.json().catch(() => ({}));
@@ -15,7 +15,7 @@ export async function post(path, body) {
     await fetch(path, {
       method: "POST",
       credentials: "same-origin",
-      headers: { "Content-Type": "application/json", "X-Harness": "1" },
+      headers: { "Content-Type": "application/json", "X-Kengash": "1" },
       body: JSON.stringify(body ?? {}),
     }),
   );

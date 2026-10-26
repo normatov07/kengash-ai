@@ -76,7 +76,7 @@ def init_project(path: Path, paths: StorePaths | None = None) -> InitResult:
     slug, created = _register(paths, repo)
     project = ensure_project(paths, slug)
     warnings = _attach(repo, project)
-    storegit.commit_store(paths, f"harness: init {slug}")
+    storegit.commit_store(paths, f"kengash: init {slug}")
     return InitResult(slug, repo, project.root, created, warnings)
 
 
@@ -97,7 +97,7 @@ def relink(slug: str, new_path: Path, paths: StorePaths | None = None) -> InitRe
         save_registry(paths, registry)
     project = ensure_project(paths, slug)
     warnings = _attach(repo, project)
-    storegit.commit_store(paths, f"harness: link {slug}")
+    storegit.commit_store(paths, f"kengash: link {slug}")
     return InitResult(slug, repo, project.root, False, warnings)
 
 
@@ -171,7 +171,7 @@ def adopt(path: Path, paths: StorePaths | None = None) -> AdoptResult:
         archive.mkdir(parents=True, exist_ok=True)
         shutil.move(source, archive / "original")
     _attach(repo, project)
-    storegit.commit_store(paths, f"harness: adopt {slug}")
+    storegit.commit_store(paths, f"kengash: adopt {slug}")
     return AdoptResult(slug, added, conflicts, archive)
 
 

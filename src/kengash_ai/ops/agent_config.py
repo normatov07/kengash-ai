@@ -96,7 +96,7 @@ def new_agent(
         keys = settings.set_values(paths, project, changes)
         written = _starter(paths, project, role, kind, does)
     event = Event(type="settings.changed", project=project, keys=keys, by=by)
-    records.record(paths, f"harness: agent new {role}", event)
+    records.record(paths, f"kengash: agent new {role}", event)
     return AgentChange(project, role, name, keys, str(written) if written else "")
 
 
@@ -130,7 +130,7 @@ def remove_agent(role: str, *, project: str | None, by: str) -> AgentChange:
                 changes[f"workflows.{flow_name}"] = {"steps": kept, "on_fail": edges}
         keys = settings.set_values(paths, project, changes)
     event = Event(type="settings.changed", project=project, keys=keys, by=by)
-    records.record(paths, f"harness: agent remove {role}", event)
+    records.record(paths, f"kengash: agent remove {role}", event)
     return AgentChange(project, role, ", ".join(steps), keys)
 
 

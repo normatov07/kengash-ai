@@ -27,5 +27,5 @@ def save_settings(changes: Mapping[str, Any], *, project: str | None, by: str) -
         keys = settings.set_values(paths, project, changes)
     if keys:
         event = Event(type="settings.changed", project=project, keys=keys, by=by)
-        records.record(paths, f"harness: settings {project or 'defaults'}", event)
+        records.record(paths, f"kengash: settings {project or 'defaults'}", event)
     return Saved(project, keys)

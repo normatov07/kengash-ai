@@ -61,7 +61,7 @@ def test_add_queues_ready_and_blocked_tickets(
     plan = plans.show_plan(plan_id, project=None).meta
     assert (plan["status"], plan["tickets"]) == ("ticketed", [keyring.id, rotate.id])
     log = run_git(store_paths.home, "log", "--format=%s")
-    assert f"harness: ticket add {keyring.id} {rotate.id}" in log
+    assert f"kengash: ticket add {keyring.id} {rotate.id}" in log
 
 
 @pytest.mark.parametrize(
@@ -142,9 +142,9 @@ def test_moving_a_dependency_to_done_unblocks_its_dependents(
     ]
     assert moves == [
         (keyring, "done/closed", "claude"),
-        (rotate, "in_queue/ready", "harness"),
+        (rotate, "in_queue/ready", "kengash"),
         (keyring, "in_queue/ready", "claude"),
-        (rotate, "in_queue/blocked", "harness"),
+        (rotate, "in_queue/blocked", "kengash"),
     ]
 
 

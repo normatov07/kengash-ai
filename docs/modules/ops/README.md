@@ -56,6 +56,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-26: store commits read `kengash: …` and events the engine writes carry `by: kengash` (SP8).
 - 2026-10-26: step commits are `kg(<id>): …` with `Kengash-*` trailers; claims make `kg/<id>` branches; changes and merge read 0.1.0 tickets (`hrn/` branches, `Harness-*` trailers) as well (SP8).
 - 2026-10-26: `providers.cli_clash` looks for a foreign `kengash` on PATH; `waiting.ping` reads `KENGASH_AGENT`, then `HARNESS_AGENT`; the eval sandbox sets `KENGASH_HOME` and runs `kengash` (SP8).
 - 2026-10-26: `init`, `link` and `adopt` write `.kengash` and drop a `.harness` link to the same project; `doctor` reports such a legacy link once and `--fix` removes it; `adopt`, the nearby scan and the init refusal take a real `.kengash/` or `.harness/` folder; `InitResult.link` (SP8).

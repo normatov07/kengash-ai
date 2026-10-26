@@ -31,7 +31,7 @@ def status_event(
     before: str,
     reason: str,
     *,
-    by: str = "harness",
+    by: str = "kengash",
     kind: str | None = None,
 ) -> Event:
     """The journal event for the status `ticket` just reached; `harness wait` reads it."""
