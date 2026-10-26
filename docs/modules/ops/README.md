@@ -56,6 +56,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-26: no unsupported providers remain: `agents`, `providers` and the Agents cards lose the gemini branch; `ProviderCard.supported` removed (SP7).
 - 2026-10-26: `jobs.prune_logs(paths, keep_days)` removes runtime/logs files untouched longer than `logs.keep_days`, at every worker spawn and on `doctor --fix` (SP7).
 - 2026-10-26: a step without a role fails the ticket instead of asserting (SP7).
 - 2026-10-26: `agent_config` reads settings under `settings.lock`; custom board columns follow workflow order (SP7).

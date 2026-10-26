@@ -30,6 +30,7 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 
 ## Changes
 
+- 2026-10-26: three provider cards (claude, codex, antigravity); the not-supported card is gone (SP7).
 - 2026-10-26: accessibility: axe-core reports no serious or critical issue on any screen; `--faint` is the canvas's grey lifted to 4.5:1, text never uses `--dim`, off roles and pending chain steps show their state by colour instead of opacity, the SETTINGS.md view is keyboard-scrollable (SP7).
 - 2026-10-26: every response carries a CSP (`script-src 'self'`, `frame-ancestors 'none'`, styles `'self' 'unsafe-inline'` for the markup's style attributes), `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` (the first URL holds the token), COOP, CORP and a Permissions-Policy, refusals included; a favicon (SP7).
 - 2026-10-26: a not-supported provider card shows the server's reason (SP6).

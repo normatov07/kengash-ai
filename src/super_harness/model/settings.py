@@ -32,7 +32,22 @@ BUILTIN_KINDS: dict[str, Kind | None] = {
 STEP_NAME = re.compile(r"[a-z][a-z0-9_]{1,30}")
 # a role names its skill folder too, so it follows the skill-name rule
 ROLE_NAME = re.compile(r"(?=.{2,31}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
-PROVIDERS = ("claude", "codex", "antigravity", "gemini")
+PROVIDERS = ("claude", "codex", "antigravity")
+# A provider harness no longer drives, its replacement and why (SP7 spec decision 15)
+REPLACED = {
+    "gemini": (
+        "antigravity",
+        "Google moved Gemini CLI's Pro, Ultra and free plans to Antigravity CLI on 2026-06-18",
+    ),
+}
+
+
+def replaced(provider: str) -> str:
+    """The message for a provider that was replaced."""
+    successor, why = REPLACED[provider]
+    return f"{provider} is replaced by {successor}: {why}; use {successor}"
+
+
 SHELL = "shell"
 
 
@@ -44,6 +59,8 @@ def split_cli(cli: str) -> tuple[str, str | None]:
 
 def _known(cli: str, *, allow_shell: bool = False) -> str:
     provider, _ = split_cli(cli)
+    if provider in REPLACED:
+        raise ValueError(replaced(provider))
     known = (*PROVIDERS, SHELL) if allow_shell else PROVIDERS
     if provider not in known:
         raise ValueError(f"unknown provider {provider!r}; known: {', '.join(known)}")
@@ -80,13 +97,19 @@ class PlanReview(_Section):
 
 
 def _default_slots() -> dict[str, NonNegativeInt]:
-    return {"claude": 3, "codex": 3, "antigravity": 2, "gemini": 0}
+    return {"claude": 3, "codex": 3, "antigravity": 2}
 
 
 class Sessions(_Section):
     reuse: bool = True
     max: int = Field(8, ge=1)
     per_provider: dict[str, NonNegativeInt] = Field(default_factory=_default_slots)
+
+    @field_validator("per_provider")
+    @classmethod
+    def _drop_replaced(cls, value: dict[str, int]) -> dict[str, int]:
+        # every project copied `gemini: 0` from the old defaults; it is harmless, so it goes
+        return {name: slots for name, slots in value.items() if name not in REPLACED}
 
 
 class Tokens(_Section):
@@ -268,6 +291,9 @@ class Settings(_Section):
     @field_validator("providers")
     @classmethod
     def _provider_names(cls, value: dict[str, ProviderOptions]) -> dict[str, ProviderOptions]:
+        for name in value:
+            if name in REPLACED:
+                raise ValueError(replaced(name))
         unknown = sorted(set(value) - set(PROVIDERS))
         if unknown:
             raise ValueError(f"unknown providers {unknown}; known: {', '.join(PROVIDERS)}")

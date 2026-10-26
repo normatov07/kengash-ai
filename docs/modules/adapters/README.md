@@ -6,7 +6,7 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 
 ## Interface
 
-- `get(name, runtime=)` → `Provider`: `claude`, `codex` (schema files in `runtime/schemas/`), `antigravity`, `shell`; `UNSUPPORTED` names providers known but not driven and why (`gemini`: Google moved its Pro, Ultra and free plans to Antigravity CLI on 2026-06-18); `get` raises `NeedsSetup` (exit 4) with that reason, unknown names `UserError`. `runtime` holds files a CLI needs on disk.
+- `get(name, runtime=)` → `Provider`: `claude`, `codex` (schema files in `runtime/schemas/`), `antigravity`, `shell`; `gemini`, replaced by Antigravity (`model.REPLACED`), and unknown names raise `UserError`. `runtime` holds files a CLI needs on disk.
 - `Provider` protocol: `name`, `detect()` → `ProviderStatus`, `run(StepRequest)` → `StepResult`, `attach_command(session_id)` (the caller runs it in the worktree), `recover_session(log)` (a killed step's session id, when the CLI printed it).
 - `base.CliProvider`: shared `run` and `detect`; subclasses give `command(req)` (pure argv), `parse(req, proc)`, `signed_in()` and `attach_command`.
 - `process.run_process(argv, cwd=, env=, timeout_s=, log=, grace_s=10)` → `ProcessResult(exit_code, stdout, stderr, timed_out, duration_s)`.
@@ -29,6 +29,7 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 
 ## Changes
 
+- 2026-10-26: `UNSUPPORTED` removed: Antigravity replaces gemini; `get("gemini")` names the replacement (SP7).
 - 2026-10-26: `UNSUPPORTED` with the reason gemini is not driven (SP6).
 - 2026-10-23: agy editing steps get `EDIT_LINE` (SP3 M4 live smoke).
 - 2026-10-23: claude reports a new session only once claude confirms it (SP3 M3 review).

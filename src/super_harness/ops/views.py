@@ -230,7 +230,6 @@ class ProviderCard:
     name: str
     installed: bool
     signed_in: bool
-    supported: bool
     version: str | None
     hint: str
     slots_used: int
@@ -731,9 +730,8 @@ def agents_view(
                 name,
                 status.installed if status else False,
                 status.signed_in if status else False,
-                name not in agents.UNSUPPORTED,
                 status.version if status else None,
-                agents.UNSUPPORTED.get(name) or (status.hint if status else ""),
+                status.hint if status else "",
                 held[name],
                 resolved.sessions.per_provider.get(name, 0),
                 spend.get(name, 0),

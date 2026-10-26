@@ -33,6 +33,7 @@ from super_harness.model.runtime import (
 from super_harness.model.settings import (
     BUILTIN_KINDS,
     PROVIDERS,
+    REPLACED,
     STEP_ROLES,
     Agent,
     CustomStep,
@@ -42,6 +43,7 @@ from super_harness.model.settings import (
     Settings,
     StepKind,
     Workflow,
+    replaced,
     split_cli,
 )
 from super_harness.model.skills import SkillMeta
@@ -67,6 +69,7 @@ __all__ = [
     "OUTPUT_SCHEMAS",
     "PLAN_SECTIONS",
     "PROVIDERS",
+    "REPLACED",
     "STEP_ROLES",
     "SUB_STATUSES",
     "TICKET_SECTIONS",
@@ -127,6 +130,7 @@ __all__ = [
     "WorkerRecord",
     "Workflow",
     "parse_output",
+    "replaced",
     "split_cli",
     "utc_now",
 ]

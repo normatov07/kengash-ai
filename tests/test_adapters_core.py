@@ -13,7 +13,7 @@ from super_harness.adapters.base import classify, positional
 from super_harness.adapters.env import worker_env
 from super_harness.adapters.process import run_process
 from super_harness.adapters.shell import Shell
-from super_harness.model import NeedsSetup, ReviewOutput, StepRequest, UserError
+from super_harness.model import ReviewOutput, StepRequest, UserError
 
 
 def _request(tmp_path: Path, **fields: Any) -> StepRequest:
@@ -153,7 +153,7 @@ def test_shell_timeout(tmp_path: Path) -> None:
 
 def test_get_knows_the_providers(tmp_path: Path) -> None:
     assert get("shell", runtime=tmp_path).name == "shell"
-    with pytest.raises(NeedsSetup, match="gemini is not supported"):
+    with pytest.raises(UserError, match="gemini is replaced by antigravity"):
         get("gemini", runtime=tmp_path)
     with pytest.raises(UserError, match="unknown provider: cursor"):
         get("cursor", runtime=tmp_path)
@@ -178,9 +178,3 @@ def test_an_interrupted_wait_ends_the_cli_group(
             log=tmp_path / "i.out",
         )
     assert _gone(int(pid_file.read_text()))
-
-
-def test_gemini_points_to_antigravity(tmp_path: Path) -> None:
-    with pytest.raises(NeedsSetup) as found:
-        get("gemini", runtime=tmp_path)
-    assert "Antigravity CLI" in str(found.value) and "pick antigravity" in str(found.value)

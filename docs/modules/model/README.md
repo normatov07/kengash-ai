@@ -28,6 +28,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Changes
 
+- 2026-10-26: `PROVIDERS` is claude, codex, antigravity; `REPLACED`/`replaced()` turn any `gemini` in agents, fallbacks, compactor, plan reviewer or `providers` into "gemini is replaced by antigravity …"; a legacy `sessions.per_provider.gemini` is dropped on load (SP7).
 - 2026-10-26: `Logs` (`logs.keep_days`, default 30, 0 keeps all) (SP7).
 - 2026-10-26: the provider check's keyword is `allow_shell` (ruff's security rules read `shell=True` as a subprocess call) (SP7).
 - 2026-10-26: custom steps: `CustomStep`, `Settings.steps`, `role_of`, `kind_of`, `step_names`, `BUILTIN_KINDS` (SP6).

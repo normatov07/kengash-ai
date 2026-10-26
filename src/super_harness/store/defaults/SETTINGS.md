@@ -22,7 +22,7 @@ plan.reviewer: different-provider   # or provider[/model]
 # sessions and limits
 sessions.reuse: true          # resume each ticket×role session across loops
 sessions.max: 8
-sessions.per_provider: {claude: 3, codex: 3, antigravity: 2, gemini: 0}
+sessions.per_provider: {claude: 3, codex: 3, antigravity: 2}
 tokens.per_ticket_max: 250000
 step_timeout_min: 30          # a step running longer is killed and retried once
 fallback_on_rate_limit: true
