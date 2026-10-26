@@ -21,6 +21,7 @@ Resolve SETTINGS.md into a validated `Settings` model so agents never parse the 
 
 ## Changes
 
+- 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-26: content-keyed layer and resolve caches (SP7).
 - 2026-10-24: writes keep a CRLF file's line endings.
 - 2026-10-24: a defaults save is refused when a registered project would no longer validate.

@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from super_harness.model import Doc, NeedsSetup, Ticket, UserError
-from super_harness.ops import projects, workspace
-from super_harness.store import StorePaths, documents
+from kengash_ai.model import Doc, NeedsSetup, Ticket, UserError
+from kengash_ai.ops import projects, workspace
+from kengash_ai.store import StorePaths, documents
 
 
 def test_resolve_slug_from_option_or_folder(store_paths: StorePaths, repo: Path) -> None:

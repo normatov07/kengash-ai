@@ -6,12 +6,12 @@ from uuid import UUID
 
 import pytest
 
-from super_harness.model import HarnessError, ProjectEntry, Registry
-from super_harness.store import StorePaths, storegit
-from super_harness.store.files import atomic_write
-from super_harness.store.ids import new_id
-from super_harness.store.locks import locked
-from super_harness.store.registry import load_registry, save_registry, slugify, unique_slug
+from kengash_ai.model import HarnessError, ProjectEntry, Registry
+from kengash_ai.store import StorePaths, storegit
+from kengash_ai.store.files import atomic_write
+from kengash_ai.store.ids import new_id
+from kengash_ai.store.locks import locked
+from kengash_ai.store.registry import load_registry, save_registry, slugify, unique_slug
 
 
 def test_atomic_write_replaces_content_without_leftovers(tmp_path: Path) -> None:
@@ -34,7 +34,7 @@ def test_atomic_write_through_a_directory_symlink_keeps_the_link(tmp_path: Path)
 def test_new_id_rerolls_a_taken_short_id(monkeypatch: pytest.MonkeyPatch) -> None:
     taken = UUID("7b55e0c1-0000-4000-8000-000000000000")
     free = UUID("a91b3d07-0000-4000-8000-000000000000")
-    monkeypatch.setattr("super_harness.store.ids.uuid4", iter([taken, free]).__next__)
+    monkeypatch.setattr("kengash_ai.store.ids.uuid4", iter([taken, free]).__next__)
     assert new_id({"7b55e0c1"}) == ("a91b3d07", free)
 
 
@@ -42,7 +42,7 @@ def test_new_id_skips_ids_that_yaml_reads_as_numbers(monkeypatch: pytest.MonkeyP
     digits = UUID("12345678-0000-4000-8000-000000000000")
     exponent = UUID("1234e567-0000-4000-8000-000000000000")
     free = UUID("a91b3d07-0000-4000-8000-000000000000")
-    monkeypatch.setattr("super_harness.store.ids.uuid4", iter([digits, exponent, free]).__next__)
+    monkeypatch.setattr("kengash_ai.store.ids.uuid4", iter([digits, exponent, free]).__next__)
     assert new_id(set()) == ("a91b3d07", free)
 
 

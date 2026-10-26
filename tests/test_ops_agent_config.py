@@ -8,10 +8,10 @@ from typing import Any
 import pytest
 from conftest import git
 
-from super_harness import settings
-from super_harness.model import Doc, Ticket, UserError
-from super_harness.ops import agent_config, projects, skills
-from super_harness.store import StorePaths, documents, locks
+from kengash_ai import settings
+from kengash_ai.model import Doc, Ticket, UserError
+from kengash_ai.ops import agent_config, projects, skills
+from kengash_ai.store import StorePaths, documents, locks
 
 Events = Callable[[], list[dict[str, Any]]]
 DOES = "Flag N+1 queries and hot loops in the changed code."

@@ -6,7 +6,7 @@ Typer command surface for `harness` (alias `hrn`): parses arguments and formats 
 
 ## Interface
 
-- `harness --version` prints `super-harness <version>` and exits 0. Skills use this line to confirm the right binary is on PATH.
+- `harness --version` (also `hrn` and `kengash_ai`, the same app) prints `kengash-ai <version>` and exits 0. Skills use this line to confirm the right binary is on PATH; `doctor` also accepts an older install's `super-harness <version>`.
 - `harness --help` lists commands and options.
 - `run ID... [--steps N]` (`started <id> <step>→<provider>` / `skipped <id>: <reason>`; exit 1 when none started, 4 when a provider needs setup), `approve ID [--loops N] [--tokens N]`, `park ID --why W`, `stop ID`, `pause` and `resume` (`--project`), `ticket changes ID [--diff]` (`<path> +a -r  loop n <step> <provider>/<model>`), `ticket attach ID [--role R]` (the resume command), `wait [--timeout 540]` (`<id> <status> loop n/max: <detail>`, `plan <id> round r/max: <verdict>, <summary>` for plan reviews, `idle`, exit 3 on timeout), `merge ID` (`merged <id>: N commits into <base>`; exit 1 when the main tree is dirty or off base, or on a conflict), each with `--json` (SP3 spec §10).
 - `harness init [PATH]`, `doctor [--fix] [--quiet] [--scan DIR]`, `link SLUG NEW_PATH`, `adopt PATH`, each with `--json` (SP2 spec §3). `doctor` prints warnings as `[<slug>: ]warning: <message>`; it exits 1 only for problems that are neither fixed nor warnings.
@@ -27,6 +27,7 @@ Typer command surface for `harness` (alias `hrn`): parses arguments and formats 
 
 ## Changes
 
+- 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-26: on native Windows every command exits 4 with "harness runs on Linux and macOS; on Windows use WSL" (SP7).
 - 2026-10-26: `agent new`, `agent remove` (SP6).
 - 2026-10-23: `ui open`, `ui stop` (SP5 M1).

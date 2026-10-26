@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Run one detached job (SP3 spec §3, decision 1): `harness run` starts `python -m super_harness.worker ticket <id> [--steps N] [--project SLUG]` in its own session, logging to `runtime/logs/<id>.log`. The worker is a frontend, as `cli` is for commands: the job itself is `ops.steps.run_job`.
+Run one detached job (SP3 spec §3, decision 1): `harness run` starts `python -m kengash_ai.worker ticket <id> [--steps N] [--project SLUG]` in its own session, logging to `runtime/logs/<id>.log`. The worker is a frontend, as `cli` is for commands: the job itself is `ops.steps.run_job`.
 
 ## Interface
 
@@ -22,6 +22,7 @@ Run one detached job (SP3 spec §3, decision 1): `harness run` starts `python -m
 
 ## Changes
 
+- 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-23: `plan-review` and `compact` jobs (SP3 M4).
 - 2026-10-23: heartbeat and record cleanup moved to `ops.jobs` (SP3 M4).
 - 2026-10-23: ticket jobs with heartbeat and clean stop (SP3 M3).

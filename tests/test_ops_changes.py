@@ -5,11 +5,11 @@ import shlex
 import pytest
 from conftest import Engine
 
-from super_harness import gitops
-from super_harness.model import SessionRef, UserError
-from super_harness.ops import changes
-from super_harness.ops.changes import Change
-from super_harness.store import documents
+from kengash_ai import gitops
+from kengash_ai.model import SessionRef, UserError
+from kengash_ai.ops import changes
+from kengash_ai.ops.changes import Change
+from kengash_ai.store import documents
 
 
 def test_changes_list_files_with_their_loop_and_model(engine: Engine) -> None:

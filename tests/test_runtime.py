@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from super_harness.model import (
+from kengash_ai.model import (
     Claims,
     HarnessError,
     JournalCursor,
@@ -12,7 +12,7 @@ from super_harness.model import (
     Usage,
     WorkerRecord,
 )
-from super_harness.store import StorePaths, runtime
+from kengash_ai.store import StorePaths, runtime
 
 NOW = datetime(2026, 10, 22, 9, 41, tzinfo=UTC)
 

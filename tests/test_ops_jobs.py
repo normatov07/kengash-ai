@@ -6,10 +6,10 @@ from datetime import timedelta
 
 from conftest import Events
 
-from super_harness import journal
-from super_harness.model import Event, WorkerRecord, utc_now
-from super_harness.ops import jobs, lifecycle
-from super_harness.store import StorePaths, runtime
+from kengash_ai import journal
+from kengash_ai.model import Event, WorkerRecord, utc_now
+from kengash_ai.ops import jobs, lifecycle
+from kengash_ai.store import StorePaths, runtime
 
 
 def test_spawn_starts_a_detached_worker_that_logs(store_paths: StorePaths) -> None:

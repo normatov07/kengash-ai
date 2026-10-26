@@ -3,10 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from super_harness.model import Doc, Ticket, UserError
-from super_harness.ops import status
-from super_harness.ops.workspace import OpenGate
-from super_harness.store import StorePaths, documents
+from kengash_ai.model import Doc, Ticket, UserError
+from kengash_ai.ops import status
+from kengash_ai.ops.workspace import OpenGate
+from kengash_ai.store import StorePaths, documents
 
 
 def test_board_counts_folders_and_lists_gates(

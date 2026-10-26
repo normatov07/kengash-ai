@@ -23,7 +23,7 @@ jobs:
           python-version: "3.12"
       - name: the tag names the package version
         run: |
-          version="$(python3 -c 'import re, pathlib; print(re.search(r"__version__ = \"(.+)\"", pathlib.Path("src/super_harness/__init__.py").read_text())[1])')"
+          version="$(python3 -c 'import re, pathlib; print(re.search(r"__version__ = \"(.+)\"", pathlib.Path("src/kengash_ai/__init__.py").read_text())[1])')"
           if [ "v$version" != "$GITHUB_REF_NAME" ]; then
             echo "tag $GITHUB_REF_NAME does not match version $version" >&2
             exit 1
@@ -42,7 +42,7 @@ jobs:
     timeout-minutes: 10
     environment:
       name: pypi
-      url: https://pypi.org/project/super-harness/
+      url: https://pypi.org/project/kengash-ai/
     permissions:
       id-token: write # PyPI trusted publishing; no token is stored anywhere
     steps:

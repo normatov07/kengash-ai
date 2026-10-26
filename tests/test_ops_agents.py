@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from super_harness import settings
-from super_harness.model import NeedsSetup, ProviderStatus
-from super_harness.ops import agents
-from super_harness.ops.agents import Pick
-from super_harness.store import StorePaths
+from kengash_ai import settings
+from kengash_ai.model import NeedsSetup, ProviderStatus
+from kengash_ai.ops import agents
+from kengash_ai.ops.agents import Pick
+from kengash_ai.store import StorePaths
 
 
 def status(**usable: bool) -> Callable[[str], ProviderStatus]:

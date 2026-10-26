@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Security fixes go into the latest release. Upgrade with `uv tool upgrade super-harness`.
+Security fixes go into the latest release. Upgrade with `uv tool upgrade kengash-ai`.
 
 ## Reporting a vulnerability
 

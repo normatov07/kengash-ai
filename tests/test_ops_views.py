@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from super_harness import journal
-from super_harness.model import (
+from kengash_ai import journal
+from kengash_ai.model import (
     ConductorPing,
     Doc,
     Event,
@@ -19,8 +19,8 @@ from super_harness.model import (
     Ticket,
     utc_now,
 )
-from super_harness.ops import agents, configure, views
-from super_harness.store import StorePaths, documents, runtime
+from kengash_ai.ops import agents, configure, views
+from kengash_ai.store import StorePaths, documents, runtime
 
 Make = Callable[..., Doc[Ticket]]
 

@@ -12,10 +12,10 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from typer.testing import CliRunner
 
-from super_harness.cli import app
-from super_harness.model import UserError
-from super_harness.ops import ui_server
-from super_harness.store import StorePaths
+from kengash_ai.cli import app
+from kengash_ai.model import UserError
+from kengash_ai.ops import ui_server
+from kengash_ai.store import StorePaths
 
 runner = CliRunner()
 
@@ -87,4 +87,4 @@ def test_without_the_extra_open_names_the_install(
 ) -> None:
     monkeypatch.setattr(ui_server, "has_extra", lambda: False)
     result = runner.invoke(app, ["ui", "open", "--no-browser"])
-    assert result.exit_code == 4 and "super-harness[ui]" in result.stderr
+    assert result.exit_code == 4 and "kengash-ai[ui]" in result.stderr

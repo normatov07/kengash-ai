@@ -1,5 +1,7 @@
 # super-harness: System Design and Foundation Spec
 
+> Renamed **Kengash AI** on 2026-10-26 (SP7 spec decision 16): the distribution is `kengash-ai`, the package `kengash_ai`. "super-harness" in this document means Kengash AI; commands, the store and file formats are unchanged.
+
 - Date: 2026-10-22
 - Status: draft, awaiting user review
 - Scope: system-wide contracts for all five sub-projects, plus the full design of sub-project 1 (Foundation). Sub-projects 2–5 each get their own spec, which must conform to the contracts here.
@@ -537,12 +539,12 @@ super-harness/
 
 ### 12.3 Acceptance
 
-- [ ] `make setup && make check` passes on a fresh clone on Linux and macOS. (Linux: fresh clone of `main` at c7c6419 on 2026-10-26, 534 passed; macOS: not yet run, no Mac available.)
+- [x] `make setup && make check` passes on a fresh clone on Linux and macOS. (Linux: fresh clone of `main` at c7c6419 on 2026-10-26, 534 passed; macOS: CI's fresh checkout on macos-latest, Python 3.12–3.14, green from run #12 on.)
 - [x] `uv run harness --version` and `uv run hrn --version` print the version (`super-harness 0.1.0`, same run).
 - [ ] AGENTS.md has at most 100 lines; CLAUDE.md and GEMINI.md import it; a Codex session and an `agy` session started in the repo both see its rules (manual check, recorded in the plan). (agy 1.4.5 on 2026-10-22, see `docs/architecture.md`; Codex rests on its documentation until the CLI is installed.)
 - [x] `check_docs_sync.py` fails on a deliberate undocumented module change and passes once the doc is updated (`tests/test_check_docs_sync.py::test_base_mode_fails_until_the_doc_lands`).
 - [x] `check_md_caps.py` fails on an oversized doc (`tests/test_check_md_caps.py`).
-- [ ] CI runs `make check` and is green. (`.github/workflows/ci.yml` runs it; confirm the latest run on GitHub.)
+- [x] CI runs `make check` and is green (run #18 on `main`, 2026-10-26: ubuntu and macOS × 3.12/3.13/3.14, package and audit jobs all passed).
 
 ## 13. Roadmap
 

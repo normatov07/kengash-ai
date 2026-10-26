@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from super_harness.store import links
+from kengash_ai.store import links
 
 
 def test_link_states(tmp_path: Path) -> None:

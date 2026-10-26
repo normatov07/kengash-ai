@@ -1,7 +1,7 @@
 from typing import Any
 
-from super_harness.model import Settings
-from super_harness.workflow import (
+from kengash_ai.model import Settings
+from kengash_ai.workflow import (
     AWAITING_MERGE,
     BRANCH_READY,
     FAILED,

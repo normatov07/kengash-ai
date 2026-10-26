@@ -2,13 +2,13 @@
 name: to-ticket
 description: Use when the user runs /to-ticket with an approved plan id, or with a short prompt to turn straight into tickets.
 disable-model-invocation: true
-metadata: {source: super-harness}
+metadata: {source: kengash-ai}
 ---
 # Slice a plan into tickets
 
 Read with your file tools; use the shell only for the `harness` commands below, each as its own call with nothing chained before or after it. Never edit the repo's files or the `.harness` store yourself.
 
-0. Run `harness --version`. If it does not print `super-harness <version>`, say "Install super-harness first: uv tool install git+https://github.com/normatov07/super-harness" and stop.
+0. Run `harness --version`. If it does not print `kengash-ai <version>`, say "Install Kengash AI first: uv tool install git+https://github.com/normatov07/kengash-ai" and stop.
 1. A plan id: `harness plan show <id>` prints it; it must say `status: approved`. A short prompt instead: start a quick plan, then use its id:
 
    ```

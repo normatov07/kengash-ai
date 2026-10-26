@@ -6,8 +6,8 @@ from typing import Any
 
 from conftest import FakeClis
 
-from super_harness.adapters.antigravity import EDIT_LINE, READ_ONLY_LINE, Antigravity
-from super_harness.model import OUTPUT_SCHEMAS, ReviewOutput, StepRequest, Usage, WorkOutput
+from kengash_ai.adapters.antigravity import EDIT_LINE, READ_ONLY_LINE, Antigravity
+from kengash_ai.model import OUTPUT_SCHEMAS, ReviewOutput, StepRequest, Usage, WorkOutput
 
 
 def _request(tmp_path: Path, **fields: Any) -> StepRequest:

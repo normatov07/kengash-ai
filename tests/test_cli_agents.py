@@ -5,7 +5,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from super_harness.cli import app
+from kengash_ai.cli import app
 
 runner = CliRunner()
 NEW = [

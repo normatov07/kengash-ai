@@ -1,6 +1,6 @@
 """Fail when a package module changes without its docs/modules/<module>/README.md.
 
-A module is a top-level package or .py file under src/super_harness/; package dunder
+A module is a top-level package or .py file under src/kengash_ai/; package dunder
 files and non-Python files at the top level are not modules. Prints nothing when in sync.
 """
 
@@ -8,7 +8,7 @@ import argparse
 import subprocess
 import sys
 
-PACKAGE = "src/super_harness/"
+PACKAGE = "src/kengash_ai/"
 
 
 def module_of(path: str) -> str | None:

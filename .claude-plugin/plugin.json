@@ -1,10 +1,10 @@
 {
-  "name": "super-harness",
+  "name": "kengash-ai",
   "version": "0.1.0",
   "description": "Plan, ticket and run many projects at once with the coding-agent subscriptions you already have, through the harness CLI.",
   "author": { "name": "normatov13" },
-  "homepage": "https://github.com/normatov07/super-harness",
-  "repository": "https://github.com/normatov07/super-harness",
+  "homepage": "https://github.com/normatov07/kengash-ai",
+  "repository": "https://github.com/normatov07/kengash-ai",
   "license": "MIT",
   "keywords": ["planning", "tickets", "multi-agent", "orchestration"]
 }

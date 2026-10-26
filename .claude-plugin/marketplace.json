@@ -1,12 +1,12 @@
 {
-  "name": "super-harness",
-  "description": "super-harness: plan, ticket and run many projects with your coding-agent subscriptions.",
+  "name": "kengash-ai",
+  "description": "kengash_ai: plan, ticket and run many projects with your coding-agent subscriptions.",
   "owner": {
     "name": "normatov13"
   },
   "plugins": [
     {
-      "name": "super-harness",
+      "name": "kengash-ai",
       "source": "./",
       "description": "Plan, ticket and run many projects at once with the coding-agent subscriptions you already have, through the harness CLI."
     }

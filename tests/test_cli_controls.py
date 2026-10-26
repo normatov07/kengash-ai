@@ -6,11 +6,11 @@ import pytest
 from conftest import Engine
 from typer.testing import CliRunner
 
-from super_harness import gitops
-from super_harness.cli import app
-from super_harness.model import SessionRef, WorkerRecord
-from super_harness.ops import controls
-from super_harness.store import StorePaths, documents, runtime
+from kengash_ai import gitops
+from kengash_ai.cli import app
+from kengash_ai.model import SessionRef, WorkerRecord
+from kengash_ai.ops import controls
+from kengash_ai.store import StorePaths, documents, runtime
 
 runner = CliRunner()
 

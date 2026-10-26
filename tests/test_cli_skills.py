@@ -10,9 +10,9 @@ import pytest
 from conftest import FakeClis
 from typer.testing import CliRunner
 
-from super_harness.cli import app
-from super_harness.ops import skills
-from super_harness.store import StorePaths
+from kengash_ai.cli import app
+from kengash_ai.ops import skills
+from kengash_ai.store import StorePaths
 
 runner = CliRunner()
 UV = shutil.which("uv")  # found before the fake-CLI fixture narrows PATH
@@ -65,7 +65,7 @@ def test_the_wheel_carries_skills_and_roles(tmp_path: Path) -> None:
     subprocess.run(build, cwd=root, check=True)
     (wheel,) = tmp_path.glob("*.whl")
     names = set(zipfile.ZipFile(wheel).namelist())
-    assert {"super_harness/skills/README.md", "super_harness/roles/plan/SKILL.md"} <= names
+    assert {"kengash_ai/skills/README.md", "kengash_ai/roles/plan/SKILL.md"} <= names
 
 
 PROBE = """\

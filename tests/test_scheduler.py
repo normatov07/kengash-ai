@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
-from super_harness.model import Importance
-from super_harness.scheduler import Busy, Candidate, Held, Limits, fits, overlaps, select
+from kengash_ai.model import Importance
+from kengash_ai.scheduler import Busy, Candidate, Held, Limits, fits, overlaps, select
 
 T0 = datetime(2026, 10, 22, 9, 0, tzinfo=UTC)
 ROOMY = Limits(total=8, per_provider={"claude": 8, "codex": 8})

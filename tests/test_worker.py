@@ -9,9 +9,9 @@ from pathlib import Path
 import pytest
 from conftest import Engine, FakeClis
 
-from super_harness.model import PlanMode, PlanStatus, WorkerRecord
-from super_harness.ops import controls, lifecycle, plans, records, tickets
-from super_harness.store import StorePaths, documents, runtime
+from kengash_ai.model import PlanMode, PlanStatus, WorkerRecord
+from kengash_ai.ops import controls, lifecycle, plans, records, tickets
+from kengash_ai.store import StorePaths, documents, runtime
 
 
 def wait_until(check: Callable[[], bool], within: float = 20.0) -> None:
@@ -86,7 +86,7 @@ def test_the_worker_runs_a_plan_review(
     documents.save_plan(store_paths.project("payments-api"), doc)
     review = {"verdict": "pass", "summary": "Fine.", "findings": []}
     fake_clis.queue("claude", stdout=fake_clis.claude_output(review))
-    worker = [sys.executable, "-m", "super_harness.worker", "plan-review", made.id]
+    worker = [sys.executable, "-m", "kengash_ai.worker", "plan-review", made.id]
     done = subprocess.run([*worker, "--project", "payments-api"], capture_output=True, text=True)
     assert done.returncode == 0, done.stdout + done.stderr
     assert done.stdout == f"{made.id}: round 1 pass\n"

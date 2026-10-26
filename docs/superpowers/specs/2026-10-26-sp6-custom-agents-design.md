@@ -50,5 +50,5 @@ Every run failed since the first push. Two tests depended on the dev machine: th
 - [x] Invalid input (built-in name, unknown role, `on_fail` from a non-review step, unknown workflow) writes nothing and names the problem (`test_new_agent_refuses_without_writing`, `test_custom_step_problems`).
 - [x] The Agents screen creates and removes a custom agent in Chrome; the board and Workflow editor show its step (headless Chrome on the demo store, 2026-10-26: add, duplicate refused in the dialog, Workflow node "5 · Perf reviewer", board column, `#/agents/new`, two-click remove).
 - [x] §6 items checked by headless captures at 1440 px beside the canvas boards (no board title cut, footer on one line, "6 · Done", "+ security, 6 loops").
-- [ ] CI green on ubuntu and macOS for 3.12 and 3.14.
+- [x] CI green on ubuntu and macOS for 3.12 and 3.14 (and 3.13; run #18 on `main`).
 - [x] `make check` green; module docs, architecture and the system spec updated (583 passed on 2026-10-26).

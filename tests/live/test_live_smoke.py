@@ -14,11 +14,11 @@ import pytest
 from conftest import git, write_settings
 from typer.testing import CliRunner
 
-from super_harness import adapters
-from super_harness.cli import app
-from super_harness.model import Doc, Plan, Ticket
-from super_harness.ops import projects, records
-from super_harness.store import StorePaths
+from kengash_ai import adapters
+from kengash_ai.cli import app
+from kengash_ai.model import Doc, Plan, Ticket
+from kengash_ai.ops import projects, records
+from kengash_ai.store import StorePaths
 
 pytestmark = pytest.mark.live
 runner = CliRunner()

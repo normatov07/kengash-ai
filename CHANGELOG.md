@@ -17,10 +17,11 @@ The first release.
 
 ### Changed
 
+- The app is named **Kengash AI** and installs as `kengash-ai` (PyPI refused `super-harness` as too similar to `superharness`). The `harness` and `hrn` commands, `~/.harness` and every file format stay; an `kengash_ai` command is added.
 - Antigravity replaces Gemini CLI: Google moved Gemini CLI's subscription plans to Antigravity CLI, so `gemini` is no longer a provider; a setting naming it says to use `antigravity`.
 
 ### Security
 
 - The UI checks Host, Origin, a per-run token and an `X-Harness` header on changes, and sends a strict Content Security Policy with framing, sniffing and referrer protections.
 
-[0.1.0]: https://github.com/normatov07/super-harness/releases/tag/v0.1.0
+[0.1.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.1.0

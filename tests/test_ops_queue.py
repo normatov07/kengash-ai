@@ -2,9 +2,9 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
-from super_harness.model import Claims, Doc, SlotEntry, SlotTable, Ticket
-from super_harness.ops import projects, queue
-from super_harness.store import StorePaths, documents, runtime
+from kengash_ai.model import Claims, Doc, SlotEntry, SlotTable, Ticket
+from kengash_ai.ops import projects, queue
+from kengash_ai.store import StorePaths, documents, runtime
 
 NOW = datetime(2026, 10, 22, 9, 41, tzinfo=UTC)
 Make = Callable[..., Doc[Ticket]]

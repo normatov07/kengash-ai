@@ -8,9 +8,9 @@ import pytest
 from conftest import COMPACTED, FakeClis, write_settings
 from typer.testing import CliRunner
 
-from super_harness.cli import app
-from super_harness.model import Doc, Ticket
-from super_harness.store import StorePaths, documents
+from kengash_ai.cli import app
+from kengash_ai.model import Doc, Ticket
+from kengash_ai.store import StorePaths, documents
 
 runner = CliRunner()
 

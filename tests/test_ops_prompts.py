@@ -3,10 +3,10 @@
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from super_harness.model import Doc, Finding, Settings, Ticket
-from super_harness.ops import prompts
-from super_harness.store import StorePaths
-from super_harness.store.seed import ensure_project, ensure_store
+from kengash_ai.model import Doc, Finding, Settings, Ticket
+from kengash_ai.ops import prompts
+from kengash_ai.store import StorePaths
+from kengash_ai.store.seed import ensure_project, ensure_store
 
 Make = Callable[..., Doc[Ticket]]
 

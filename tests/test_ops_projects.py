@@ -7,11 +7,11 @@ from uuid import uuid4
 
 import pytest
 
-from super_harness.model import Doc, Folder, NeedsSetup, Ticket, UserError
-from super_harness.ops import projects, providers
-from super_harness.store import StorePaths, documents, links
-from super_harness.store.paths import ProjectPaths
-from super_harness.store.registry import load_registry
+from kengash_ai.model import Doc, Folder, NeedsSetup, Ticket, UserError
+from kengash_ai.ops import projects, providers
+from kengash_ai.store import StorePaths, documents, links
+from kengash_ai.store.paths import ProjectPaths
+from kengash_ai.store.registry import load_registry
 
 MakeTicket = Callable[..., Doc[Ticket]]
 NEWER = datetime(2026, 10, 23, 8, 0, tzinfo=UTC)
@@ -178,11 +178,24 @@ def test_doctor_warns_about_a_foreign_harness(
     script.chmod(0o755)
     monkeypatch.setenv("PATH", f"{foreign}{os.pathsep}{os.environ['PATH']}")
     assert providers.cli_clash() == (
-        f"the first harness on PATH ({script}) is not super-harness; "
+        f"the first harness on PATH ({script}) is not kengash-ai; "
         "run hrn instead, and install skills with --cli-name hrn"
     )
     report = projects.doctor(fix=False, scan=None)
-    assert any(p.warning and "not super-harness" in p.message for p in report.problems)
+    assert any(p.warning and "not kengash-ai" in p.message for p in report.problems)
+
+
+@pytest.mark.parametrize("banner", ["kengash-ai 0.1.0", "super-harness 0.1.0"])
+def test_a_harness_of_ours_before_or_after_the_rename_is_fine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, banner: str
+) -> None:
+    ours = tmp_path / "older-bin"
+    ours.mkdir()
+    script = ours / "harness"
+    script.write_text(f"#!/bin/sh\necho '{banner}'\n")
+    script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{ours}{os.pathsep}{os.environ['PATH']}")
+    assert providers.cli_clash() is None
 
 
 def test_our_own_harness_or_none_is_fine(monkeypatch: pytest.MonkeyPatch) -> None:

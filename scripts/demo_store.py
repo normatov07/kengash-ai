@@ -194,8 +194,8 @@ def commit_work(repo: Path, ticket: Any) -> None:
 
 def main(root: Path) -> int:
     os.environ["HARNESS_HOME"] = str(root / ".harness")
-    from super_harness import journal, memory
-    from super_harness.model import (
+    from kengash_ai import journal, memory
+    from kengash_ai.model import (
         ConductorPing,
         Doc,
         Event,
@@ -208,8 +208,8 @@ def main(root: Path) -> int:
         TicketState,
         utc_now,
     )
-    from super_harness.ops import configure, projects
-    from super_harness.store import StorePaths, documents, runtime
+    from kengash_ai.ops import configure, projects
+    from kengash_ai.store import StorePaths, documents, runtime
 
     paths = StorePaths.default()
     if paths.home.exists():

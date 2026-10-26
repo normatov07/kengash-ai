@@ -5,8 +5,8 @@ import subprocess
 import pytest
 from typer.testing import CliRunner
 
-from super_harness import __version__
-from super_harness.cli import app
+from kengash_ai import __version__
+from kengash_ai.cli import app
 
 runner = CliRunner()
 
@@ -14,7 +14,7 @@ runner = CliRunner()
 def test_version_names_the_package() -> None:
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
-    assert result.output.strip() == f"super-harness {__version__}"
+    assert result.output.strip() == f"kengash-ai {__version__}"
 
 
 def test_help_lists_the_version_option() -> None:
@@ -31,11 +31,11 @@ def test_console_scripts_print_version(command: str) -> None:
     output = subprocess.run(
         [executable, "--version"], check=True, capture_output=True, text=True
     ).stdout
-    assert output.strip() == f"super-harness {__version__}"
+    assert output.strip() == f"kengash-ai {__version__}"
 
 
 def test_native_windows_stops_with_the_wsl_message(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("super_harness.cli.sys.platform", "win32")
+    monkeypatch.setattr("kengash_ai.cli.sys.platform", "win32")
     for args in (["--version"], ["status"]):
         result = runner.invoke(app, args)
         assert result.exit_code == 4

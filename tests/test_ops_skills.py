@@ -4,12 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from super_harness.model import SkillMeta, UserError
-from super_harness.model.settings import SkillCaps
-from super_harness.ops import skills
-from super_harness.store import StorePaths
-from super_harness.store.frontmatter import split_frontmatter
-from super_harness.store.seed import ensure_project, ensure_store
+from kengash_ai.model import SkillMeta, UserError
+from kengash_ai.model.settings import SkillCaps
+from kengash_ai.ops import skills
+from kengash_ai.store import StorePaths
+from kengash_ai.store.frontmatter import split_frontmatter
+from kengash_ai.store.seed import ensure_project, ensure_store
 
 
 def role(folder: Path, name: str, body: str) -> None:
@@ -52,7 +52,7 @@ GOOD = """---
 name: good-skill
 description: Use when the user asks for a good skill.
 ---
-0. Run `harness --version`; it prints `super-harness <version>`.
+0. Run `harness --version`; it prints `kengash-ai <version>`.
 1. Run `harness plan new --title T` and `harness wait --timeout 540`.
 
 ```

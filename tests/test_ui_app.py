@@ -9,11 +9,11 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from super_harness import journal
-from super_harness.model import Doc, Event, ProviderStatus, Ticket
-from super_harness.ops import agents, jobs, views
-from super_harness.store import StorePaths, documents
-from super_harness.ui import app as ui_app
+from kengash_ai import journal
+from kengash_ai.model import Doc, Event, ProviderStatus, Ticket
+from kengash_ai.ops import agents, jobs, views
+from kengash_ai.store import StorePaths, documents
+from kengash_ai.ui import app as ui_app
 
 TOKEN = "t" * 43
 PORT = 47123

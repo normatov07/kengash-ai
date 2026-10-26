@@ -4,9 +4,9 @@ from pathlib import Path
 
 from conftest import FakeClis, write_settings
 
-from super_harness import settings
-from super_harness.ops.providers import check_providers, trust_notice
-from super_harness.store import StorePaths
+from kengash_ai import settings
+from kengash_ai.ops.providers import check_providers, trust_notice
+from kengash_ai.store import StorePaths
 
 
 def test_every_provider_usable_reports_nothing(

@@ -19,7 +19,7 @@ Never record `claude auth status`: it prints the account's email and organisatio
 
 ## Re-recording
 
-In a scratch git repo, with `env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT`; `$REVIEW` and `$WORK` are `super_harness.adapters.base.schema_json("review")` and `("work")`, and `$READ` is `Read Grep Glob "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)" "Bash(git status:*)"`:
+In a scratch git repo, with `env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT`; `$REVIEW` and `$WORK` are `kengash_ai.adapters.base.schema_json("review")` and `("work")`, and `$READ` is `Read Grep Glob "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)" "Bash(git status:*)"`:
 
 ```bash
 claude -p "Review a.py. Fail it with one low finding: variable name x is unclear." --output-format json --json-schema "$REVIEW" --session-id "$(uuidgen)" --model haiku --setting-sources project,local --strict-mcp-config --permission-mode dontAsk --allowedTools $READ > claude/review_new.json

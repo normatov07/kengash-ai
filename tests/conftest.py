@@ -14,11 +14,11 @@ from uuid import uuid4
 
 import pytest
 
-from super_harness import gitops
-from super_harness.model import Doc, Plan, Ticket, TicketState
-from super_harness.ops import projects
-from super_harness.store import StorePaths, documents, runtime
-from super_harness.store.seed import ensure_store
+from kengash_ai import gitops
+from kengash_ai.model import Doc, Plan, Ticket, TicketState
+from kengash_ai.ops import projects
+from kengash_ai.store import StorePaths, documents, runtime
+from kengash_ai.store.seed import ensure_store
 
 NOW = datetime(2026, 10, 22, 9, 41, tzinfo=UTC)
 FAKES = Path(__file__).parent / "fakes"

@@ -41,7 +41,7 @@ Pointer files hold no content of their own; put it in `AGENTS.md` or a topic doc
 
 ## Module docs
 
-Every module under `src/super_harness/` has `docs/modules/<module>/README.md` with four sections:
+Every module under `src/kengash_ai/` has `docs/modules/<module>/README.md` with four sections:
 
 - **Purpose**: one or two sentences.
 - **Interface**: what users and other modules call.

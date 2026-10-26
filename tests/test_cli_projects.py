@@ -3,8 +3,8 @@ from pathlib import Path
 from conftest import FakeClis
 from typer.testing import CliRunner
 
-from super_harness.cli import app
-from super_harness.store import StorePaths
+from kengash_ai.cli import app
+from kengash_ai.store import StorePaths
 
 runner = CliRunner()
 

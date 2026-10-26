@@ -8,11 +8,11 @@ from typing import Any
 import pytest
 from conftest import Events, FakeClis, write_settings
 
-from super_harness import settings
-from super_harness.model import Doc, NeedsSetup, Plan, PlanMode, PlanStatus, ProviderStatus
-from super_harness.ops import calls, plans, records, reviews
-from super_harness.ops.agents import Pick
-from super_harness.store import StorePaths, documents, runtime
+from kengash_ai import settings
+from kengash_ai.model import Doc, NeedsSetup, Plan, PlanMode, PlanStatus, ProviderStatus
+from kengash_ai.ops import calls, plans, records, reviews
+from kengash_ai.ops.agents import Pick
+from kengash_ai.store import StorePaths, documents, runtime
 
 SECTIONS = (
     "## Goal\nWebhook keys rotate without downtime.\n"

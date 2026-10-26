@@ -29,6 +29,7 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 
 ## Changes
 
+- 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-26: `UNSUPPORTED` removed: Antigravity replaces gemini; `get("gemini")` names the replacement (SP7).
 - 2026-10-26: `UNSUPPORTED` with the reason gemini is not driven (SP6).
 - 2026-10-23: agy editing steps get `EDIT_LINE` (SP3 M4 live smoke).

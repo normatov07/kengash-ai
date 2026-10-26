@@ -9,8 +9,8 @@ from typing import Any
 import pytest
 from conftest import FakeClis
 
-from super_harness.model import EvalScenario, UserError
-from super_harness.ops import evals, lifecycle
+from kengash_ai.model import EvalScenario, UserError
+from kengash_ai.ops import evals, lifecycle
 
 SCENARIO = """\
 skill: to-plan

@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from super_harness.model import (
+from kengash_ai.model import (
     OUTPUT_SCHEMAS,
     CompactOutput,
     Finding,

@@ -5,11 +5,11 @@ from collections.abc import Callable
 import pytest
 from conftest import Engine
 
-from super_harness import gitops
-from super_harness.model import Doc, Ticket, UserError
-from super_harness.ops import merging, records
-from super_harness.ops.merging import Merged
-from super_harness.store import documents
+from kengash_ai import gitops
+from kengash_ai.model import Doc, Ticket, UserError
+from kengash_ai.ops import merging, records
+from kengash_ai.ops.merging import Merged
+from kengash_ai.store import documents
 
 Make = Callable[..., Doc[Ticket]]
 

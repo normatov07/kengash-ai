@@ -7,8 +7,8 @@ import pytest
 from conftest import Engine, Events, FakeClis
 from typer.testing import CliRunner
 
-from super_harness.cli import app
-from super_harness.store import documents, runtime
+from kengash_ai.cli import app
+from kengash_ai.store import documents, runtime
 
 runner = CliRunner()
 REVIEW_FAIL = {

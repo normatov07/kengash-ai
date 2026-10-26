@@ -6,8 +6,8 @@ Thank you for helping. This page says how to set up, what a change needs, and ho
 
 Requires Linux or macOS, [uv](https://docs.astral.sh/uv/), git and GNU make.
 
-    git clone https://github.com/normatov07/super-harness
-    cd super-harness
+    git clone https://github.com/normatov07/kengash-ai
+    cd kengash-ai
     make setup      # the environment and the git hooks
     make check      # what CI runs: format, lint, types, tests, docs and skill checks
 
@@ -22,7 +22,7 @@ Requires Linux or macOS, [uv](https://docs.astral.sh/uv/), git and GNU make.
 ## What a change needs
 
 - Tests first: write the failing test, watch it fail, then make it pass.
-- A change under `src/super_harness/<module>` updates `docs/modules/<module>/README.md` in the same commit; the pre-commit hook and CI check it.
+- A change under `src/kengash_ai/<module>` updates `docs/modules/<module>/README.md` in the same commit; the pre-commit hook and CI check it.
 - `make check` passes. For packaging changes, `make dist` passes too.
 - Commit messages in the [Conventional Commits](https://www.conventionalcommits.org/) style (`feat:`, `fix:`, `docs:`, `build:` …), saying why as well as what.
 - User-visible changes get a line under the next version in [CHANGELOG.md](CHANGELOG.md).

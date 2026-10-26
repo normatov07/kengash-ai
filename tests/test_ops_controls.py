@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from conftest import Engine, Events, FakeClis
 
-from super_harness.model import (
+from kengash_ai.model import (
     Doc,
     NeedsSetup,
     Ticket,
@@ -15,9 +15,9 @@ from super_harness.model import (
     UserError,
     WorkerRecord,
 )
-from super_harness.ops import controls
-from super_harness.ops.controls import Paused, Resumed, Started
-from super_harness.store import StorePaths, documents, runtime
+from kengash_ai.ops import controls
+from kengash_ai.ops.controls import Paused, Resumed, Started
+from kengash_ai.store import StorePaths, documents, runtime
 
 Make = Callable[..., Doc[Ticket]]
 
