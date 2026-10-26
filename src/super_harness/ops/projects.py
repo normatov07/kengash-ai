@@ -10,7 +10,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from super_harness.model import NeedsSetup, Plan, ProjectEntry, Ticket, UserError, utc_now
-from super_harness.ops import providers, waiting
+from super_harness.ops import jobs, providers, waiting
 from super_harness.ops.records import repo_root
 from super_harness.store import documents, links, seed, storegit
 from super_harness.store.locks import locked
@@ -115,6 +115,8 @@ def doctor(
                 problems.append(
                     Problem(f"unmanaged store {found}; run: harness adopt {found.parent}")
                 )
+    if fix:
+        jobs.prune_logs(paths, jobs.keep_days(paths))
     dead = waiting.dead_workers(paths)
     if fix and dead:
         waiting.check_workers(paths)

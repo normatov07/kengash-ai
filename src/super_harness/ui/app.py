@@ -38,6 +38,21 @@ STATIC = Path(__file__).parent / "static"
 COOKIE = "harness_token_{port}"  # one per server: cookies ignore ports
 BY = "ui"
 PING_S = 15.0
+# Sent with every response (SP7 spec decision 4). Inline style attributes are part of the
+# screens' markup, so styles allow 'unsafe-inline'; scripts load from this server only.
+SECURITY_HEADERS = {
+    "content-security-policy": (
+        "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; "
+        "form-action 'self'; frame-ancestors 'none'"
+    ),
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "no-referrer",  # the first request carries the token in its URL
+    "cross-origin-opener-policy": "same-origin",
+    "cross-origin-resource-policy": "same-origin",
+    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+}
 LOCKED = (
     "<!doctype html><title>harness</title>"
     "<p>Open the link that <code>harness ui open</code> printed.</p>"
@@ -120,6 +135,15 @@ def create_app(*, token: str, port: int) -> FastAPI:
         response = await call_next(request)
         if request.url.path.startswith("/static/"):
             response.headers["cache-control"] = "no-cache"  # revalidate: an upgrade shows at once
+        return response
+
+    @app.middleware("http")
+    async def secure(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        # added after guard, so it is the outer one and guard's refusals get the headers too
+        response = await call_next(request)
+        response.headers.update(SECURITY_HEADERS)
         return response
 
     @app.exception_handler(HarnessError)

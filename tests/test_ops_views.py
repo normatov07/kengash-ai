@@ -473,7 +473,7 @@ def test_the_board_has_a_column_for_a_custom_step(seeded: StorePaths, make_ticke
     documents.save_ticket(seeded.project("payments-api"), doc)
     columns = views.board(seeded, project="payments-api").columns
     keys = [column.key for column in columns]
-    assert keys.index("perf_review") == keys.index("security") + 1 and keys[-1] == "done"
+    assert keys.index("perf_review") == keys.index("review_code") + 1 and keys[-1] == "done"
     perf = columns[keys.index("perf_review")]
     assert (perf.title, [card.id for card in perf.cards]) == ("Perf review", ["aaaaaaa6"])
 
@@ -483,3 +483,12 @@ def test_the_agents_view_carries_each_workflows_loop_cap(
 ) -> None:
     found = views.agents_view(seeded, project="payments-api")
     assert found.loop_max == {"simple": 3, "standard": 4, "critical": 6}
+
+
+def test_a_custom_column_sits_where_its_workflow_runs_it(
+    seeded: StorePaths, make_ticket: Make
+) -> None:
+    configure.save_settings(PERF_CHANGES, project="payments-api", by="ui")
+    keys = [column.key for column in views.board(seeded, project="payments-api").columns]
+    assert keys.index("perf_review") == keys.index("review_code") + 1
+    assert keys.index("security") == keys.index("perf_review") + 1

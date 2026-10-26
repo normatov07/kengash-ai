@@ -27,6 +27,7 @@ Typer command surface for `harness` (alias `hrn`): parses arguments and formats 
 
 ## Changes
 
+- 2026-10-26: on native Windows every command exits 4 with "harness runs on Linux and macOS; on Windows use WSL" (SP7).
 - 2026-10-26: `agent new`, `agent remove` (SP6).
 - 2026-10-23: `ui open`, `ui stop` (SP5 M1).
 - 2026-10-23: `skills eval` (SP4 M2).

@@ -30,6 +30,8 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 
 ## Changes
 
+- 2026-10-26: accessibility: axe-core reports no serious or critical issue on any screen; `--faint` is the canvas's grey lifted to 4.5:1, text never uses `--dim`, off roles and pending chain steps show their state by colour instead of opacity, the SETTINGS.md view is keyboard-scrollable (SP7).
+- 2026-10-26: every response carries a CSP (`script-src 'self'`, `frame-ancestors 'none'`, styles `'self' 'unsafe-inline'` for the markup's style attributes), `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` (the first URL holds the token), COOP, CORP and a Permissions-Policy, refusals included; a favicon (SP7).
 - 2026-10-26: a not-supported provider card shows the server's reason (SP6).
 - 2026-10-26: canvas follow-ups: narrow board columns float their "more" button so titles fit at 1440 px, the queue footer stays on one line, the end node is numbered ("6 · Done"), critical routing names its loop cap (SP6 §6).
 - 2026-10-26: New agent dialog, Remove agent, status flow "+ add", custom steps in the Workflow editor (SP6).

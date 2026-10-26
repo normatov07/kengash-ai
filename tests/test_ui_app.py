@@ -289,3 +289,31 @@ def test_remove_agent_endpoint(client: TestClient) -> None:
     )
     assert removed.status_code == 200
     assert "perf-reviewer" not in {row["role"] for row in removed.json()["roster"]}
+
+
+SECURITY_HEADERS = {
+    "content-security-policy": (
+        "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; "
+        "form-action 'self'; frame-ancestors 'none'"
+    ),
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "no-referrer",
+    "cross-origin-opener-policy": "same-origin",
+    "cross-origin-resource-policy": "same-origin",
+    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+}
+
+
+def test_every_response_carries_the_security_headers(client: TestClient) -> None:
+    responses = [
+        client.get("/"),  # 401: not signed in
+        client.get("/api/overview", headers={"Host": "evil.example:80"}),  # 403
+        client.get(f"/?token={TOKEN}", follow_redirects=False),  # 303 with the cookie
+    ]
+    signed_in(client)
+    responses += [client.get("/"), client.get("/static/app.js"), client.get("/api/meta")]
+    assert [r.status_code for r in responses] == [401, 403, 303, 200, 200, 200]
+    for response in responses:
+        assert {k: response.headers.get(k) for k in SECURITY_HEADERS} == SECURITY_HEADERS

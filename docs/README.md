@@ -5,6 +5,7 @@ One line per doc: what it holds and when to read it.
 | Doc | Read when |
 |---|---|
 | `architecture.md` | adding or moving a module, or changing module dependencies |
+| `releasing.md` | publishing a version to PyPI and GitHub, or setting that up |
 | `conventions/instruction-files.md` | writing AGENTS.md, CLAUDE.md, GEMINI.md or anything under `docs/` |
 | `conventions/skills.md` | writing a skill or role skill |
 | `conventions/memory-files.md` | touching MEMORY.md, DECISIONS.md, PROCESS.md, SETTINGS.md, plan or ticket formats |

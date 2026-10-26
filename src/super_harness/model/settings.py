@@ -42,9 +42,9 @@ def split_cli(cli: str) -> tuple[str, str | None]:
     return provider, model or None
 
 
-def _known(cli: str, *, shell: bool = False) -> str:
+def _known(cli: str, *, allow_shell: bool = False) -> str:
     provider, _ = split_cli(cli)
-    known = (*PROVIDERS, SHELL) if shell else PROVIDERS
+    known = (*PROVIDERS, SHELL) if allow_shell else PROVIDERS
     if provider not in known:
         raise ValueError(f"unknown provider {provider!r}; known: {', '.join(known)}")
     return cli
@@ -108,6 +108,10 @@ class MemoryCaps(_Section):
         return _known(value)
 
 
+class Logs(_Section):
+    keep_days: int = Field(30, ge=0)  # 0 keeps every log
+
+
 class ReviewPolicy(_Section):
     diff_only: bool = True
 
@@ -123,7 +127,7 @@ class Agent(_Section):
     @field_validator("cli")
     @classmethod
     def _cli_provider(cls, value: str) -> str:
-        return _known(value, shell=True)
+        return _known(value, allow_shell=True)
 
     @field_validator("fallback")
     @classmethod
@@ -194,6 +198,7 @@ class Settings(_Section):
     skill: SkillCaps = Field(default_factory=SkillCaps)
     memory: MemoryCaps = Field(default_factory=MemoryCaps)
     review: ReviewPolicy = Field(default_factory=ReviewPolicy)
+    logs: Logs = Field(default_factory=Logs)
     providers: dict[str, ProviderOptions] = Field(default_factory=dict)
     agents: dict[str, Agent] = Field(default_factory=dict)
     steps: dict[str, CustomStep] = Field(default_factory=dict)

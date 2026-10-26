@@ -185,7 +185,7 @@ export function view(data, app) {
       <section class="panel settings-file">
         <div class="panel-head"><h2 class="mono" style="font-size: 12px">SETTINGS.md</h2><span class="end faint" style="font-size: 11px">${data.file.split("\n").length - 1} lines</span></div>
         <div class="file-paths mono"><div title="${data.path}"><span class="faint">store</span> ${data.path}</div>${data.repo_path ? html`<div title="${data.repo_path}"><span class="faint">repo</span> ${data.repo_path}</div>` : ""}</div>
-        <div class="yaml-box">${fileView(data)}</div>
+        <div class="yaml-box" tabindex="0" role="region" aria-label="SETTINGS.md">${fileView(data)}</div>
         <div class="file-foot"><span class="y-set">Amber values</span> are set in this ${scope ? "project" : "scope"}; the rest ${scope ? "come from the defaults" : "match the package defaults"}.</div>
       </section>
     </div>

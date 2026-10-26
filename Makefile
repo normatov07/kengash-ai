@@ -1,7 +1,7 @@
 DOCS_BASE ?= main
 MAKEFLAGS += --silent
 
-.PHONY: setup fmt lint type test live evals docs check
+.PHONY: setup fmt lint type test live evals docs check dist audit
 
 setup:
 	uv sync
@@ -36,3 +36,15 @@ docs:
 	uv run python scripts/check_docs_sync.py --base $(DOCS_BASE)
 
 check: lint type test docs
+
+# release artifacts, checked: the product and nothing local (SP7 spec decision 8)
+dist:
+	rm -rf dist
+	uv build --quiet
+	uv run python scripts/check_dist.py dist
+
+# known vulnerabilities in the locked dependencies
+audit:
+	uv lock --check
+	uv export --format requirements-txt --all-extras --no-emit-project --quiet > .audit-requirements.txt
+	uvx pip-audit@2.10.1 -r .audit-requirements.txt --disable-pip --require-hashes; status=$$?; rm -f .audit-requirements.txt; exit $$status

@@ -13,7 +13,7 @@
   --line-strong: #323943;
   --text: #eceff3;
   --muted: #a7b0bc;
-  --faint: #78828f;
+  --faint: #7e8895; /* the canvas's #78828f, lifted to 4.5:1 on every surface (WCAG AA) */
   --dim: #5a646f;
   --accent: #f0883e;
   --accent-hover: #ffa463;
@@ -330,7 +330,7 @@ body[data-screen="board"] #view { flex: 1 1 auto; min-height: 0; display: flex; 
 .cchip.ok { background: #1e2a20; color: var(--ok); }
 .cchip.plain { background: #22262c; color: var(--muted); }
 .cdiff { font-family: var(--mono); font-size: 10px; color: var(--ok); }
-.card-foot { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10px; color: var(--dim); }
+.card-foot { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10px; color: var(--faint); }
 .card-foot .end { margin-left: auto; color: var(--faint); max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list-view { margin: 0; }
 .list-row { display: flex; align-items: center; gap: 10px; color: var(--text); }
@@ -457,7 +457,8 @@ a.dep-row:hover { border-color: var(--line-strong); color: var(--text); }
 .chain-row.s-needs-you .num { background: #3a2024; color: var(--danger); }
 .chain-row.s-needs-you .name { font-weight: 600; }
 .chain-row.s-needs-you .end { color: var(--danger); }
-.chain-row.s-pending { opacity: 0.55; }
+/* pending and off say so by colour, not opacity: faded text would fall under 4.5:1 */
+.chain-row.s-pending, .chain-row.s-pending * { color: var(--faint); }
 .meta-rows { display: flex; flex-direction: column; gap: 9px; font-size: 12px; }
 .meta-rows > div { display: flex; gap: 8px; }
 .meta-rows > div > span:first-child { flex: 0 0 90px; color: var(--faint); }
@@ -565,7 +566,7 @@ a.dep-row:hover { border-color: var(--line-strong); color: var(--text); }
 .pstate span { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 .pstate.ok { background: #1e2a20; color: var(--ok); }
 .pstate.warn { background: #2a2320; color: var(--warn); }
-.pstate.plain { background: var(--pressed); color: var(--faint); }
+.pstate.plain { background: var(--pressed); color: var(--muted); }
 .prov-rows { display: flex; flex-direction: column; gap: 7px; font-size: 12px; color: var(--faint); }
 .prov-rows > div { display: flex; gap: 8px; }
 .prov-rows .end { margin-left: auto; color: var(--text); }
@@ -573,14 +574,15 @@ a.dep-row:hover { border-color: var(--line-strong); color: var(--text); }
 .prov-btn { width: 100%; margin-top: auto; padding: 8px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--raised); color: var(--muted); font-size: 12px; cursor: pointer; }
 .prov-btn.strong { color: var(--text); font-weight: 500; }
 .prov-btn:hover { border-color: var(--faint); }
-.prov-hint { margin-top: 7px; font-size: 10px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prov-hint { margin-top: 7px; font-size: 10px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .roster-rows { min-width: 1000px; }
 .roster-rows .thead { background: var(--card); }
 .roster-item { border-bottom: 1px solid var(--line-soft); }
 .roster-item:last-child { border-bottom: 0; }
 .roster-item .trow { border-bottom: 0; padding: 13px 18px; }
 .roster-item.is-blocking > .trow { background: #181b1f; }
-.roster-item.is-off > .trow { opacity: 0.62; }
+.roster-item.is-off .r-name b { color: var(--muted); font-weight: 500; }
+.roster-item.is-off .used span { opacity: 0.45; }
 .roster-row > .r-on { flex: 0 0 56px; }
 .roster-row > .r-name { flex: 1 1 190px; min-width: 0; }
 .roster-row > .r-name > div:first-child { display: flex; align-items: center; gap: 8px; font-size: 13px; }
@@ -653,6 +655,7 @@ a.dep-row:hover { border-color: var(--line-strong); color: var(--text); }
 .settings-file .panel-head { background: #191c21; padding: 13px 16px; }
 .file-paths { display: flex; flex-direction: column; gap: 3px; padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 10.5px; color: var(--muted); }
 .file-paths div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yaml-box:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .yaml-box { padding: 14px 16px; overflow: auto; max-height: 560px; background: #121518; }
 .yaml { min-width: 272px; font-family: var(--mono); font-size: 11.5px; line-height: 1.85; color: var(--muted); white-space: pre; }
 .yaml > span { display: block; }

@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # pinned action commits, kept current
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Python dependencies: security updates only. Dependabot's uv support ignores
+  # versioning-strategy and raises pyproject.toml lower bounds; routine upgrades run
+  # through `uv lock --upgrade` (CONTRIBUTING.md), and CI checks the lock with --locked.
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0

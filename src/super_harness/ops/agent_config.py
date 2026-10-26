@@ -79,20 +79,20 @@ def new_agent(
     if project is not None:
         records.scope(paths, project)
     name = step or role.replace("-", "_")
-    resolved = settings.load(paths, project)
-    if role in resolved.agents:
-        raise UserError(f"agent {role} exists; pick another name")
-    if name in resolved.step_names():
-        raise UserError(f"step {name} exists; pass another step name")
     if send_back is not None and kind != "review":
         raise UserError("only a review step sends a ticket back")
-    changes: dict[str, Any] = {
-        f"agents.{role}": {"on": True, "cli": cli, "skill": role},
-        f"steps.{name}": {"role": role, "kind": kind, "does": does},
-    }
-    for flow in workflows:
-        changes[f"workflows.{flow}"] = _with_step(resolved, flow, name, kind, after, send_back)
-    with locked(paths.locks / "settings.lock"):
+    with locked(paths.locks / "settings.lock"):  # read, change and write as one edit
+        resolved = settings.load(paths, project)
+        if role in resolved.agents:
+            raise UserError(f"agent {role} exists; pick another name")
+        if name in resolved.step_names():
+            raise UserError(f"step {name} exists; pass another step name")
+        changes: dict[str, Any] = {
+            f"agents.{role}": {"on": True, "cli": cli, "skill": role},
+            f"steps.{name}": {"role": role, "kind": kind, "does": does},
+        }
+        for flow in workflows:
+            changes[f"workflows.{flow}"] = _with_step(resolved, flow, name, kind, after, send_back)
         keys = settings.set_values(paths, project, changes)
         written = _starter(paths, project, role, kind, does)
     event = Event(type="settings.changed", project=project, keys=keys, by=by)
@@ -107,27 +107,27 @@ def remove_agent(role: str, *, project: str | None, by: str) -> AgentChange:
     slugs = records.scope(paths, project)
     if role in BUILTIN_ROLES:
         raise UserError(f"{role} is a built-in role; switch it off instead")
-    resolved = settings.load(paths, project)
-    if role not in resolved.agents:
-        raise UserError(f"no agent {role}")
-    own = settings.scope_keys(paths, project)
-    if not any(key == f"agents.{role}" or key.startswith(f"agents.{role}.") for key in own):
-        where = "the defaults" if project is None else project
-        raise UserError(f"agent {role} is not set in {where}; remove it where it is set")
-    steps = [name for name, step in resolved.steps.items() if step.role == role]
-    for slug in slugs:
-        for doc in records.project_tickets(paths, slug).values():
-            ticket = doc.meta
-            if ticket.folder is Folder.in_process and ticket.step in steps:
-                raise UserError(f"ticket {ticket.id} is at step {ticket.step}; move it first")
-    changes: dict[str, Any] = {f"agents.{role}": None}
-    changes |= {f"steps.{name}": None for name in steps}
-    for flow_name, flow in resolved.workflows.items():
-        edges = {k: v for k, v in flow.on_fail.items() if k not in steps and v not in steps}
-        kept = [name for name in flow.steps if name not in steps]
-        if kept != flow.steps or edges != flow.on_fail:
-            changes[f"workflows.{flow_name}"] = {"steps": kept, "on_fail": edges}
-    with locked(paths.locks / "settings.lock"):
+    with locked(paths.locks / "settings.lock"):  # read, change and write as one edit
+        resolved = settings.load(paths, project)
+        if role not in resolved.agents:
+            raise UserError(f"no agent {role}")
+        own = settings.scope_keys(paths, project)
+        if not any(key == f"agents.{role}" or key.startswith(f"agents.{role}.") for key in own):
+            where = "the defaults" if project is None else project
+            raise UserError(f"agent {role} is not set in {where}; remove it where it is set")
+        steps = [name for name, step in resolved.steps.items() if step.role == role]
+        for slug in slugs:
+            for doc in records.project_tickets(paths, slug).values():
+                ticket = doc.meta
+                if ticket.folder is Folder.in_process and ticket.step in steps:
+                    raise UserError(f"ticket {ticket.id} is at step {ticket.step}; move it first")
+        changes: dict[str, Any] = {f"agents.{role}": None}
+        changes |= {f"steps.{name}": None for name in steps}
+        for flow_name, flow in resolved.workflows.items():
+            edges = {k: v for k, v in flow.on_fail.items() if k not in steps and v not in steps}
+            kept = [name for name in flow.steps if name not in steps]
+            if kept != flow.steps or edges != flow.on_fail:
+                changes[f"workflows.{flow_name}"] = {"steps": kept, "on_fail": edges}
         keys = settings.set_values(paths, project, changes)
     event = Event(type="settings.changed", project=project, keys=keys, by=by)
     records.record(paths, f"harness: agent remove {role}", event)

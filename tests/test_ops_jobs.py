@@ -99,3 +99,17 @@ def test_exited_names_the_job_and_its_plan(journal_events: Events) -> None:
         "ok": False,
         "reason": "boom",
     }
+
+
+def test_old_logs_are_pruned_and_new_ones_kept(store_paths: StorePaths) -> None:
+    store_paths.logs.mkdir(parents=True)
+    now = time.time()
+    ages = {"old-1.out": 31, "fresh-1.out": 29, "ui.log": 0}
+    for name, days in ages.items():
+        path = store_paths.logs / name
+        path.write_text("x")
+        os.utime(path, (now - days * 86400, now - days * 86400))
+    assert jobs.prune_logs(store_paths, keep_days=0) == 0  # 0 keeps everything
+    assert jobs.prune_logs(store_paths, keep_days=30) == 1
+    assert sorted(p.name for p in store_paths.logs.iterdir()) == ["fresh-1.out", "ui.log"]
+    assert jobs.prune_logs(store_paths, keep_days=30) == 0
