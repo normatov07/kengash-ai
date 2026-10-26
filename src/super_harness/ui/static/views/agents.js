@@ -49,7 +49,7 @@ function provider(card) {
   const head = html`<div class="prov-head"><span class="mono prov-name ${ready || !card.checked ? "" : "muted"}">${card.name}</span>${badge(card)}</div>`;
   if (card.checked && !ready) {
     const why = !card.supported
-      ? "Not supported yet: pick another provider for its roles in SETTINGS.md."
+      ? card.hint || "Not supported yet: pick another provider for its roles in SETTINGS.md."
       : !card.installed
         ? `The ${card.name} CLI is not on this machine's PATH.`
         : `The ${card.name} CLI${card.version ? ` ${card.version}` : ""} is installed but no session has been signed in.`;

@@ -150,3 +150,7 @@ def test_done_node_is_numbered() -> None:
 def test_routing_names_the_critical_loop_cap() -> None:
     agents = (STATIC / "views" / "agents.js").read_text()
     assert "${data.loop_max[name]} loops" in agents
+
+
+def test_an_unsupported_provider_card_explains_itself() -> None:
+    assert "card.hint ||" in (STATIC / "views" / "agents.js").read_text()

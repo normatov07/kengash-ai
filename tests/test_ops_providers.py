@@ -4,6 +4,7 @@ from pathlib import Path
 
 from conftest import FakeClis, write_settings
 
+from super_harness import adapters
 from super_harness.ops.providers import check_providers, trust_notice
 from super_harness.store import StorePaths
 
@@ -57,7 +58,7 @@ def test_gemini_is_unsupported(registered_repo: Path, store_paths: StorePaths) -
     )
     [check] = check_providers(store_paths)
     assert check.blocking and check.message == (
-        "gemini: not supported yet; used by doc-writer; pick another provider in SETTINGS.md"
+        f"gemini: not supported; used by doc-writer; {adapters.UNSUPPORTED['gemini']}"
     )
 
 

@@ -45,10 +45,10 @@ Every run failed since the first push. Two tests depended on the dev machine: th
 
 ## 7. Acceptance (SP6 exit)
 
-- [ ] `harness agent new perf-reviewer --kind review --does "…" --workflow critical --after review_code --send-back implement` adds the agent, the step, the workflow entry, the edge and a starter skill that passes `harness skills lint`; a ticket on `critical` runs the step with the fake CLIs, a fail sends it back and burns a loop.
-- [ ] An `edit` custom step's changes are committed under the ticket; a `read` step's notes reach the Handoff.
-- [ ] Invalid input (built-in name, unknown role, `on_fail` from a non-review step, unknown workflow) writes nothing and names the problem.
-- [ ] The Agents screen creates and removes a custom agent in Chrome; the board and Workflow editor show its step.
-- [ ] §6 items checked by headless captures at 1440 px beside the canvas boards.
+- [x] `harness agent new perf-reviewer --kind review --does "…" --workflow critical --after review_code --send-back implement` adds the agent, the step, the workflow entry, the edge and a starter skill that passes `harness skills lint`; a ticket on `critical` runs the step with the fake CLIs, a fail sends it back and burns a loop (`test_new_agent_writes_one_valid_save_and_a_starter_skill`, `test_cli_agent_new_and_remove`, `test_a_custom_review_step_sends_the_ticket_back`, `test_a_custom_review_step_routes_like_review_code`).
+- [x] An `edit` custom step's changes are committed under the ticket; a `read` step's notes reach the Handoff (`test_a_custom_edit_step_is_committed`, `test_a_custom_read_step_hands_notes_on`).
+- [x] Invalid input (built-in name, unknown role, `on_fail` from a non-review step, unknown workflow) writes nothing and names the problem (`test_new_agent_refuses_without_writing`, `test_custom_step_problems`).
+- [x] The Agents screen creates and removes a custom agent in Chrome; the board and Workflow editor show its step (headless Chrome on the demo store, 2026-10-26: add, duplicate refused in the dialog, Workflow node "5 · Perf reviewer", board column, `#/agents/new`, two-click remove).
+- [x] §6 items checked by headless captures at 1440 px beside the canvas boards (no board title cut, footer on one line, "6 · Done", "+ security, 6 loops").
 - [ ] CI green on ubuntu and macOS for 3.12 and 3.14.
-- [ ] `make check` green; module docs, architecture and the system spec updated.
+- [x] `make check` green; module docs, architecture and the system spec updated (583 passed on 2026-10-26).

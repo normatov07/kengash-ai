@@ -12,6 +12,13 @@ from super_harness.model import NeedsSetup, UserError
 __all__ = ["Provider", "get"]
 
 
+# Providers harness knows by name but cannot drive, and why (SP6 spec decision 9)
+UNSUPPORTED = {
+    "gemini": "Google moved Gemini CLI's Pro, Ultra and free plans to Antigravity CLI on "
+    "2026-06-18 and harness never uses API keys; pick antigravity in SETTINGS.md",
+}
+
+
 def get(name: str, *, runtime: Path) -> Provider:
     """The driver for a provider (or `shell`); `runtime` holds files a CLI needs on disk."""
     if name == "claude":
@@ -22,6 +29,6 @@ def get(name: str, *, runtime: Path) -> Provider:
         return Antigravity()
     if name == "shell":
         return Shell()
-    if name == "gemini":
-        raise NeedsSetup("gemini is not supported yet; pick another provider in SETTINGS.md")
+    if name in UNSUPPORTED:
+        raise NeedsSetup(f"{name} is not supported: {UNSUPPORTED[name]}")
     raise UserError(f"unknown provider: {name}")

@@ -205,7 +205,9 @@ def test_the_agents_screen_reads_one_scope(
     shown = client.get("/api/agents?project=payments-api&window=7d").json()
     assert shown["scope"] == "payments-api"
     assert {role["role"] for role in shown["roster"]} >= {"planner", "implementer"}
-    assert all(card["hint"] == "install it" for card in shown["providers"])
+    hints = {card["name"]: card["hint"] for card in shown["providers"]}
+    assert "Antigravity CLI" in hints.pop("gemini")  # not driven, and the card says why
+    assert set(hints.values()) == {"install it"}
 
 
 def test_a_ticket_and_its_plan_are_served(

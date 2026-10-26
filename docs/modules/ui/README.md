@@ -30,6 +30,7 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 
 ## Changes
 
+- 2026-10-26: a not-supported provider card shows the server's reason (SP6).
 - 2026-10-26: canvas follow-ups: narrow board columns float their "more" button so titles fit at 1440 px, the queue footer stays on one line, the end node is numbered ("6 · Done"), critical routing names its loop cap (SP6 §6).
 - 2026-10-26: New agent dialog, Remove agent, status flow "+ add", custom steps in the Workflow editor (SP6).
 - 2026-10-24: board columns shrink to 156 px, so seven fit at 1440 px without scrolling sideways.

@@ -720,7 +720,7 @@ def agents_view(
                 status.signed_in if status else False,
                 name not in agents.UNSUPPORTED,
                 status.version if status else None,
-                status.hint if status else "",
+                agents.UNSUPPORTED.get(name) or (status.hint if status else ""),
                 held[name],
                 resolved.sessions.per_provider.get(name, 0),
                 spend.get(name, 0),

@@ -56,6 +56,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-26: `providers`, `agents` and the Agents cards give gemini's reason from `adapters.UNSUPPORTED` (SP6).
 - 2026-10-26: `agent_config.new_agent`, `remove_agent` (SP6).
 - 2026-10-26: views show custom steps: board columns, `Role.custom`/`step`, `WorkflowsView.kinds`/`does` (SP6).
 - 2026-10-26: engine, claims, queue and attach look steps up through `Settings.role_of`/`kind_of`; `prompts.instruction` and kind-driven `output_kind`/`profile` run custom steps (SP6).
