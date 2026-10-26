@@ -953,7 +953,7 @@ def skills_install(
     cli_name: Annotated[
         str,
         typer.Option("--cli-name", help="The command the skills call: kengash, or a full path."),
-    ] = "harness",  # becomes kengash once the skills call kengash (SP8 Task 6)
+    ] = "kengash",
     yes: Annotated[bool, typer.Option("--yes", help="Replace skills that differ.")] = False,
     as_json: AsJson = False,
 ) -> None:

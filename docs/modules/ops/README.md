@@ -56,6 +56,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-26: skills run `kengash` (`skills.CLI`); lint wants step 0 `kengash --version` and checks `kengash` commands; `rename_cli` swaps `kengash` for `--cli-name` (default `kengash`); `install` removes skill folders whose frontmatter `metadata.source` is ours (`kengash-ai`, `super-harness`) and that are not packaged any more, reporting them `removed`; eval conductors get `Bash(kengash:*)`; the UI install hint uses the PyPI release (SP8).
 - 2026-10-26: store commits read `kengash: …` and events the engine writes carry `by: kengash` (SP8).
 - 2026-10-26: step commits are `kg(<id>): …` with `Kengash-*` trailers; claims make `kg/<id>` branches; changes and merge read 0.1.0 tickets (`hrn/` branches, `Harness-*` trailers) as well (SP8).
 - 2026-10-26: `providers.cli_clash` looks for a foreign `kengash` on PATH; `waiting.ping` reads `KENGASH_AGENT`, then `HARNESS_AGENT`; the eval sandbox sets `KENGASH_HOME` and runs `kengash` (SP8).

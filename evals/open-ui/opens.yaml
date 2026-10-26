@@ -2,7 +2,7 @@ skill: open-ui
 description: /open-ui starts the local UI and hands the user its link
 notes: >-
   RED 2026-10-24: claude (haiku) said the /open-ui command was not installed and did nothing;
-  agy guessed `harness ui open` from the store and passed even without the skill.
+  agy guessed `kengash ui open` from the store and passed even without the skill.
 turns:
   - "/open-ui"
 expect:

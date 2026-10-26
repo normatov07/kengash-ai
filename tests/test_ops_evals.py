@@ -67,7 +67,7 @@ def test_fill_replaces_known_names_only() -> None:
     )
 
 
-PLAN_NEW = "harness plan new --mode direct --title Probe <<'EOF'\nAdd add(a, b).\nEOF"
+PLAN_NEW = "kengash plan new --mode direct --title Probe <<'EOF'\nAdd add(a, b).\nEOF"
 
 
 def claude_reply(session: str = "s-1", result: str = "Planned it.") -> str:
@@ -117,7 +117,7 @@ def test_a_scenario_passes_when_the_conductor_does_the_work(
     argv = call["argv"]
     assert argv[:2] == ["-p", "/to-plan Add add(a, b)"] and call["cwd"] == str(work / "repo")
     assert argv[argv.index("--model") + 1] == "haiku" and "dontAsk" in argv
-    assert argv[-4:] == ["Read", "Grep", "Glob", "Bash(harness:*)"]
+    assert argv[-4:] == ["Read", "Grep", "Glob", "Bash(kengash:*)"]
     assert call["env"]["KENGASH_AGENT"] == "claude" and "CLAUDECODE" not in call["env"]
     assert (work / "repo" / ".claude" / "skills" / "to-plan" / "SKILL.md").is_file()
 
@@ -235,7 +235,7 @@ def test_a_clean_expectation_names_changed_files(
     assert (result.passed, result.failure) == (False, "the repo has changes: notes.md")
 
 
-# A stand-in server started as `harness ui open` starts one: in a session of its own from
+# A stand-in server started as `kengash ui open` starts one: in a session of its own from
 # the moment it runs, so the conductor's process group ending cannot take it down (a
 # backgrounded process that calls setsid itself loses that race on slow starts, as on macOS),
 # and recorded only once it is detached. Its streams go to /dev/null so the conductor's
@@ -272,4 +272,4 @@ def test_a_ui_the_conductor_starts_is_stopped_after_the_run(
     pid = int((work / "home" / "ui.pid").read_text())
     assert not record.exists() and not lifecycle.pid_alive(pid)
     (call,) = fake_clis.calls("claude")
-    assert call["env"]["BROWSER"] == "true"  # `harness ui open` opens no window in an eval
+    assert call["env"]["BROWSER"] == "true"  # `kengash ui open` opens no window in an eval

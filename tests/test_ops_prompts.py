@@ -78,7 +78,7 @@ def test_custom_step_prompts_follow_their_kind() -> None:
     }
     settings = Settings.model_validate({"agents": agents, "steps": steps})
     assert prompts.instruction(settings, "advise") == "Do the thing. Do not edit files."
-    assert prompts.instruction(settings, "tidy") == "Do the thing. Do not commit; harness commits."
+    assert prompts.instruction(settings, "tidy") == "Do the thing. Do not commit; kengash commits."
     assert prompts.instruction(settings, "perf_review") == (
         "Do the thing. Read the changes with read-only git; fail only for real problems."
     )

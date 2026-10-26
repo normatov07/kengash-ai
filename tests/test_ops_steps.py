@@ -306,7 +306,7 @@ def test_a_custom_edit_step_is_committed(
     subjects = run_git(engine.worktree, "log", "--format=%s", "main..HEAD").splitlines()
     assert subjects[0].startswith("kg(7b55e0c1): loop 1 tidy: Renamed")
     tidy = fake_clis.calls("claude")[1]
-    assert "Polish the change. Do not commit; harness commits." in " ".join(tidy["argv"])
+    assert "Polish the change. Do not commit; kengash commits." in " ".join(tidy["argv"])
 
 
 def test_a_custom_review_step_sends_the_ticket_back(

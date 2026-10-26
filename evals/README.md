@@ -1,6 +1,6 @@
 # evals
 
-Scenarios that prove each installed skill on real agents (SP4 spec decisions 11 to 13). Never installed; run with `harness skills eval <skill>` or `make evals`, which spend subscription quota.
+Scenarios that prove each installed skill on real agents (SP4 spec decisions 11 to 13). Never installed; run with `kengash skills eval <skill>` or `make evals`, which spend subscription quota.
 
 `evals/<skill>/<scenario>.yaml`:
 
@@ -10,7 +10,7 @@ description: one line
 notes: how it failed without the skill (RED)
 files: {calc.py: "def sub(a, b): ..."}   # the scratch repo
 settings: "plan.reviewer: {cli}\n"   # SETTINGS.md for the defaults and the project
-setup:                                # harness commands run before the conductor
+setup:                                # kengash commands run before the conductor
   - {args: [plan, new, --mode, quick, --title, T], stdin: "prompt", save: plan}
 turns:                                # what the user types; {plan} is a saved id
   - "/to-ticket {plan}"

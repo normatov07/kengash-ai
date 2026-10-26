@@ -52,12 +52,12 @@ GOOD = """---
 name: good-skill
 description: Use when the user asks for a good skill.
 ---
-0. Run `harness --version`; it prints `kengash-ai <version>`.
-1. Run `harness plan new --title T` and `harness wait --timeout 540`.
+0. Run `kengash --version`; it prints `kengash-ai <version>`.
+1. Run `kengash plan new --title T` and `kengash wait --timeout 540`.
 
 ```
-harness plan review <id>
-$ harness memory add "x" --why y
+kengash plan review <id>
+$ kengash memory add "x" --why y
 ```
 Read `references/rubric.md` when grading.
 """
@@ -90,13 +90,13 @@ def test_a_good_skill_is_clean(tmp_path: Path) -> None:
             "description: Helps when",
             'description must start with "Use when"',
         ),
-        ("Run `harness --version`; it", "Check", "step 0 must run harness --version"),
+        ("Run `kengash --version`; it", "Check", "step 0 must run kengash --version"),
         (
-            "harness plan review <id>",
-            "harness plan reveiw <id>",
-            "unknown command: harness plan reveiw",
+            "kengash plan review <id>",
+            "kengash plan reveiw <id>",
+            "unknown command: kengash plan reveiw",
         ),
-        ("`harness wait --timeout 540`", "`harness waitt`", "unknown command: harness waitt"),
+        ("`kengash wait --timeout 540`", "`kengash waitt`", "unknown command: kengash waitt"),
     ],
 )
 def test_lint_names_each_problem(tmp_path: Path, old: str, new: str, message: str) -> None:
@@ -136,14 +136,14 @@ def test_mentions_reads_code_spans_and_fenced_commands() -> None:
         ["plan", "review"],
         ["memory", "add"],
     ]
-    assert skills.mentions("Load `harness-memory` and the `harness store`.") == [["store"]]
+    assert skills.mentions("Load `kengash-memory` and the `kengash store`.") == [["store"]]
 
 
-ALPHA = "---\nname: alpha\ndescription: Use when alpha.\n---\n0. Run `harness --version`.\n"
+ALPHA = "---\nname: alpha\ndescription: Use when alpha.\n---\n0. Run `kengash --version`.\n"
 BETA = (
     "---\nname: beta\ndescription: Use when beta.\n---\n"
-    "The harness store keeps plans.\n\n```\nharness plan new --title T\n$ harness wait\n```\n"
-    "Then `harness plan review <id>`.\n"
+    "The kengash store keeps plans.\n\n```\nkengash plan new --title T\n$ kengash wait\n```\n"
+    "Then `kengash plan review <id>`.\n"
 )
 
 
@@ -190,10 +190,10 @@ def test_a_hand_edited_skill_needs_yes_and_shows_a_diff(tmp_path: Path, source: 
 
 
 def test_cli_name_rewrites_commands_not_prose() -> None:
-    renamed = skills.rename_cli(BETA, "hrn")
-    assert "The harness store keeps plans." in renamed
-    assert "\nhrn plan new --title T\n$ hrn wait\n" in renamed
-    assert "`hrn plan review <id>`" in renamed and "`harness" not in renamed
+    renamed = skills.rename_cli(BETA, "/opt/kg/bin/kengash")
+    assert "The kengash store keeps plans." in renamed
+    assert "\n/opt/kg/bin/kengash plan new --title T\n$ /opt/kg/bin/kengash wait\n" in renamed
+    assert "`/opt/kg/bin/kengash plan review <id>`" in renamed and "`kengash" not in renamed
 
 
 def test_global_install_uses_each_agents_home_folder(tmp_path: Path, source: Path) -> None:
@@ -207,3 +207,19 @@ def test_global_install_uses_each_agents_home_folder(tmp_path: Path, source: Pat
 def test_unknown_agents_are_refused(tmp_path: Path, source: Path) -> None:
     with pytest.raises(UserError, match="unknown agent gemini"):
         skills.install(["gemini"], root=tmp_path, source=source)
+
+
+def ours(folder: Path, name: str, source: str) -> Path:
+    text = f"---\nname: {name}\ndescription: Use when.\nmetadata: {{source: {source}}}\n---\nOld.\n"
+    return skill(folder, name, text)
+
+
+def test_install_removes_obsolete_skills_of_ours_only(tmp_path: Path, source: Path) -> None:
+    folder = tmp_path / ".claude/skills"
+    ours(folder, "harness-memory", "super-harness")  # 0.1.0 shipped it under this name
+    ours(folder, "retired", "kengash-ai")
+    ours(folder, "theirs", "someone-else")
+    result = skills.install(["claude"], root=tmp_path, source=source)
+    removed = sorted(e.name for e in result.entries if e.state == "removed")
+    assert removed == ["harness-memory", "retired"]
+    assert not (folder / "harness-memory").exists() and (folder / "theirs" / "SKILL.md").is_file()

@@ -27,6 +27,7 @@ Typer command surface for `harness` (alias `hrn`): parses arguments and formats 
 
 ## Changes
 
+- 2026-10-26: `skills install --cli-name` defaults to `kengash` and prints `removed` for an obsolete skill of ours (SP8).
 - 2026-10-26: the command is `kengash` (0.2.0); `harness` and `hrn` run `cli.legacy`, which prints `harness is now kengash; the harness and hrn names stop working in 0.3.0` on stderr and runs the same app; `--by` reads `KENGASH_AGENT`, then `HARNESS_AGENT` (SP8).
 - 2026-10-26: `init` and `link` print the `.kengash` link (SP8).
 - 2026-10-26: every run first moves a 0.1.0 store once and prints the note on stderr (SP8).

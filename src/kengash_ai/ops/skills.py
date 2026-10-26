@@ -93,7 +93,7 @@ def packaged() -> Path:
 
 
 def lint_skills(targets: Sequence[Path], *, commands: Collection[str]) -> list[Problem]:
-    """`harness skills lint`: the given targets, else the installed and role skills, with
+    """`kengash skills lint`: the given targets, else the installed and role skills, with
     the user's `skill.*` caps (the package's when there is no store)."""
     try:
         caps = settings.load(StorePaths.default()).skill
@@ -112,8 +112,8 @@ def lint(targets: Sequence[Path], *, commands: Collection[str], caps: SkillCaps)
 
 
 def mentions(body: str) -> list[list[str]]:
-    """The words after `harness` in each command a skill shows: inline code spans, and
-    fenced lines that start with `harness ` (or `$ harness `), up to the first flag,
+    """The words after `kengash` in each command a skill shows: inline code spans, and
+    fenced lines that start with `kengash ` (or `$ kengash `), up to the first flag,
     placeholder, quote or shell operator."""
     found: list[list[str]] = []
     fenced = False
@@ -123,7 +123,7 @@ def mentions(body: str) -> list[list[str]]:
             continue
         texts = [line.strip().removeprefix("$ ")] if fenced else SPAN.findall(line)
         for text in texts:
-            if text == "harness" or text.startswith("harness "):
+            if text == CLI or text.startswith(f"{CLI} "):
                 found.append(_command_words(text.split()[1:]))
     return found
 
@@ -177,8 +177,8 @@ def _lint_one(path: Path, *, commands: Collection[str], caps: SkillCaps) -> list
         messages.append(f"{lines} lines; the cap is {caps.max_lines}")
     if words > caps.max_words:
         messages.append(f"{words} words; the cap is {caps.max_words}")
-    if not role and "harness --version" not in body:
-        messages.append("step 0 must run harness --version")
+    if not role and f"{CLI} --version" not in body:
+        messages.append(f"step 0 must run {CLI} --version")
     references = folder / "references"
     for name in dict.fromkeys(REFERENCE.findall(body)):
         if not (references / name).is_file():
@@ -188,7 +188,7 @@ def _lint_one(path: Path, *, commands: Collection[str], caps: SkillCaps) -> list
     for words_ in mentions(body):
         unknown = _unknown(words_, commands)
         if unknown:
-            messages.append(f"unknown command: harness {unknown}")
+            messages.append(f"unknown command: {CLI} {unknown}")
     return messages
 
 
@@ -205,7 +205,10 @@ def _unknown(words: list[str], commands: Collection[str]) -> str | None:
     return None
 
 
-State = Literal["installed", "updated", "unchanged", "differs"]
+State = Literal["installed", "updated", "unchanged", "differs", "removed"]
+CLI = "kengash"  # the command skills run; `--cli-name` swaps it at install time
+# frontmatter `metadata.source` of the skills this package installs, now and before 0.2.0
+OURS = frozenset({"kengash-ai", "super-harness"})
 
 
 @dataclass
@@ -230,7 +233,7 @@ class InstallResult:
 def install_skills(
     agents: Sequence[str], *, global_: bool, path: Path, cli_name: str, yes: bool
 ) -> InstallResult:
-    """`harness skills install`: into the repo containing `path`, or the home folder."""
+    """`kengash skills install`: into the repo containing `path`, or the home folder."""
     root = Path.home() if global_ else records.repo_root(path)
     return install(agents, root=root, home=global_, cli_name=cli_name, yes=yes)
 
@@ -240,7 +243,7 @@ def install(
     *,
     root: Path,
     home: bool = False,
-    cli_name: str = "harness",
+    cli_name: str = CLI,
     yes: bool = False,
     source: Path | None = None,
 ) -> InstallResult:
@@ -257,7 +260,11 @@ def install(
         if name not in owners:
             owners.append(name)
     result = InstallResult()
+    packaged_names = {child.name for child in source.iterdir() if (child / "SKILL.md").is_file()}
     for folder, owners in folders.items():
+        for stale in _obsolete(folder, packaged_names):
+            shutil.rmtree(stale)
+            result.entries.append(Installed(",".join(owners), stale.name, "removed", stale))
         for skill in sorted(child for child in source.iterdir() if (child / "SKILL.md").is_file()):
             files = _render(skill, cli_name)
             target = folder / skill.name
@@ -274,9 +281,9 @@ def install(
 
 
 def rename_cli(text: str, name: str) -> str:
-    """`text` with `harness` replaced by `name` where it starts a command: in code spans
+    """`text` with `kengash` replaced by `name` where it starts a command: in code spans
     and at the start of fenced lines; prose keeps the word."""
-    if name == "harness":
+    if name == CLI:
         return text
     lines: list[str] = []
     fenced = False
@@ -284,9 +291,9 @@ def rename_cli(text: str, name: str) -> str:
         if line.strip().startswith(FENCE):
             fenced = not fenced
         elif fenced:
-            line = re.sub(r"^(\s*(?:\$ )?)harness(?= |$)", rf"\g<1>{name}", line)
+            line = re.sub(rf"^(\s*(?:\$ )?){CLI}(?= |$)", rf"\g<1>{name}", line)
         else:
-            line = re.sub(r"`harness(?=[ `])", f"`{name}", line)
+            line = re.sub(rf"`{CLI}(?=[ `])", f"`{name}", line)
         lines.append(line)
     return "".join(lines)
 
@@ -300,6 +307,23 @@ def _render(skill: Path, cli_name: str) -> dict[str, bytes]:
                 data = rename_cli(data.decode("utf-8"), cli_name).encode("utf-8")
             files[path.relative_to(skill).as_posix()] = data
     return files
+
+
+def _obsolete(folder: Path, packaged: Collection[str]) -> list[Path]:
+    """Skill folders this package installed once but ships no more (0.1.0's harness-memory):
+    only those whose frontmatter names us as `metadata.source`; anything else stays."""
+    found: list[Path] = []
+    for child in sorted(folder.iterdir()) if folder.is_dir() else []:
+        path = child / "SKILL.md"
+        if child.name in packaged or not path.is_file():
+            continue
+        try:
+            meta = SkillMeta.model_validate(split_frontmatter(path.read_text(encoding="utf-8"))[0])
+        except (UserError, ValidationError):
+            continue
+        if meta.metadata.get("source") in OURS:
+            found.append(child)
+    return found
 
 
 def _files(folder: Path) -> dict[str, bytes] | None:

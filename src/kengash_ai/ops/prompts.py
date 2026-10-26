@@ -26,17 +26,17 @@ INSTRUCTIONS = {
     "review_plan": "Review the plan in the Handoff against the Scope and Acceptance; "
     "fail only for real gaps.",
     "implement": "Implement the ticket in this worktree, with tests. "
-    "Do not commit; harness commits.",
+    "Do not commit; kengash commits.",
     "review_code": "Review the branch's changes against the Scope and Acceptance; "
     "read the diff with read-only git.",
     "security": "Review the branch's changes for security problems; "
     "read the diff with read-only git.",
-    "docs": "Update the docs for the branch's changes. Do not commit; harness commits.",
+    "docs": "Update the docs for the branch's changes. Do not commit; kengash commits.",
 }
 # the rule a custom step's one-line `does` gets, by kind (SP6 spec decision 2)
 KIND_RULES = {
     "read": "Do not edit files.",
-    "edit": "Do not commit; harness commits.",
+    "edit": "Do not commit; kengash commits.",
     "review": "Read the changes with read-only git; fail only for real problems.",
 }
 REPLY = "Reply with JSON that matches the schema."

@@ -6,13 +6,13 @@ metadata: {source: kengash-ai}
 ---
 # Slice a plan into tickets
 
-Read with your file tools; use the shell only for the `harness` commands below, each as its own call with nothing chained before or after it. Never edit the repo's files or the `.harness` store yourself.
+Read with your file tools; use the shell only for the `kengash` commands below, each as its own call with nothing chained before or after it. Never edit the repo's files or the `.kengash` store yourself.
 
-0. Run `harness --version`. If it does not print `kengash-ai <version>`, say "Install Kengash AI first: uv tool install git+https://github.com/normatov07/kengash-ai" and stop.
-1. A plan id: `harness plan show <id>` prints it; it must say `status: approved`. A short prompt instead: start a quick plan, then use its id:
+0. Run `kengash --version`. If it does not print `kengash-ai <version>`, say "Install Kengash AI first: uv tool install kengash-ai" and stop.
+1. A plan id: `kengash plan show <id>` prints it; it must say `status: approved`. A short prompt instead: start a quick plan, then use its id:
 
    ```
-   harness plan new --mode quick --title "<short title>" <<'EOF'
+   kengash plan new --mode quick --title "<short title>" <<'EOF'
    <the user's prompt, verbatim>
    EOF
    ```
@@ -23,7 +23,7 @@ Read with your file tools; use the shell only for the `harness` commands below, 
 5. Add the agreed slices; `key` names a slice so others can depend on it, and `touches` lists repo path prefixes:
 
    ```
-   harness ticket add --plan <id> <<'EOF'
+   kengash ticket add --plan <id> <<'EOF'
    - key: first
      title: <title>
      importance: simple

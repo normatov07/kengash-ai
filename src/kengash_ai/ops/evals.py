@@ -37,7 +37,7 @@ CHEAPEST: dict[str, str | None] = {
     "codex": None,
     "antigravity": "gemini-3.8-flash-low",
 }
-CLAUDE_TOOLS = ("Read", "Grep", "Glob", "Bash(harness:*)")
+CLAUDE_TOOLS = ("Read", "Grep", "Glob", "Bash(kengash:*)")
 BIN = Path(sys.executable).parent  # this interpreter's console scripts, harness among them
 TAIL = 400
 

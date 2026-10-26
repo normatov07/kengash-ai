@@ -19,10 +19,7 @@ from kengash_ai.store import runtime
 from kengash_ai.store.locks import locked
 from kengash_ai.store.paths import StorePaths
 
-INSTALL = (
-    "install the UI: uv tool install --force "
-    "'kengash-ai[ui] @ git+https://github.com/normatov07/kengash-ai'"
-)
+INSTALL = "install the UI: uv tool install --force 'kengash-ai[ui]'"
 START_S = 10.0
 STOP_S = 5.0
 
