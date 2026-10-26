@@ -5,7 +5,7 @@ How a version of Kengash AI reaches PyPI and GitHub. The workflow is `.github/wo
 ## One-time setup (a maintainer, in the browser)
 
 1. **PyPI trusted publisher.** On pypi.org, under your account's Publishing settings, add a pending trusted publisher: project `kengash-ai`, owner `normatov07`, repository `kengash-ai`, workflow `release.yml`, environment `pypi`. No API token is created or stored; PyPI trusts this workflow's OIDC identity, and the publish action uploads attestations for each file.
-2. **GitHub environment.** In the repository settings, create the environment `pypi`. Add yourself as a required reviewer so every publish waits for an approval click, and limit it to tags matching `v*`.
+2. **GitHub environment.** In the repository settings, create the environment `pypi` and limit it to tags matching `v*`, so only a version tag can publish. Where the plan offers required reviewers (public repositories, or paid plans for private ones), add yourself so every publish waits for an approval click.
 3. **Branch protection.** Protect `main`: require pull requests and the `ci` checks (every `check` job, `package`, `audit`).
 4. **Private vulnerability reporting.** Turn it on under Security → Settings, as SECURITY.md promises.
 
