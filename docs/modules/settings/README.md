@@ -6,8 +6,8 @@ Resolve SETTINGS.md into a validated `Settings` model so agents never parse the 
 
 ## Interface
 
-- `load(paths, slug=None)` → `Settings`: package defaults, then `~/.harness/defaults/SETTINGS.md`, then `projects/<slug>/SETTINGS.md`. Raises `UserError` naming the first problem: `settings: …` for schema problems, or the file name for invalid YAML. Each layer is parsed once per content and the resolved `Settings` cached by the layers' digests; callers get copies, and errors are never cached (SP7).
-- `problems(paths, slug=None)` → one line per problem, empty when valid (`harness settings check`).
+- `load(paths, slug=None)` → `Settings`: package defaults, then `~/.kengash/defaults/SETTINGS.md`, then `projects/<slug>/SETTINGS.md`. Raises `UserError` naming the first problem: `settings: …` for schema problems, or the file name for invalid YAML. Each layer is parsed once per content and the resolved `Settings` cached by the layers' digests; callers get copies, and errors are never cached (SP7).
+- `problems(paths, slug=None)` → one line per problem, empty when valid (`kengash settings check`).
 - `get(settings, key)` → the value at a dotted key, with a "did you mean" hint for unknown keys.
 - `unflatten`, `merge`: the YAML rules below, usable on any mapping.
 - `set_values(paths, slug|None, changes)` → the keys changed: writes dotted keys (None removes one) into `defaults/SETTINGS.md` or the project's file through `store.yamledit`, validates the resolved result first and writes nothing on a problem (`UserError` naming it); a defaults save also resolves every registered project with the new defaults and is refused, naming the project and its first problem, when one that resolved before would no longer validate; `workflows.<name>` is set whole. `scope_keys(paths, slug)` → the dotted leaves that file sets, a workflow counting as one; `overrides(paths, slug)` → those whose resolved value differs from what the scope inherits (package defaults for the user's defaults, the user's defaults for a project), since a project's file starts as a full copy.

@@ -15,7 +15,7 @@ from pydantic import ValidationError
 
 import kengash_ai
 from kengash_ai import settings
-from kengash_ai.model import HarnessError, SkillMeta, UserError
+from kengash_ai.model import KengashError, SkillMeta, UserError
 from kengash_ai.model.settings import SkillCaps
 from kengash_ai.model.skills import DESCRIPTION_MAX, NAME_MAX, NAME_PATTERN
 from kengash_ai.ops import records
@@ -97,7 +97,7 @@ def lint_skills(targets: Sequence[Path], *, commands: Collection[str]) -> list[P
     the user's `skill.*` caps (the package's when there is no store)."""
     try:
         caps = settings.load(StorePaths.default()).skill
-    except HarnessError:
+    except KengashError:
         caps = SkillCaps()
     return lint(list(targets) or [packaged(), roles_dir()], commands=commands, caps=caps)
 

@@ -66,7 +66,7 @@ def taken_ids(paths: StorePaths) -> set[str]:
 
 
 def project_tickets(paths: StorePaths, slug: str) -> dict[str, Doc[Ticket]]:
-    """The project's valid tickets by id; `harness doctor` reports the invalid ones."""
+    """The project's valid tickets by id; `kengash doctor` reports the invalid ones."""
     tickets: dict[str, Doc[Ticket]] = {}
     for path, kind in documents.iter_documents(paths.project(slug)):
         if kind == "ticket":
@@ -79,7 +79,7 @@ def project_tickets(paths: StorePaths, slug: str) -> dict[str, Doc[Ticket]]:
 
 
 def project_plans(paths: StorePaths, slug: str) -> dict[str, Doc[Plan]]:
-    """The project's valid plans by id; `harness doctor` reports the invalid ones."""
+    """The project's valid plans by id; `kengash doctor` reports the invalid ones."""
     plans: dict[str, Doc[Plan]] = {}
     for path, kind in documents.iter_documents(paths.project(slug)):
         if kind == "plan":
@@ -95,14 +95,14 @@ def load_plan(path: Path) -> Doc[Plan]:
     try:
         return documents.load_plan(path)
     except ValidationError as exc:
-        raise UserError(f"{path.name}: {describe(exc)}; run: harness doctor") from exc
+        raise UserError(f"{path.name}: {describe(exc)}; run: kengash doctor") from exc
 
 
 def load_ticket(path: Path) -> Doc[Ticket]:
     try:
         return documents.load_ticket(path)
     except ValidationError as exc:
-        raise UserError(f"{path.name}: {describe(exc)}; run: harness doctor") from exc
+        raise UserError(f"{path.name}: {describe(exc)}; run: kengash doctor") from exc
 
 
 def document(slug: str, path: Path, doc: Doc[Plan] | Doc[Ticket]) -> Document:

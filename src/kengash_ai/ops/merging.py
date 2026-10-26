@@ -1,7 +1,7 @@
 """Merge a finished ticket (SP3 spec §9, decisions 13 and 23; system spec §5).
 
 Rebase the ticket branch onto the base branch in its worktree, fast-forward the base
-branch in the main working tree, then remove the worktree and the branch. Harness never
+branch in the main working tree, then remove the worktree and the branch. Kengash never
 pushes.
 """
 

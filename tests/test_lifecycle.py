@@ -29,7 +29,7 @@ REVIEW_PASS = {"verdict": "pass", "summary": "Good.", "findings": []}
 
 @pytest.fixture
 def lifecycle_repo(engine: Engine) -> Engine:
-    """`engine` with its ticket back in the queue, as `harness ticket add` leaves it."""
+    """`engine` with its ticket back in the queue, as `kengash ticket add` leaves it."""
     doc = engine.ticket()
     doc.meta.status, doc.meta.step = "in_queue/ready", None
     documents.save_ticket(engine.paths.project(engine.slug), doc)

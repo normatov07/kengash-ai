@@ -6,7 +6,7 @@ from pathlib import Path
 
 from filelock import FileLock, Timeout
 
-from kengash_ai.model import HarnessError
+from kengash_ai.model import KengashError
 
 
 @contextmanager
@@ -18,7 +18,7 @@ def locked(path: Path, timeout: float = 30.0) -> Iterator[None]:
         lock.acquire()
     except Timeout as exc:
         message = f"store busy: {path.name} held by another process for {timeout:g}s"
-        raise HarnessError(message) from exc
+        raise KengashError(message) from exc
     try:
         yield
     finally:

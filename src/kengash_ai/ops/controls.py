@@ -27,7 +27,7 @@ from kengash_ai.store.registry import load_registry
 RESUMABLE = ("in_queue/ready", "in_process/failed", "in_process/stalled", "in_process/paused")
 NO_SLOT = ("shell", "user")
 SANDBOXED = (
-    "harness run cannot start workers inside a network-less codex sandbox; "
+    "kengash run cannot start workers inside a network-less codex sandbox; "
     "run it outside the sandbox"
 )
 
@@ -299,7 +299,7 @@ def _claim(
         ticket.status = lifecycle.step_status(resolved, step)
         events = [_event("ticket.claimed", slug, ticket, step=step, provider=provider, by=by)]
         events[0] = events[0].model_copy(update={"from": before})
-        if step == "approve":  # the user's step: no worker until `harness approve`
+        if step == "approve":  # the user's step: no worker until `kengash approve`
             ticket.status = workflow.NEEDS_APPROVAL
             state.approval = "approve_step"
             reason = "waiting for the user's approval"

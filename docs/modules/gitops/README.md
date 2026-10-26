@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The git commands harness runs in the user's repo (SP3 spec §9): ticket worktrees, commits with `Harness-*` trailers, diffs, rebase, fast-forward merge and a ticket's history. Never touches the store.
+The git commands kengash runs in the user's repo (SP3 spec §9): ticket worktrees, commits with `Kengash-*` trailers (0.1.0 wrote `Harness-*`), diffs, rebase, fast-forward merge and a ticket's history. Never touches the store.
 
 ## Interface
 

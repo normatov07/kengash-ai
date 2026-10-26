@@ -45,7 +45,7 @@ def new_plan(
     paths = StorePaths.default()
     slug = resolve_slug(project, cwd, paths)
     if slug is None:
-        raise UserError("no project here; pass --project SLUG, or run: harness init")
+        raise UserError("no project here; pass --project SLUG, or run: kengash init")
     if not prompt.strip():
         raise UserError("the prompt is empty")
     review_max = settings.load(paths, slug).plan.review_max
@@ -133,7 +133,7 @@ def approve_plan(plan_id: str, *, skip_review: bool, project: str | None, by: st
             if review.verdict == "fail":
                 raise NeedsUser(
                     f"plan {plan.id} failed review round {review.round} of {review_max}; "
-                    f"save a revision and run: harness plan review {plan.id}, "
+                    f"save a revision and run: kengash plan review {plan.id}, "
                     "or approve with --skip-review"
                 )
             raise NeedsUser(

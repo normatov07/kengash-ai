@@ -2,7 +2,7 @@
 // the role roster (on or off, CLI and model, skill, where it is used, tokens) with a row
 // editor, session and token limits, and importance routing. Provider detection runs the
 // CLIs' sign-in checks, so the page renders first and the cards fill in after. "New agent"
-// (SP6) adds a user's role and its step through `harness agent new`'s ops call.
+// (SP6) adds a user's role and its step through `kengash agent new`'s ops call.
 import { get, post } from "../api.js";
 import { tokens } from "../format.js";
 import { LABELS } from "../graph.js";
@@ -25,7 +25,7 @@ const SHORT = { plan: "plan", review_plan: "review plan", implement: "implement"
 const COMMON_CLIS = ["claude", "claude/opus", "claude/sonnet", "claude/haiku", "codex", "antigravity", "shell"];
 const KINDS = [
   ["review", "Reviewer", "Reads the changes; a fail sends the ticket back and burns a loop"],
-  ["edit", "Worker", "Edits code in the ticket's worktree; harness commits"],
+  ["edit", "Worker", "Edits code in the ticket's worktree; kengash commits"],
   ["read", "Advisor", "Reads only and hands notes to the next step"],
 ];
 const state = { open: new Set(), creating: false };
@@ -140,7 +140,7 @@ export function top(data, app) {
 
 export function view(data, app) {
   if (data.problem) {
-    return html`<div class="page"><div class="banner"><span class="badge danger">invalid</span>${data.problem}. Fix SETTINGS.md, or run harness settings check.</div></div>`;
+    return html`<div class="page"><div class="banner"><span class="badge danger">invalid</span>${data.problem}. Fix SETTINGS.md, or run kengash settings check.</div></div>`;
   }
   const on = data.roster.filter((item) => item.on).length;
   const clis = [...new Set([...data.roster.map((item) => item.cli), ...COMMON_CLIS])];

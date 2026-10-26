@@ -30,9 +30,11 @@ Research (2026-10-26): clig.dev — a simple memorable lowercase name, aliases e
 
 ## 4. Acceptance (SP8 exit)
 
-- [ ] `kengash --version` prints `kengash-ai 0.2.0`; `harness`/`hrn` run the same command, warn once on stderr, and leave `--json` output parseable.
-- [ ] A 0.1.0 home (`~/.harness` with a registered project, a `.harness` link and a ticket worktree) migrates on first run: `~/.kengash` holds the data, `~/.harness` links to it, the old link and worktree still resolve, `doctor --fix` turns the link into `.kengash`; both-real-directories and custom-location cases move nothing.
-- [ ] New commits, branches and worktrees use the kengash forms; changes, merge and the ticket sheet still read a 0.1.0 branch.
-- [ ] Skills install as `kengash-memory` etc., an old `harness-memory` of ours is removed and a foreign one is kept; `kengash skills lint` passes.
-- [ ] The UI works end to end in Chrome with the new header and cookie.
-- [ ] `make check` and `make dist` green; module docs, README, AGENTS.md, architecture and the system spec say kengash.
+- [x] `kengash --version` prints `kengash-ai 0.2.0`; `harness`/`hrn` run the same command, warn once on stderr, and leave `--json` output parseable.
+- [x] A 0.1.0 home (`~/.harness` with a registered project, a `.harness` link and a ticket worktree) migrates on first run: `~/.kengash` holds the data, `~/.harness` links to it, the old link and worktree still resolve, `doctor --fix` turns the link into `.kengash`; both-real-directories and custom-location cases move nothing.
+- [x] New commits, branches and worktrees use the kengash forms; changes, merge and the ticket sheet still read a 0.1.0 branch.
+- [x] Skills install as `kengash-memory` etc., an old `harness-memory` of ours is removed and a foreign one is kept; `kengash skills lint` passes.
+- [x] The UI works end to end in Chrome with the new header and cookie.
+- [x] `make check` and `make dist` green; module docs, README, AGENTS.md, architecture and the system spec say kengash.
+
+Evidence (2026-10-26): `tests/test_cli.py` (console scripts, clean `--json` under `hrn`), `tests/test_store_migrate.py`, `tests/test_ops_projects.py` (legacy links), `tests/test_gitops.py` and `tests/test_ops_merging.py` (0.1.0 tickets), `tests/test_ops_skills.py` (obsolete skills); a real `kengash-ai==0.1.0` store from PyPI moved by the first `kengash` command, its old project link and the 0.1.0 binary still working, `doctor --fix` turning `.harness` into `.kengash`; the UI on that store in headless Chrome (store path, brand, a New agent POST with `X-Kengash`); `make check` 637 passed.

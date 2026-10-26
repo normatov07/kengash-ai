@@ -49,5 +49,5 @@ def test_context_outside_a_project_has_memory_only(store_paths: StorePaths, repo
 
 
 def test_context_needs_a_store(store_paths: StorePaths, repo: Path) -> None:
-    with pytest.raises(NeedsSetup, match="harness init"):
+    with pytest.raises(NeedsSetup, match="kengash init"):
         workspace.context(None, repo)

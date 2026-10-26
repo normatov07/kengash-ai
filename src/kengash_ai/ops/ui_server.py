@@ -41,7 +41,7 @@ def open_ui(*, browser: bool) -> UiServer:
     """The running server, or a new one; opens the browser on its link unless told not to."""
     paths = StorePaths.default()
     if not paths.home.is_dir():
-        raise NeedsSetup("no store yet; run: harness init")
+        raise NeedsSetup("no store yet; run: kengash init")
     if not has_extra():
         raise NeedsSetup(INSTALL)
     with locked(paths.locks / "ui.lock"):

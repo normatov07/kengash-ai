@@ -106,7 +106,7 @@ function storeTree(memory) {
     lines.push(html`${bar}   ├── in_process/   <span class="t-busy">${c.in_process}</span>`);
     lines.push(html`${bar}   └── done/         <span class="t-ok">${c.done}</span>`);
   });
-  if (!projects.length) lines.push(html`└── <span class="faint">no project yet: run harness init in a repo</span>`);
+  if (!projects.length) lines.push(html`└── <span class="faint">no project yet: run kengash init in a repo</span>`);
   return html`<div class="tree">${lines.map((l) => html`<span>${l}</span>`)}</div>`;
 }
 
@@ -114,7 +114,7 @@ function projectTree(link) {
   if (!link) return html`<div class="tree"><span class="faint">Pick a project in the scope menu to see its folder link.</span></div>`;
   const ok = link.state === "ok";
   const lines = [
-    html`<span class="${ok ? "t-ok" : "danger-text"}">.harness/</span>       ${ok ? "one folder link to the store" : `folder link: ${link.state}`}`,
+    html`<span class="${ok ? "t-ok" : "danger-text"}">.kengash/</span>       ${ok ? "one folder link to the store" : `folder link: ${link.state}`}`,
     html`├── <span class="t-file">PROCESS.md</span>  this codebase`,
     html`├── <span class="t-file">SETTINGS.md</span> yours to edit`,
     html`├── <span class="t-file">memory/</span>     <span class="${link.memory === "ok" ? "t-ok" : "danger-text"}">→ ../../memory</span>  MEMORY.md, DECISIONS.md`,
@@ -135,12 +135,12 @@ function memorySection(data, scope) {
       ${links.total ? html`<span class="pill ${broken ? "danger" : "ok"}">${icon(broken ? "warning" : "check", { size: 12, width: 1.8 })}${links.intact} of ${links.total} links intact</span>` : html`<span class="pill plain-pill">no project linked yet</span>`}</div>
     ${fileCards(memory, scope)}
     <div class="tree-row">
-      <div class="tree-panel"><div class="tree-head"><b>Shared store</b><span class="end mono faint">~/.harness/</span></div>${storeTree(memory)}</div>
-      <div class="tree-panel"><div class="tree-head"><b>Inside the project</b><span class="end mono faint ellipsis" title="${link ? `${link.link} → ${link.target}` : ""}">${link ? `./${link.repo.split("/").pop()}/.harness → ~/.harness/projects/${link.project}/` : "pick a project"}</span></div>${projectTree(link)}
+      <div class="tree-panel"><div class="tree-head"><b>Shared store</b><span class="end mono faint">~/.kengash/</span></div>${storeTree(memory)}</div>
+      <div class="tree-panel"><div class="tree-head"><b>Inside the project</b><span class="end mono faint ellipsis" title="${link ? `${link.link} → ${link.target}` : ""}">${link ? `./${link.repo.split("/").pop()}/.kengash → ~/.kengash/projects/${link.project}/` : "pick a project"}</span></div>${projectTree(link)}
         <div class="tree-actions">
           ${link ? (state.relink ? html`<form class="relink" data-project="${link.project}"><label class="sr-only" for="relink-path">New path of ${link.project}</label><input id="relink-path" name="path" class="inline-input" placeholder="new path of the repo" required><button class="btn small" type="submit">Re-link</button></form>` : html`<button class="btn small" type="button" data-relink-open>Re-link</button>`) : ""}
           ${link?.fix === "repair" ? html`<button class="btn small" type="button" data-link="repair">Repair links</button>` : ""}
-          <button class="btn small" type="button" data-link="adopt" data-path="${links.nearby[0]?.repo ?? ""}" ${links.nearby.length ? "" : html`disabled title="No real .harness folder found beside your repos"`}>Adopt a found store</button>
+          <button class="btn small" type="button" data-link="adopt" data-path="${links.nearby[0]?.repo ?? ""}" ${links.nearby.length ? "" : html`disabled title="No real .kengash folder found beside your repos"`}>Adopt a found store</button>
           <button class="btn small" type="button" data-compact ${memory.compacting ? "disabled" : ""}>${memory.compacting ? "Compacting…" : "Compact now"}</button>
         </div>
       </div>
@@ -159,8 +159,8 @@ export function view(data, app) {
   const num = (key, label, extra = {}) => field({ key, label, value: pick(v, key), setHere: on(key), ...extra });
   const box = (key, label) => check({ key, label, value: pick(v, key), setHere: on(key) });
   return html`<div class="page wide-page">
-    <div style="max-width: 62ch"><h1 class="h1">Settings</h1><p class="lede">Defaults seed a project when it is registered. After that its file is yours: harness never overwrites it, and a save here changes only the lines you edited.</p></div>
-    ${data.problem ? html`<div class="banner"><span class="badge danger">invalid</span>${data.problem}. Fix the file, or run harness settings check.</div>` : ""}
+    <div style="max-width: 62ch"><h1 class="h1">Settings</h1><p class="lede">Defaults seed a project when it is registered. After that its file is yours: kengash never overwrites it, and a save here changes only the lines you edited.</p></div>
+    ${data.problem ? html`<div class="banner"><span class="badge danger">invalid</span>${data.problem}. Fix the file, or run kengash settings check.</div>` : ""}
     <div class="settings-row">
       <div class="settings-form">
         <section class="panel"><div class="panel-body">

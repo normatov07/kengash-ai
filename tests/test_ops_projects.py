@@ -48,7 +48,7 @@ def test_init_from_a_subfolder_registers_the_repo_root(store_paths: StorePaths, 
 @pytest.mark.parametrize("name", [".kengash", ".harness"])
 def test_init_refuses_a_real_store_folder(store_paths: StorePaths, repo: Path, name: str) -> None:
     (repo / name).mkdir()  # .harness: a real folder from before 0.2.0
-    with pytest.raises(NeedsSetup, match=f"{name} is a real folder; run: harness adopt"):
+    with pytest.raises(NeedsSetup, match=f"{name} is a real folder; run: kengash adopt"):
         projects.init_project(repo)
 
 
@@ -67,7 +67,7 @@ def test_doctor_is_quiet_for_a_healthy_store(store_paths: StorePaths, repo: Path
 
 def test_doctor_without_a_store_says_so(store_paths: StorePaths) -> None:
     [problem] = projects.doctor().problems
-    assert problem.message == f"no store at {store_paths.home}; run: harness init"
+    assert problem.message == f"no store at {store_paths.home}; run: kengash init"
 
 
 def test_moved_repo_is_reported_and_relinked(store_paths: StorePaths, repo: Path) -> None:
@@ -90,7 +90,7 @@ def test_doctor_fix_repairs_a_broken_link(store_paths: StorePaths, repo: Path) -
     projects.init_project(repo)
     (repo / ".kengash").unlink()
     [problem] = projects.doctor().problems
-    assert problem.message == "link missing; run: harness doctor --fix"
+    assert problem.message == "link missing; run: kengash doctor --fix"
     [fixed] = projects.doctor(fix=True).problems
     assert (fixed.message, fixed.fixed) == ("link missing; repaired", True)
     assert projects.doctor().problems == []
@@ -113,7 +113,7 @@ def test_doctor_scan_finds_unmanaged_stores(
     stray.mkdir(parents=True)
     messages = [problem.message for problem in projects.doctor(scan=tmp_path / "code").problems]
     found = stray.resolve()
-    assert messages == [f"unmanaged store {found}; run: harness adopt {found.parent}"]
+    assert messages == [f"unmanaged store {found}; run: kengash adopt {found.parent}"]
 
 
 def test_adopt_merges_by_uuid_and_archives_everything(
@@ -200,7 +200,7 @@ def test_a_kengash_of_ours_is_fine(
 
 
 def test_our_own_harness_or_none_is_fine(monkeypatch: pytest.MonkeyPatch) -> None:
-    assert providers.cli_clash() is None  # the venv's harness comes first in tests
+    assert providers.cli_clash() is None  # the venv's kengash comes first in tests
     monkeypatch.setenv("PATH", "/nonexistent")
     assert providers.cli_clash() is None
 
@@ -212,7 +212,7 @@ def test_doctor_checks_and_repairs_the_projects_memory_link(
     link.unlink()
     report = projects.doctor(fix=False, scan=None)
     assert any(
-        p.message == "memory link missing; run: harness doctor --fix" for p in report.problems
+        p.message == "memory link missing; run: kengash doctor --fix" for p in report.problems
     )
     fixed = projects.doctor(fix=True, scan=None)
     assert any(p.message == "memory link missing; repaired" for p in fixed.problems)

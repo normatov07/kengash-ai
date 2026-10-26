@@ -4,7 +4,7 @@ import shlex
 from dataclasses import dataclass, field
 
 from kengash_ai import adapters, gitops, settings
-from kengash_ai.model import STEP_ROLES, Doc, HarnessError, Ticket, UserError
+from kengash_ai.model import STEP_ROLES, Doc, KengashError, Ticket, UserError
 from kengash_ai.ops import records
 from kengash_ai.store import documents
 from kengash_ai.store.paths import StorePaths
@@ -78,7 +78,7 @@ def attach_command(ticket_id: str, *, role: str | None, project: str | None) -> 
     if role is None:
         try:
             current = settings.load(paths, slug).role_of(doc.meta.step or "")
-        except HarnessError:  # broken settings: the built-in steps still name their roles
+        except KengashError:  # broken settings: the built-in steps still name their roles
             current = STEP_ROLES.get(doc.meta.step or "")
         role = current if current in sessions else next(reversed(sessions), None)
         if role is None:

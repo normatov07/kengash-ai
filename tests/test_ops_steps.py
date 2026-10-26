@@ -202,7 +202,7 @@ def test_a_failing_hook_gets_one_repair_turn(engine: Engine, fake_clis: FakeClis
 def test_a_ticket_moved_during_its_step_keeps_the_users_status(
     engine: Engine, fake_clis: FakeClis
 ) -> None:
-    move = "harness ticket move 7b55e0c1 done --why 'user closed it' --by user"
+    move = "kengash ticket move 7b55e0c1 done --why 'user closed it' --by user"
     fake_clis.queue("claude", fixture="claude/work_resume.json", shell=move)
     end = steps.run_job("7b55e0c1")
     assert end == JobEnd("done/closed", "changed while the step ran")

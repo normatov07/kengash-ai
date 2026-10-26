@@ -282,7 +282,7 @@ def _check_plan(plan: Plan) -> None:
         raise UserError(f"plan {plan.id} was rejected")
     raise NeedsUser(
         f"plan {plan.id} is {plan.status.value}; the user approves it first: "
-        f"harness plan approve {plan.id}"
+        f"kengash plan approve {plan.id}"
     )
 
 
@@ -402,7 +402,7 @@ def _parse_pairs(pairs: Sequence[str]) -> dict[str, Any]:
         if not sep:
             raise UserError(f"{pair!r} is not KEY=VALUE")
         if key == "status":
-            raise UserError("status changes through: harness ticket move ID FOLDER[/SUB] --why W")
+            raise UserError("status changes through: kengash ticket move ID FOLDER[/SUB] --why W")
         if key not in SETTABLE:
             hint = difflib.get_close_matches(key, SETTABLE, n=1)
             help_text = f"did you mean {hint[0]}?" if hint else f"settable: {', '.join(SETTABLE)}"

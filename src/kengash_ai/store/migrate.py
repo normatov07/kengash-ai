@@ -13,13 +13,13 @@ from kengash_ai.store.paths import ENV_HOME, HOME_NAME, LEGACY_ENV_HOME, LEGACY_
 
 
 def legacy_home() -> str | None:
-    """Move ~/.harness to ~/.kengash once and link the old path to it; a one-line note when
+    """Move ~/.kengash to ~/.kengash once and link the old path to it; a one-line note when
     it moved, else None (nothing to move, a custom location, or both exist)."""
     if os.environ.get(ENV_HOME) or os.environ.get(LEGACY_ENV_HOME):
         return None
     old, new = Path.home() / LEGACY_HOME_NAME, Path.home() / HOME_NAME
     if new.exists() or new.is_symlink() or old.is_symlink() or not old.is_dir():
-        return None  # doctor reports a leftover ~/.harness beside ~/.kengash
+        return None  # doctor reports a leftover ~/.kengash beside ~/.kengash
     old.rename(new)
     old.symlink_to(HOME_NAME)  # relative: the link survives the home folder moving
     return f"moved {old} to {new}; {old} now links to it"

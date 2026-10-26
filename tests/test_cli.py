@@ -60,7 +60,7 @@ def test_native_windows_stops_with_the_wsl_message(monkeypatch: pytest.MonkeyPat
     for args in (["--version"], ["status"]):
         result = runner.invoke(app, args)
         assert result.exit_code == 4
-        assert "harness runs on Linux and macOS; on Windows use WSL" in result.output
+        assert "kengash runs on Linux and macOS; on Windows use WSL" in result.output
 
 
 def test_the_first_command_moves_a_0_1_store_and_says_so(

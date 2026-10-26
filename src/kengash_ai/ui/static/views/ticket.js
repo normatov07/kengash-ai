@@ -153,10 +153,10 @@ function timelineTab(data) {
 
 function fileTab(data) {
   const storeRel = data.store_path.split(`/projects/${data.project}/`)[1] ?? data.store_path;
-  const repoRel = data.repo_path.split("/.harness/")[1] ?? data.repo_path;
+  const repoRel = data.repo_path.split("/.kengash/")[1] ?? data.repo_path;
   const colour = { importance: IMPORTANCE[data.meta.importance]?.[1], status: "var(--warn)" };
   let fence = 0;
-  return html`<div class="t-row"><h2 class="t-h" style="margin: 0">Ticket file</h2><span class="mono faint ellipsis" style="font-size: 11px; flex: 1 1 200px" title="${data.store_path}">${state.paths ? data.store_path : `~/.harness/projects/${data.project}/${storeRel}`} · in the repo: ${state.paths ? data.repo_path : `.harness/${repoRel}`}</span><button class="btn small end" type="button" data-paths>${state.paths ? "Short paths" : "Show both paths"}</button></div>
+  return html`<div class="t-row"><h2 class="t-h" style="margin: 0">Ticket file</h2><span class="mono faint ellipsis" style="font-size: 11px; flex: 1 1 200px" title="${data.store_path}">${state.paths ? data.store_path : `~/.kengash/projects/${data.project}/${storeRel}`} · in the repo: ${state.paths ? data.repo_path : `.kengash/${repoRel}`}</span><button class="btn small end" type="button" data-paths>${state.paths ? "Short paths" : "Show both paths"}</button></div>
     <div class="file-box"><div class="file-lines">${data.file.split("\n").map((line) => {
       if (line === "---") {
         fence += 1;

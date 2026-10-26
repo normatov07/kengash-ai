@@ -38,7 +38,7 @@ CHEAPEST: dict[str, str | None] = {
     "antigravity": "gemini-3.8-flash-low",
 }
 CLAUDE_TOOLS = ("Read", "Grep", "Glob", "Bash(kengash:*)")
-BIN = Path(sys.executable).parent  # this interpreter's console scripts, harness among them
+BIN = Path(sys.executable).parent  # this interpreter's console scripts, kengash among them
 TAIL = 400
 
 
@@ -89,7 +89,7 @@ def run_evals(
     folder that holds their transcripts."""
     named = scenarios(root, skill)
     chosen = _agents(agents_)
-    base = keep or Path(tempfile.mkdtemp(prefix="harness-eval-"))
+    base = keep or Path(tempfile.mkdtemp(prefix="kengash-eval-"))
     runs: list[EvalRun] = []
     for name, path in named:
         scenario = load(path)
@@ -196,7 +196,7 @@ def run_scenario(
     values = agent_values(agent, model)
     init = _kengash(["init", str(repo)], env, repo)
     if init.returncode != 0:
-        return failed(f"harness init failed: {_tail(init.stderr)}")
+        return failed(f"kengash init failed: {_tail(init.stderr)}")
     slug = next(iter(load_registry(paths).projects))
     if scenario.settings:
         for target in (paths.defaults / "SETTINGS.md", paths.project(slug).settings):
@@ -321,7 +321,7 @@ def _dotted(record: Mapping[str, Any], field: str) -> str:
 
 def _env(agent: str, home: Path, work: Path) -> dict[str, str]:
     """The conductor's environment: no API keys or conductor markers, its own store and
-    git identity, and this interpreter's `harness` first on PATH."""
+    git identity, and this interpreter's `kengash` first on PATH."""
     work.mkdir(parents=True, exist_ok=True)
     config = work / "gitconfig"
     config.write_text("[user]\n\tname = Eval\n\temail = eval@example.com\n", encoding="utf-8")

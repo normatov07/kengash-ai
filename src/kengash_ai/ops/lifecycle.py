@@ -34,7 +34,7 @@ def status_event(
     by: str = "kengash",
     kind: str | None = None,
 ) -> Event:
-    """The journal event for the status `ticket` just reached; `harness wait` reads it."""
+    """The journal event for the status `ticket` just reached; `kengash wait` reads it."""
     kind = kind or EVENT_TYPES.get(ticket.sub_status, "ticket.moved")
     data: dict[str, object] = {
         "type": kind,

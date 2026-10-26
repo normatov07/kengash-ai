@@ -29,7 +29,7 @@ def test_doctor_exit_code_signals_problems(store_paths: StorePaths, repo: Path) 
     result = runner.invoke(app, ["doctor"])
     assert (result.exit_code, result.stdout) == (
         1,
-        "payments-api: link missing; run: harness doctor --fix\n",
+        "payments-api: link missing; run: kengash doctor --fix\n",
     )
     fixed = runner.invoke(app, ["doctor", "--fix"])
     assert (fixed.exit_code, fixed.stdout) == (0, "payments-api: link missing; repaired\n")
@@ -39,7 +39,7 @@ def test_errors_go_to_stderr_with_spec_exit_codes(store_paths: StorePaths, repo:
     (repo / ".kengash").mkdir()
     result = runner.invoke(app, ["init", str(repo)])
     assert result.exit_code == 4
-    assert result.stderr == f"{repo / '.kengash'} is a real folder; run: harness adopt {repo}\n"
+    assert result.stderr == f"{repo / '.kengash'} is a real folder; run: kengash adopt {repo}\n"
 
 
 def test_link_and_adopt(store_paths: StorePaths, repo: Path, tmp_path: Path) -> None:

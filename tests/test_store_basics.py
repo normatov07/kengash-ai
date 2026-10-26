@@ -6,7 +6,7 @@ from uuid import UUID
 
 import pytest
 
-from kengash_ai.model import HarnessError, ProjectEntry, Registry
+from kengash_ai.model import KengashError, ProjectEntry, Registry
 from kengash_ai.store import StorePaths, storegit
 from kengash_ai.store.files import atomic_write
 from kengash_ai.store.ids import new_id
@@ -50,7 +50,7 @@ def test_lock_times_out_with_a_clear_error(tmp_path: Path) -> None:
     lock_file = tmp_path / "locks" / "x.lock"
     with (
         locked(lock_file),
-        pytest.raises(HarnessError, match=r"store busy: x\.lock"),
+        pytest.raises(KengashError, match=r"store busy: x\.lock"),
         locked(lock_file, timeout=0.05),
     ):
         pass
@@ -86,8 +86,8 @@ def test_store_commits_ignore_runtime_and_skip_empty_changes(
     (home / "runtime").mkdir()
     (home / "runtime" / "pid").write_text("1", encoding="utf-8")
     (home / "registry.yaml").write_text("projects: {}\n", encoding="utf-8")
-    assert storegit.commit(home, "harness: one") is True
-    assert storegit.commit(home, "harness: none") is False
+    assert storegit.commit(home, "kengash: one") is True
+    assert storegit.commit(home, "kengash: none") is False
     assert run_git(home, "ls-files").split() == [".gitignore", "registry.yaml"]
 
 

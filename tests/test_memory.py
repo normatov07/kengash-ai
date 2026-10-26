@@ -117,7 +117,7 @@ def test_show_filters_decisions_by_project(store: StorePaths) -> None:
 
 
 def test_memory_needs_a_store(store_paths: StorePaths) -> None:
-    with pytest.raises(NeedsSetup, match="harness init"):
+    with pytest.raises(NeedsSetup, match="kengash init"):
         memory.add(store_paths, "x", "y")
 
 

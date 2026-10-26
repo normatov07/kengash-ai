@@ -69,7 +69,7 @@ def test_context_without_a_store_exits_4(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["context"])
-    assert (result.exit_code, result.stderr) == (4, "no store yet; run: harness init\n")
+    assert (result.exit_code, result.stderr) == (4, "no store yet; run: kengash init\n")
 
 
 def test_context_lists_open_gates(

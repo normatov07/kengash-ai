@@ -1,6 +1,6 @@
 # super-harness: System Design and Foundation Spec
 
-> Renamed **Kengash AI** on 2026-10-26 (SP7 spec decision 16): the distribution is `kengash-ai`, the package `kengash_ai`. "super-harness" in this document means Kengash AI; commands, the store and file formats are unchanged.
+> Renamed **Kengash AI** on 2026-10-26 (SP7 spec decision 16; distribution `kengash-ai`, package `kengash_ai`). From 0.2.0 (SP8 spec) every user-facing name follows: read `harness …` commands here as `kengash …`, `~/.harness` as `~/.kengash`, the `.harness` link as `.kengash`, `HARNESS_*` variables as `KENGASH_*`, `hrn(`/`hrn/` as `kg(`/`kg/` and `Harness-*` trailers as `Kengash-*`. File formats and settings keys are unchanged.
 
 - Date: 2026-10-22
 - Status: draft, awaiting user review
@@ -556,3 +556,4 @@ super-harness/
 | 5 UI | FastAPI, SSE, seven screens; the `open-ui` skill | canvas parity checklist complete; live updates; every action goes through `ops` |
 | 6 Custom agents | custom steps in SETTINGS.md, `harness agent new\|remove`, the New agent dialog, CI on GitHub, canvas follow-ups (`2026-10-26-sp6-custom-agents-design.md`) | a custom step runs like the built-in step of its kind; CI green |
 | 7 Production readiness | speed on large stores, hardening, packaging, release and community docs (`2026-10-26-sp7-production-design.md`) | views under 1 s warm on 1,500 tickets; clean artifacts; CI, package and audit green |
+| 8 Kengash naming | every user-facing name follows Kengash AI, with a compatible upgrade from 0.1.0 (`2026-10-26-sp8-kengash-naming-design.md`) | a 0.1.0 store upgrades untouched; old names warn until 0.3.0 |

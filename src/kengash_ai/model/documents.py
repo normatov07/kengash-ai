@@ -132,7 +132,7 @@ class Ticket(_Schema):
 
 
 class TicketInput(BaseModel):
-    """One item of the list `harness ticket add` reads (SP2 spec §4)."""
+    """One item of the list `kengash ticket add` reads (SP2 spec §4)."""
 
     model_config = ConfigDict(extra="forbid")
 

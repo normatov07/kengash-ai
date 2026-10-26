@@ -35,7 +35,7 @@ STARTER_STEPS = {
     "edit": (
         "1. Read the ticket's Scope, Acceptance, Handoff and Findings.\n"
         "2. Make the change in this worktree, with tests where behaviour changes. "
-        "Do not commit; harness commits.\n"
+        "Do not commit; kengash commits.\n"
         "3. Run the project's tests when you can, and say what you ran.\n"
         "4. Reply with JSON: `summary` in one line and `handoff` for the next step.\n"
     ),

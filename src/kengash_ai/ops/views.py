@@ -18,8 +18,8 @@ from kengash_ai.model import (
     Doc,
     Event,
     Folder,
-    HarnessError,
     JournalCursor,
+    KengashError,
     ProviderStatus,
     Settings,
     Ticket,
@@ -121,7 +121,7 @@ class Slot:
 @dataclass
 class Overview:
     projects: list[str] = field(default_factory=list)
-    paused: bool = False  # `harness pause` without a project
+    paused: bool = False  # `kengash pause` without a project
     links_broken: int = 0  # projects whose folder or memory link needs a fix
     tickets_total: int = 0
     grant: int = 2  # loops one approval adds (`loop_grant`)
@@ -194,7 +194,7 @@ class ProjectLink:
 
 @dataclass
 class FoundStore:
-    """A real `.harness/` folder beside a registered repo that the store does not know."""
+    """A real `.kengash/` folder beside a registered repo that the store does not know."""
 
     path: str
     repo: str
@@ -463,7 +463,7 @@ def overview(paths: StorePaths | None = None, *, window: Window = "today") -> Ov
     found.avg_ticket_cost = round(sum(costs) / len(costs)) if costs else 0
     found.spend = _spend(events, window)
     found.slots = _slots(paths)
-    with contextlib.suppress(HarnessError):
+    with contextlib.suppress(KengashError):
         resolved = settings.load(paths)
         found.agents_on = sum(agent.on for agent in resolved.agents.values())
         found.agents_total = len(resolved.agents)
@@ -499,7 +499,7 @@ def board(paths: StorePaths | None = None, *, project: str | None = None) -> Boa
         if slug not in loaded:
             try:
                 loaded[slug] = settings.load(paths, slug)
-            except HarnessError:
+            except KengashError:
                 loaded[slug] = None
         added, removed = diffs.get(ticket.id, (0, 0))
         provider, _ = _agent(paths, slug, ticket) if ticket.step else ("", "")
@@ -531,7 +531,7 @@ def board(paths: StorePaths | None = None, *, project: str | None = None) -> Boa
         )
     try:
         resolved: Settings | None = settings.load(paths, project)
-    except HarnessError:
+    except KengashError:
         resolved = None
     titles = dict(COLUMNS)
     order = [key for key, _ in COLUMNS]
@@ -607,7 +607,7 @@ def _footer(paths: StorePaths, key: str, cards: list[Card], resolved: Settings |
 
 def links(paths: StorePaths | None = None, *, nearby: bool = True) -> Links:
     """Link health for the Memory screen: every project's links and, with `nearby`, the real
-    `.harness/` folders beside registered repos."""
+    `.kengash/` folders beside registered repos."""
     paths = paths or StorePaths.default()
     found = Links()
     if not paths.registry.exists():
@@ -642,7 +642,7 @@ def _project_link(paths: StorePaths, slug: str, repo: Path) -> ProjectLink:
     memory = store_links.state_of(project.memory_link, paths.memory).value
     link = str(repo / store_links.LINK)
     if not repo.is_dir():
-        hint = f"harness link {slug} <new-path>"
+        hint = f"kengash link {slug} <new-path>"
         return ProjectLink(
             slug,
             str(repo),
@@ -660,11 +660,11 @@ def _project_link(paths: StorePaths, slug: str, repo: Path) -> ProjectLink:
     fix: Literal["", "repair", "relink", "adopt", "manual"] = ""
     hint = ""
     if state is store_links.LinkState.real_dir:
-        fix, hint = "adopt", f"harness adopt {repo}"
+        fix, hint = "adopt", f"kengash adopt {repo}"
     elif state is store_links.LinkState.blocked or memory in ("real folder", "blocked by a file"):
-        fix, hint = "manual", "harness doctor"
+        fix, hint = "manual", "kengash doctor"
     elif state is not store_links.LinkState.ok or memory != "ok" or excluded is False:
-        fix, hint = "repair", "harness doctor --fix"
+        fix, hint = "repair", "kengash doctor --fix"
     return ProjectLink(
         slug, str(repo), link, str(project.root), state.value, memory, excluded, tickets, fix, hint
     )
@@ -693,7 +693,7 @@ def settings_view(paths: StorePaths | None = None, *, project: str | None) -> Se
     try:
         found.values = settings.load(paths, project).model_dump(mode="json")
         found.set_here = settings.overrides(paths, project)
-    except HarnessError as exc:
+    except KengashError as exc:
         found.problem = str(exc)
     return found
 
@@ -716,7 +716,7 @@ def agents_view(
     try:
         resolved = settings.load(paths, project)
         found.set_here = settings.overrides(paths, project)
-    except HarnessError as exc:
+    except KengashError as exc:
         found.problem = str(exc)
         return found
     events = _events(paths)
@@ -784,7 +784,7 @@ def workflows_view(paths: StorePaths | None = None, *, project: str | None) -> W
     try:
         resolved = settings.load(paths, project)
         found.set_here = settings.overrides(paths, project)
-    except HarnessError as exc:
+    except KengashError as exc:
         found.problem = str(exc)
         return found
     found.names = list(resolved.workflows)
@@ -842,11 +842,11 @@ def ticket_view(
     found.blocks = [_link(o.meta) for o in others.values() if ticket.id in o.meta.depends_on]
     try:
         found.changes = changes_ops.ticket_changes(ticket.id, diff=False, project=slug).changes
-    except (HarnessError, OSError):
+    except (KengashError, OSError):
         found.changes = []
     try:
         found.attach = changes_ops.attach_command(ticket.id, role=None, project=slug).command
-    except (HarnessError, OSError):
+    except (KengashError, OSError):
         found.attach = ""
     events = [event for event in _events(paths) if _about(event, ticket.id)]
     found.timeline = [row for event in events if (row := _timeline_row(event, ticket.id))]
@@ -932,7 +932,7 @@ def memory_view(paths: StorePaths | None = None, *, project: str | None) -> Memo
         ):
             if path.is_file():
                 found.files.append(_memory_file(path, name, "project", None))
-    with contextlib.suppress(HarnessError):  # an invalid defaults file keeps the default cap
+    with contextlib.suppress(KengashError):  # an invalid defaults file keeps the default cap
         found.cap = settings.load(paths).memory.compact_at_lines
     found.compacting = jobs.alive(paths, jobs.COMPACT) is not None
     kinds = ("memory.write", "memory.compacted", "ticket.moved")
@@ -1085,7 +1085,7 @@ def _agent(paths: StorePaths, slug: str, ticket: Ticket) -> tuple[str, str]:
         if role is None:
             return "", ""
         provider, model = split_cli(resolved.agents[role].cli)
-    except (HarnessError, KeyError):
+    except (KengashError, KeyError):
         return "", ""
     return provider, model or "default"
 
@@ -1169,7 +1169,7 @@ def _timeline_row(event: Event, ticket_id: str) -> TimelineStep | None:
 def _grant(paths: StorePaths, slug: str) -> int:
     try:
         return settings.load(paths, slug).loop_grant
-    except HarnessError:
+    except KengashError:
         return 2
 
 
@@ -1180,7 +1180,7 @@ def _chain(
     try:
         resolved = settings.load(paths, slug)
         steps = workflow.steps_for(resolved, ticket.workflow, hitl=ticket.gate is TicketGate.hitl)
-    except (HarnessError, KeyError):
+    except (KengashError, KeyError):
         return []
     current = steps.index(ticket.step) if ticket.step in steps else -1
     here: Literal["running", "waiting", "needs you"] = "running"
@@ -1208,7 +1208,7 @@ def _plan_ref(paths: StorePaths, slug: str, plan_id: str) -> PlanRef:
     try:
         _, path = records.locate_plan(paths, plan_id, slug)
         plan = records.load_plan(path)
-    except HarnessError:
+    except KengashError:
         return PlanRef(plan_id, "", "", False)
     return PlanRef(plan_id, plan.meta.title, plan.sections.get("Prompt", ""), True)
 
@@ -1216,7 +1216,7 @@ def _plan_ref(paths: StorePaths, slug: str, plan_id: str) -> PlanRef:
 def _slots(paths: StorePaths) -> list[Slot]:
     try:
         limits = settings.load(paths).sessions.per_provider
-    except HarnessError:
+    except KengashError:
         return []
     held: dict[str, int] = defaultdict(int)
     for entry in runtime.load_slots(paths).held:

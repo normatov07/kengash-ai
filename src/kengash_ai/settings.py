@@ -1,4 +1,4 @@
-"""Resolved settings: package defaults, then ~/.harness/defaults, then the project file."""
+"""Resolved settings: package defaults, then ~/.kengash/defaults, then the project file."""
 
 import copy
 import difflib
@@ -90,7 +90,7 @@ def load(paths: StorePaths, slug: str | None = None) -> Settings:
         return _resolve(paths, slug)
     except ValidationError as exc:
         found = [_describe(error) for error in exc.errors()]
-        more = f" (+{len(found) - 1} more; run: harness settings check)" if len(found) > 1 else ""
+        more = f" (+{len(found) - 1} more; run: kengash settings check)" if len(found) > 1 else ""
         raise UserError(f"settings: {found[0]}{more}") from exc
 
 

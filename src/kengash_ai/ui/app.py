@@ -20,7 +20,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from kengash_ai.model import HarnessError, JournalCursor, NeedsSetup, NeedsUser
+from kengash_ai.model import JournalCursor, KengashError, NeedsSetup, NeedsUser
 from kengash_ai.ops import (
     agent_config,
     changes,
@@ -54,8 +54,8 @@ SECURITY_HEADERS = {
     "permissions-policy": "camera=(), microphone=(), geolocation=()",
 }
 LOCKED = (
-    "<!doctype html><title>harness</title>"
-    "<p>Open the link that <code>harness ui open</code> printed.</p>"
+    "<!doctype html><title>kengash</title>"
+    "<p>Open the link that <code>kengash ui open</code> printed.</p>"
 )
 
 
@@ -146,8 +146,8 @@ def create_app(*, token: str, port: int) -> FastAPI:
         response.headers.update(SECURITY_HEADERS)
         return response
 
-    @app.exception_handler(HarnessError)
-    async def harness_error(request: Request, exc: HarnessError) -> JSONResponse:
+    @app.exception_handler(KengashError)
+    async def kengash_error(request: Request, exc: KengashError) -> JSONResponse:
         status = 409 if isinstance(exc, NeedsSetup | NeedsUser) else 400
         return JSONResponse({"error": str(exc)}, status_code=status)
 
@@ -223,7 +223,7 @@ def create_app(*, token: str, port: int) -> FastAPI:
 
     @app.post("/api/links/repair")
     def repair_links() -> views.Links:
-        projects.doctor(fix=True)  # what `harness doctor --fix` does, links included
+        projects.doctor(fix=True)  # what `kengash doctor --fix` does, links included
         return views.links()
 
     @app.post("/api/links/relink")

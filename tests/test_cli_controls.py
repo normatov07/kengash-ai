@@ -50,7 +50,7 @@ def test_doctor_reports_a_dead_worker(engine: Engine) -> None:
     )
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 1
-    assert "payments-api: worker of 7b55e0c1 died; run: harness doctor --fix" in result.stdout
+    assert "payments-api: worker of 7b55e0c1 died; run: kengash doctor --fix" in result.stdout
     fixed = runner.invoke(app, ["doctor", "--fix"])
     assert "worker of 7b55e0c1 died; marked failed" in fixed.stdout
 

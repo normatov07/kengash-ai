@@ -1,4 +1,4 @@
-# SETTINGS.md: harness settings for this project. YAML. Harness never overwrites this file.
+# SETTINGS.md: kengash settings for this project. YAML. Kengash never overwrites this file.
 version: 1
 
 # project

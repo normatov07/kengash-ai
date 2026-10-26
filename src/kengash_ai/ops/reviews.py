@@ -1,5 +1,5 @@
 """Plan review (SP3 spec decisions 14, 28 to 30): who reviews, the round a `plan-review`
-worker runs, and `harness plan review`, which starts the job and waits for its round."""
+worker runs, and `kengash plan review`, which starts the job and waits for its round."""
 
 import contextlib
 import os
@@ -13,7 +13,7 @@ from kengash_ai.model import (
     PLAN_SECTIONS,
     Doc,
     Event,
-    HarnessError,
+    KengashError,
     NeedsSetup,
     NeedsUser,
     Plan,
@@ -98,7 +98,7 @@ def review_plan(
             if not any(doc.sections.get(name, "").strip() for name in REVIEWED):
                 raise UserError(
                     f"plan {plan_id} has nothing to review yet; "
-                    f"save its sections with: harness plan save {plan_id}"
+                    f"save its sections with: kengash plan save {plan_id}"
                 )
             pick, warning = choose_reviewer(
                 resolved, conductor_provider(by), agents.detector(paths)
@@ -134,7 +134,7 @@ def review_plan(
     if end is None:
         raise WaitTimeout(
             f"plan {plan_id} review round {number} is still running; "
-            f"run harness plan review {plan_id} again to keep waiting"
+            f"run kengash plan review {plan_id} again to keep waiting"
         )
     if end.type == "worker.exited":
         raise UserError(f"plan {plan_id} review failed: {(end.model_extra or {}).get('reason')}")
@@ -215,7 +215,7 @@ def run_review(plan_id: str, *, project: str | None) -> str:
         doc = records.load_plan(path)
         plan = doc.meta
         if plan.status is not PlanStatus.in_review or plan.updated != since:
-            reason = f"the plan changed during its review; run: harness plan review {plan_id}"
+            reason = f"the plan changed during its review; run: kengash plan review {plan_id}"
             return _exit(paths, slug, plan_id, reason)
         plan.review.round, plan.review.verdict = number, output.verdict
         if result.session_id:
@@ -321,7 +321,7 @@ def _decisions(paths: StorePaths, slug: str) -> str:
     """The newest project and global DECISIONS.md entries."""
     try:
         text = memory.show(paths, decisions=True, project=slug)
-    except HarnessError:
+    except KengashError:
         return ""
     entries = [line for line in text.splitlines() if line.startswith("- ")]
     return "\n".join(entries[-DECISION_LINES:])

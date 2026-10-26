@@ -1,5 +1,5 @@
 """The per-repo `.kengash` directory symlink into the store (system spec §4.2); 0.1.0 named
-it `.harness` (SP8 spec decision 3)."""
+it `.kengash` (SP8 spec decision 3)."""
 
 import os
 import subprocess

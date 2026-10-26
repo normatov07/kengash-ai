@@ -158,18 +158,18 @@ def test_links_report_each_projects_link_and_its_fix(
     assert project.link == str(registered_repo / ".kengash")
     (registered_repo / ".kengash").unlink()
     broken = views.links(store_paths).projects[0]
-    assert (broken.state, broken.fix, broken.hint) == ("missing", "repair", "harness doctor --fix")
+    assert (broken.state, broken.fix, broken.hint) == ("missing", "repair", "kengash doctor --fix")
     (registered_repo / ".kengash").mkdir()
     real = views.links(store_paths).projects[0]
     assert (real.state, real.fix) == ("real folder", "adopt")
-    assert real.hint == f"harness adopt {registered_repo}"
+    assert real.hint == f"kengash adopt {registered_repo}"
 
 
 def test_a_moved_repo_needs_a_relink(registered_repo: Path, store_paths: StorePaths) -> None:
     registered_repo.rename(registered_repo.with_name("moved"))
     moved = views.links(store_paths).projects[0]
     assert (moved.state, moved.fix) == ("repo missing", "relink")
-    assert moved.hint == "harness link payments-api <new-path>"
+    assert moved.hint == "kengash link payments-api <new-path>"
     assert views.overview(store_paths, window="today").links_broken == 1
 
 

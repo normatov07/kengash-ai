@@ -8,7 +8,7 @@ import { icon } from "../icons.js";
 
 const state = { file: "MEMORY.md", show: "all", find: "", relink: "" };
 const FILE_NOTES = { "MEMORY.md": "the brain every session reads first", "DECISIONS.md": "design calls and what was turned down", "PROCESS.md": "how this codebase is built and tested", "SETTINGS.md": "this project's settings", "AGENTS.md": "read first by every CLI" };
-const STATES = { "points elsewhere": "it points somewhere else", missing: "the folder link is missing", "real folder": "a real .harness folder sits where the link belongs", "blocked by a file": "a file blocks the link", "repo missing": "the repo folder moved or was deleted" };
+const STATES = { "points elsewhere": "it points somewhere else", missing: "the folder link is missing", "real folder": "a real .kengash folder sits where the link belongs", "blocked by a file": "a file blocks the link", "repo missing": "the repo folder moved or was deleted" };
 
 export async function load(app) {
   return get(`/api/memory?project=${encodeURIComponent(app.project)}`);
@@ -50,7 +50,7 @@ function indexBody(data) {
 
 function viewer(data) {
   const file = data.files.find((f) => f.name === state.file) ?? data.files[0];
-  if (!file) return html`<section class="panel"><div class="empty">No memory file yet: run harness init.</div></section>`;
+  if (!file) return html`<section class="panel"><div class="empty">No memory file yet: run kengash init.</div></section>`;
   const memory = file.name === "MEMORY.md";
   const pass = data.last_before ? Math.round(((data.last_after - data.last_before) / data.last_before) * 100) : 0;
   return html`<section class="panel">
@@ -67,7 +67,7 @@ function linkCard(item) {
   if (!broken) {
     return html`<div class="lh-row">${icon("link", { size: 14, stroke: "var(--ok)", width: 1.6 })}<span class="ellipsis" title="${item.link} → ${item.target}">${item.project}</span><span class="end mono faint">${item.tickets} tickets</span></div>`;
   }
-  const why = STATES[item.state] ?? (item.memory !== "ok" ? `its memory link is ${item.memory}` : item.excluded === false ? ".harness is not in .git/info/exclude" : item.state);
+  const why = STATES[item.state] ?? (item.memory !== "ok" ? `its memory link is ${item.memory}` : item.excluded === false ? ".kengash is not in .git/info/exclude" : item.state);
   const action = {
     repair: html`<button class="btn small accent" type="button" data-link="repair">Repair</button>`,
     adopt: html`<button class="btn small accent" type="button" data-link="adopt" data-path="${item.repo}">Adopt its folder</button>`,
@@ -93,7 +93,7 @@ function write(event) {
 export function top(data, app) {
   const projects = app.overview?.projects ?? [];
   return html`<label class="sr-only" for="project">Store or project</label>
-    <select id="project" class="select">${[["", "~/.harness/memory"], ...projects.map((p) => [p, `~/.harness/projects/${p}`])].map(([value, label]) => html`<option value="${value}" ${value === app.project ? "selected" : ""}>${label}</option>`)}</select>
+    <select id="project" class="select">${[["", "~/.kengash/memory"], ...projects.map((p) => [p, `~/.kengash/projects/${p}`])].map(([value, label]) => html`<option value="${value}" ${value === app.project ? "selected" : ""}>${label}</option>`)}</select>
     <label class="sr-only" for="mq">Find a ticket or memory entry</label>
     <input id="mq" class="search" type="search" placeholder="Find by id, title or project…" value="${state.find}">
     <button class="btn quiet" type="button" data-verify>Verify links</button>
@@ -124,7 +124,7 @@ export function view(data, app) {
             <div class="thead file-row"><div class="m-file">FILE</div><div class="m-scope">SCOPE</div><div class="m-size">SIZE</div><div class="m-read">PER READ</div><div class="m-when">COMPACTED</div></div>
             ${data.files.length
               ? data.files.map((file) => html`<button type="button" class="trow file-row ${file.name === (state.file ?? "MEMORY.md") ? "on" : ""}" data-file="${file.name}"><span class="m-file mono">${file.name}</span><span class="m-scope"><span class="scope-tag ${file.scope === "project" ? "project" : ""}" style="margin: 0">${file.scope.toUpperCase()}</span></span><span class="m-size mono">${file.name === "DECISIONS.md" ? `${file.entries} e` : `${file.lines} L`}</span><span class="m-read mono">${tokens(file.tokens)}</span><span class="m-when mono ${file.compacted ? "ok-text" : "faint"}">${file.name === "MEMORY.md" ? when(file.compacted) : file.name === "AGENTS.md" ? "n/a" : "never"}</span></button>`)
-              : html`<div class="empty">No memory files yet: run harness init.</div>`}
+              : html`<div class="empty">No memory files yet: run kengash init.</div>`}
           </div></div>
         </section>
         <div class="viewer-slot">${viewer(data)}</div>
@@ -132,10 +132,10 @@ export function view(data, app) {
       <div class="mem-side">
         <section class="panel">
           <div class="panel-head"><h2>Link health</h2><span class="end mono ${broken ? "danger-text" : "ok-text"}" style="font-size: 11px">${broken ? `${broken} broken` : "intact"}</span></div>
-          <div class="lh-list">${links.projects.length ? links.projects.map(linkCard) : html`<div class="empty">No project yet: run harness init inside a repo.</div>`}</div>
+          <div class="lh-list">${links.projects.length ? links.projects.map(linkCard) : html`<div class="empty">No project yet: run kengash init inside a repo.</div>`}</div>
         </section>
-        ${links.nearby.map((found) => html`<section class="nearby"><div class="nb-head">${icon("folder", { size: 15, stroke: "var(--warn)", width: 1.6 })}<h2>Store found nearby</h2></div><p><span class="mono">${found.repo.split("/").pop()}/.harness/</span> holds ${found.tickets} ticket files and ${found.plans} plans this store does not know about.</p><button class="btn small" type="button" data-link="adopt" data-path="${found.repo}">Adopt and link</button></section>`)}
-        <p class="faint" style="font-size: 12px; margin: 0">Why a folder link and not hard links: folders cannot be hard-linked, and a hard-linked file goes stale on every atomic save or status move. The folder link keeps both paths live, works across disks, and <span class="mono">harness doctor --fix</span> restores it.</p>
+        ${links.nearby.map((found) => html`<section class="nearby"><div class="nb-head">${icon("folder", { size: 15, stroke: "var(--warn)", width: 1.6 })}<h2>Store found nearby</h2></div><p><span class="mono">${found.repo.split("/").pop()}/.kengash/</span> holds ${found.tickets} ticket files and ${found.plans} plans this store does not know about.</p><button class="btn small" type="button" data-link="adopt" data-path="${found.repo}">Adopt and link</button></section>`)}
+        <p class="faint" style="font-size: 12px; margin: 0">Why a folder link and not hard links: folders cannot be hard-linked, and a hard-linked file goes stale on every atomic save or status move. The folder link keeps both paths live, works across disks, and <span class="mono">kengash doctor --fix</span> restores it.</p>
       </div>
     </div>
     <section class="panel">
@@ -148,7 +148,7 @@ export function view(data, app) {
     </section>
     <section class="panel">
       <div class="panel-head"><h2>Writes to memory</h2><span class="faint" style="font-size: 12px">who changed the shared files, and why</span></div>
-      <div class="writes">${data.writes.length ? data.writes.map(write) : html`<div class="empty" style="padding: 0">Nothing written yet. Agents add facts with harness memory add; compaction and ticket moves show here too.</div>`}</div>
+      <div class="writes">${data.writes.length ? data.writes.map(write) : html`<div class="empty" style="padding: 0">Nothing written yet. Agents add facts with kengash memory add; compaction and ticket moves show here too.</div>`}</div>
     </section>
   </div>`;
 }

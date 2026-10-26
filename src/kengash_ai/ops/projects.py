@@ -81,7 +81,7 @@ def init_project(path: Path, paths: StorePaths | None = None) -> InitResult:
 
 
 def relink(slug: str, new_path: Path, paths: StorePaths | None = None) -> InitResult:
-    """Point a moved project's registry entry and `.harness` link at its new place."""
+    """Point a moved project's registry entry and `.kengash` link at its new place."""
     paths = paths or StorePaths.default()
     repo = repo_root(new_path)
     _refuse_obstruction(repo)
@@ -113,7 +113,7 @@ def doctor(
     """Check every project's repo, link, exclude entry, documents and trust, then providers."""
     paths = paths or StorePaths.default()
     if not paths.home.is_dir():
-        return DoctorReport(0, [Problem(f"no store at {paths.home}; run: harness init")])
+        return DoctorReport(0, [Problem(f"no store at {paths.home}; run: kengash init")])
     registry = load_registry(paths)
     problems: list[Problem] = []
     for slug, entry in sorted(registry.projects.items()):
@@ -126,7 +126,7 @@ def doctor(
         for found in real_folders(scan.resolve(), SCAN_DEPTH):
             if found.parent not in known:
                 problems.append(
-                    Problem(f"unmanaged store {found}; run: harness adopt {found.parent}")
+                    Problem(f"unmanaged store {found}; run: kengash adopt {found.parent}")
                 )
     if fix:
         jobs.prune_logs(paths, jobs.keep_days(paths))
@@ -135,7 +135,7 @@ def doctor(
         waiting.check_workers(paths)
     for record in dead:
         done = "marked failed" if record.job == "ticket" else "dropped"
-        hint = done if fix else "run: harness doctor --fix"
+        hint = done if fix else "run: kengash doctor --fix"
         problems.append(Problem(f"worker of {record.id} died; {hint}", record.project, fix))
     problems += [
         Problem(check.message, warning=not check.blocking)
@@ -178,7 +178,7 @@ def adopt(path: Path, paths: StorePaths | None = None) -> AdoptResult:
 def _refuse_obstruction(repo: Path) -> None:
     real = links.real_folder(repo)
     if real is not None:
-        raise NeedsSetup(f"{real} is a real folder; run: harness adopt {repo}")
+        raise NeedsSetup(f"{real} is a real folder; run: kengash adopt {repo}")
     if links.obstruction(repo) is links.LinkState.blocked:
         raise UserError(f"{repo / links.LINK} is a file; move it away first")
 
@@ -217,7 +217,7 @@ def _attach(repo: Path, project: ProjectPaths) -> list[str]:
 def _check_project(paths: StorePaths, slug: str, repo: Path, fix: bool) -> list[Problem]:
     if not repo.is_dir():
         return [
-            Problem(f"repo missing at {repo}; if it moved: harness link {slug} <new-path>", slug)
+            Problem(f"repo missing at {repo}; if it moved: kengash link {slug} <new-path>", slug)
         ]
     project = paths.project(slug)
     problems: list[Problem] = []
@@ -225,9 +225,9 @@ def _check_project(paths: StorePaths, slug: str, repo: Path, fix: bool) -> list[
     legacy = links.legacy_link(repo, project.root)
     real = links.real_folder(repo)
     if real is not None:
-        problems.append(Problem(f"{real} is a real folder; run: harness adopt {repo}", slug))
+        problems.append(Problem(f"{real} is a real folder; run: kengash adopt {repo}", slug))
     elif state is links.LinkState.blocked:
-        message = f"{repo / links.LINK} is a file; move it away, then: harness doctor --fix"
+        message = f"{repo / links.LINK} is a file; move it away, then: kengash doctor --fix"
         problems.append(Problem(message, slug))
     elif state is not links.LinkState.ok:
         if fix:
@@ -248,7 +248,7 @@ def _check_project(paths: StorePaths, slug: str, repo: Path, fix: bool) -> list[
         kind = "folder" if memory is links.LinkState.real_dir else "file"
         message = (
             f"{where} is a real {kind}: move what it holds into {paths.memory} "
-            "(harness memory add), remove it, then run: harness doctor --fix"
+            "(kengash memory add), remove it, then run: kengash doctor --fix"
         )
         problems.append(Problem(message, slug))
     elif memory is not links.LinkState.ok:
@@ -263,7 +263,7 @@ def _check_project(paths: StorePaths, slug: str, repo: Path, fix: bool) -> list[
 
 
 def _fixable(message: str, slug: str, fixed: bool) -> Problem:
-    hint = "repaired" if fixed else "run: harness doctor --fix"
+    hint = "repaired" if fixed else "run: kengash doctor --fix"
     return Problem(f"{message}; {hint}", slug, fixed)
 
 

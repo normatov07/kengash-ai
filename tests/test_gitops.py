@@ -105,7 +105,7 @@ def test_reset_soft_and_diffs(repo: Path, tmp_path: Path) -> None:
     commit_all(wt, "agent commit", {})
     reset_soft(wt, start)
     assert head(wt) == start and not is_clean(wt)
-    commit_all(wt, "harness commit", TRAILERS)
+    commit_all(wt, "kengash commit", TRAILERS)
     assert sorted(numstat(wt, "main"), key=lambda c: c.path) == [
         FileChange("a.py", 2, 0),
         FileChange("blob.bin", None, None),

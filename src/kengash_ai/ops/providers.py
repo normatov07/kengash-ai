@@ -1,4 +1,4 @@
-"""Provider and repo-trust checks for `harness doctor` (SP3 spec §10)."""
+"""Provider and repo-trust checks for `kengash doctor` (SP3 spec §10)."""
 
 import hashlib
 import json
@@ -36,7 +36,7 @@ class _Use:
 def check_providers(paths: StorePaths) -> list[ProviderCheck]:
     """Providers that enabled agents or the compactor need and cannot use as things stand.
 
-    Scopes whose SETTINGS.md does not validate are skipped; `harness settings check`
+    Scopes whose SETTINGS.md does not validate are skipped; `kengash settings check`
     reports them.
     """
     scopes: list[Settings] = []

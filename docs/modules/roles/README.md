@@ -8,7 +8,7 @@ Role skills, data only (system spec §8.2; SP4 spec decision 3): the instruction
 
 - A new session gets the body, without its frontmatter: claude through `--append-system-prompt`, other CLIs prepended to the prompt (`ops.prompts.role_skill`).
 - Lookup: `projects/<slug>/roles/<role>/SKILL.md` → `defaults/roles/<role>/SKILL.md` → the package (`ops.skills.role_text`).
-- `harness init` seeds every package role missing from `defaults/roles/` and never overwrites one (`store.seed`).
+- `kengash init` seeds every package role missing from `defaults/roles/` and never overwrites one (`store.seed`).
 
 ## Invariants
 

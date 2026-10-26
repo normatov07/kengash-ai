@@ -1,4 +1,4 @@
-/* harness UI: the Claude Design canvas's tokens, one dark theme, fonts bundled (OFL). */
+/* kengash UI: the Claude Design canvas's tokens, one dark theme, fonts bundled (OFL). */
 @font-face { font-family: "Inter"; src: url("/static/fonts/inter.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
 @font-face { font-family: "JetBrains Mono"; src: url("/static/fonts/jetbrains-mono.woff2") format("woff2"); font-weight: 100 800; font-style: normal; font-display: swap; }
 :root {

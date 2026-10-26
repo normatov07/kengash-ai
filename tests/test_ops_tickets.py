@@ -98,7 +98,7 @@ def test_add_refuses_bad_batches(registered_repo: Path, batch: str, message: str
 
 def test_add_needs_an_approved_or_quick_plan(registered_repo: Path) -> None:
     draft = plan_for(registered_repo, approve=False)
-    with pytest.raises(NeedsUser, match=f"harness plan approve {draft}"):
+    with pytest.raises(NeedsUser, match=f"kengash plan approve {draft}"):
         tickets.add_tickets(draft, BATCH, project=None, by="x")
     quick = plan_for(registered_repo, PlanMode.quick, approve=False)
     assert len(tickets.add_tickets(quick, BATCH, project=None, by="x").tickets) == 2
@@ -189,7 +189,7 @@ def test_set_changes_fields_and_requeues(registered_repo: Path, journal_events: 
     ("pair", "message"),
     [
         ("title", "is not KEY=VALUE"),
-        ("status=done/closed", "harness ticket move"),
+        ("status=done/closed", "kengash ticket move"),
         ("titel=x", "did you mean title"),
         ("importance=urgent", "importance: "),
         ("workflow=nightly", "no workflow 'nightly'"),

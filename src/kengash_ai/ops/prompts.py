@@ -1,4 +1,4 @@
-"""What a step's CLI reads and what harness writes back (SP3 spec §8.2, decision 25)."""
+"""What a step's CLI reads and what kengash writes back (SP3 spec §8.2, decision 25)."""
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime
@@ -171,7 +171,7 @@ def repair_prompt(problem: str) -> str:
 
 
 def handoff_text(handoff: str) -> str:
-    """The Handoff harness keeps: redacted, at most 15 lines."""
+    """The Handoff kengash keeps: redacted, at most 15 lines."""
     return "\n".join(redact(handoff).strip("\n").splitlines()[:HANDOFF_LINES])
 
 

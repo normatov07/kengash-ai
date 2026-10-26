@@ -51,7 +51,7 @@ def add(
 ) -> AddResult:
     """Record one fact in MEMORY.md (under `section`) or one decision in DECISIONS.md."""
     if not paths.memory.is_dir():
-        raise NeedsSetup("no store yet; run: harness init")
+        raise NeedsSetup("no store yet; run: kengash init")
     fact, reason = _one_line(text), _one_line(why)
     if decision:
         name, cap = "DECISIONS.md", DECISIONS_CAP
@@ -169,7 +169,7 @@ def show(paths: StorePaths, *, decisions: bool = False, project: str | None = No
     """MEMORY.md, or DECISIONS.md narrowed to one project's and the global entries."""
     path = paths.memory / ("DECISIONS.md" if decisions else "MEMORY.md")
     if not path.exists():
-        raise NeedsSetup("no store yet; run: harness init")
+        raise NeedsSetup("no store yet; run: kengash init")
     text = path.read_text(encoding="utf-8")
     if not (decisions and project):
         return text
