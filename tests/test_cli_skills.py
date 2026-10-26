@@ -1,4 +1,4 @@
-"""`harness skills lint|install` (SP4 spec §4)."""
+"""`kengash skills lint|install` (SP4 spec §4)."""
 
 import json
 import shutil
@@ -28,12 +28,12 @@ def test_cli_lint_names_an_unknown_command(tmp_path: Path, store_paths: StorePat
     folder.mkdir()
     (folder / "SKILL.md").write_text(
         "---\nname: typo\ndescription: Use when testing.\n---\n"
-        "0. Run `harness --version`.\n1. Run `harness plan reveiw <id>`.\n",
+        "0. Run `kengash --version`.\n1. Run `kengash plan reveiw <id>`.\n",
         encoding="utf-8",
     )
     result = runner.invoke(app, ["skills", "lint", str(folder)])
     assert result.exit_code == 1
-    assert result.stdout == f"{folder / 'SKILL.md'}: unknown command: harness plan reveiw\n"
+    assert result.stdout == f"{folder / 'SKILL.md'}: unknown command: kengash plan reveiw\n"
 
 
 def test_cli_install_exits_5_until_yes(
@@ -73,7 +73,7 @@ skill: probe
 turns: ["/probe"]
 expect: {journal: [plan.created]}
 """
-PLAN_NEW = "harness plan new --mode direct --title Probe <<'EOF'\nAdd add(a, b).\nEOF"
+PLAN_NEW = "kengash plan new --mode direct --title Probe <<'EOF'\nAdd add(a, b).\nEOF"
 
 
 def test_cli_eval_prints_one_line_per_run(

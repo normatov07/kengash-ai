@@ -10,8 +10,8 @@ from pydantic import BaseModel, ValidationError
 from kengash_ai.model import (
     Claims,
     ConductorPing,
-    HarnessError,
     JournalCursor,
+    KengashError,
     SlotTable,
     TicketState,
     Trust,
@@ -193,7 +193,7 @@ def _load[M: BaseModel](path: Path, model: type[M]) -> M:
         return model.model_validate_json(path.read_text(encoding="utf-8"))
     except ValidationError as exc:
         problem = exc.errors()[0]["msg"]
-        raise HarnessError(f"{path}: damaged runtime file ({problem}); delete it to reset") from exc
+        raise KengashError(f"{path}: damaged runtime file ({problem}); delete it to reset") from exc
 
 
 def _save(path: Path, data: BaseModel) -> None:

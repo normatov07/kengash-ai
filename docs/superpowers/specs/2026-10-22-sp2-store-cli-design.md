@@ -2,7 +2,7 @@
 
 - Date: 2026-10-22
 - Status: approved by default (user prefers momentum; assumptions listed in §2 for veto)
-- Implements: system spec `2026-10-22-super-harness-design.md` §4 (store), §6 (store-only commands), units `model`, `store`, `settings`, `memory`, `journal`, `ops`, `cli`.
+- Implements: system spec `2026-10-22-kengash-design.md` §4 (store), §6 (store-only commands), units `model`, `store`, `settings`, `memory`, `journal`, `ops`, `cli`.
 - This spec only adds what the system spec leaves open. Where they differ, change the system spec first.
 
 ## 1. Milestones

@@ -27,7 +27,7 @@ from kengash_ai.store.registry import load_registry
 RESUMABLE = ("in_queue/ready", "in_process/failed", "in_process/stalled", "in_process/paused")
 NO_SLOT = ("shell", "user")
 SANDBOXED = (
-    "harness run cannot start workers inside a network-less codex sandbox; "
+    "kengash run cannot start workers inside a network-less codex sandbox; "
     "run it outside the sandbox"
 )
 
@@ -101,7 +101,7 @@ def run_tickets(
         if outcome.setup and setup is None:
             setup = outcome.reason
     if result.started:
-        storegit.commit_store(paths, f"harness: run {' '.join(s.id for s in result.started)}")
+        storegit.commit_store(paths, f"kengash: run {' '.join(s.id for s in result.started)}")
     elif setup is not None:
         raise NeedsSetup(setup)
     return result
@@ -159,7 +159,7 @@ def approve_ticket(
         )
         if restart:
             _start_worker(paths, slug, ticket, steps=None)
-        records.record(paths, f"harness: approve {ticket_id}", approved, *events)
+        records.record(paths, f"kengash: approve {ticket_id}", approved, *events)
     if isinstance(decision, workflow.Merge):
         return Approved(ticket_id, slug, merging.merge_if_clean(paths, slug, ticket_id, by=by))
     return Approved(ticket_id, slug, ticket.status)
@@ -184,7 +184,7 @@ def park_ticket(ticket_id: str, why: str, *, project: str | None, by: str) -> Pa
         documents.save_ticket(paths.project(slug), doc)
         slots.release(paths, ticket_id)
         event = lifecycle.status_event(slug, ticket, before, reason, by=by)
-        records.record(paths, f"harness: park {ticket_id}", event)
+        records.record(paths, f"kengash: park {ticket_id}", event)
     return Parked(ticket_id, slug, deferred=False)
 
 
@@ -284,7 +284,7 @@ def _claim(
             slot = SlotEntry(provider=provider, project=slug, ticket=ticket_id, step=step, pid=0)
             if not slots.reserve(paths, slot):
                 return _Skip(f"no free {provider} slot")
-        branch = f"hrn/{ticket_id}"
+        branch = f"kg/{ticket_id}"
         try:
             with locked(paths.locks / f"repo-{slug}.lock"):
                 gitops.ensure_worktree(
@@ -299,7 +299,7 @@ def _claim(
         ticket.status = lifecycle.step_status(resolved, step)
         events = [_event("ticket.claimed", slug, ticket, step=step, provider=provider, by=by)]
         events[0] = events[0].model_copy(update={"from": before})
-        if step == "approve":  # the user's step: no worker until `harness approve`
+        if step == "approve":  # the user's step: no worker until `kengash approve`
             ticket.status = workflow.NEEDS_APPROVAL
             state.approval = "approve_step"
             reason = "waiting for the user's approval"

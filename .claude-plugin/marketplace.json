@@ -8,7 +8,7 @@
     {
       "name": "kengash-ai",
       "source": "./",
-      "description": "Plan, ticket and run many projects at once with the coding-agent subscriptions you already have, through the harness CLI."
+      "description": "Plan, ticket and run many projects at once with the coding-agent subscriptions you already have, through the kengash CLI."
     }
   ]
 }

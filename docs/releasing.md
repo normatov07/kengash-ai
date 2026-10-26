@@ -21,7 +21,7 @@ How a version of Kengash AI reaches PyPI and GitHub. The workflow is `.github/wo
         git push origin vX.Y.Z
 
 5. Approve the `pypi` environment when the workflow asks. The workflow checks the tag against `__version__`, builds, runs `scripts/check_dist.py`, publishes to PyPI, then creates the GitHub release with the artifacts and the version's CHANGELOG section.
-6. Check it: `uv tool install --force 'kengash-ai[ui]==X.Y.Z'` and `harness --version`.
+6. Check it: `uv tool install --force 'kengash-ai[ui]==X.Y.Z'` and `kengash --version`.
 
 ## If something goes wrong
 

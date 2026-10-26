@@ -40,9 +40,10 @@ Changelog = "https://github.com/normatov07/kengash-ai/blob/main/CHANGELOG.md"
 Documentation = "https://github.com/normatov07/kengash-ai#readme"
 
 [project.scripts]
-harness = "kengash_ai.cli:app"
-hrn = "kengash_ai.cli:app"
 kengash = "kengash_ai.cli:app"
+# the 0.1.0 names: they warn, then run, until 0.3.0 (SP8 spec decision 1)
+harness = "kengash_ai.cli:legacy"
+hrn = "kengash_ai.cli:legacy"
 
 [project.optional-dependencies]
 ui = [

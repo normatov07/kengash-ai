@@ -33,7 +33,7 @@ STEP_NAME = re.compile(r"[a-z][a-z0-9_]{1,30}")
 # a role names its skill folder too, so it follows the skill-name rule
 ROLE_NAME = re.compile(r"(?=.{2,31}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
 PROVIDERS = ("claude", "codex", "antigravity")
-# A provider harness no longer drives, its replacement and why (SP7 spec decision 15)
+# A provider kengash no longer drives, its replacement and why (SP7 spec decision 15)
 REPLACED = {
     "gemini": (
         "antigravity",

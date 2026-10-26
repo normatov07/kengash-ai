@@ -1,8 +1,8 @@
 # AGENTS.md
 
-Kengash AI lets one developer run many projects at once with the coding-agent subscriptions they already have (Claude Code, Codex, Antigravity `agy`, which also serves Google's plans), driven through the official CLIs, never API keys. Skills installed into the user's agent conduct the work, the deterministic `harness` CLI does every mechanical step, and a local UI monitors it all.
+Kengash AI lets one developer run many projects at once with the coding-agent subscriptions they already have (Claude Code, Codex, Antigravity `agy`, which also serves Google's plans), driven through the official CLIs, never API keys. Skills installed into the user's agent conduct the work, the deterministic `kengash` CLI does every mechanical step, and a local UI monitors it all.
 
-Status: all 7 sub-projects done (Foundation; Store + `harness` CLI; Engine; Skills; Web UI; Custom agents; Production readiness): `harness init|doctor|link|adopt|settings|memory|context|plan|ticket|status|next|run|wait|approve|park|stop|pause|resume|merge|skills|agent|ui` work, with detached workers, plan review, memory compaction, role skills, six installed skills (`skills/`, proven by `evals/`), the local web UI (`harness ui open`, seven screens matching the canvas), user-defined agents (`harness agent new` or the UI's New agent), and release tooling (`make dist`, `make audit`, `docs/releasing.md`). `docs/architecture.md` tracks what is built.
+Status: all 8 sub-projects done (Foundation; Store + `kengash` CLI; Engine; Skills; Web UI; Custom agents; Production readiness; Kengash naming): `kengash init|doctor|link|adopt|settings|memory|context|plan|ticket|status|next|run|wait|approve|park|stop|pause|resume|merge|skills|agent|ui` work, with detached workers, plan review, memory compaction, role skills, six installed skills (`skills/`, proven by `evals/`), the local web UI (`kengash ui open`, seven screens matching the canvas), user-defined agents (`kengash agent new` or the UI's New agent), and release tooling (`make dist`, `make audit`, `docs/releasing.md`). `docs/architecture.md` tracks what is built.
 
 ## Commands
 
@@ -17,10 +17,10 @@ Status: all 7 sub-projects done (Foundation; Store + `harness` CLI; Engine; Skil
 
 ## Hard rules
 
-1. The spec `docs/superpowers/specs/2026-10-22-super-harness-design.md` is the contract. Where it differs from `full prompt of app.md` (the original request), the spec wins. Change the spec before changing a contract.
+1. The spec `docs/superpowers/specs/2026-10-22-kengash-design.md` is the contract. Where it differs from `full prompt of app.md` (the original request), the spec wins. Change the spec before changing a contract.
 2. A change to `src/kengash_ai/<module>` updates `docs/modules/<module>/README.md` in the same commit; `make docs` and the pre-commit hook enforce it.
 3. Each project links to the store through one directory symlink. Never use hard links: they cannot link directories and break on status-folder moves and atomic saves.
-4. Only `harness` writes store files; agents never hand-edit plan or ticket state.
+4. Only `kengash` writes store files; agents never hand-edit plan or ticket state.
 5. Tickets reference their plan by id; never copy the full prompt into tickets.
 6. Providers run only through their official binaries under the user's login: never read or reuse OAuth tokens, never use `claude --bare` (it skips subscription login), and strip provider API-key variables from worker environments.
 7. No always-on daemon: workers are short-lived detached processes, one per job.

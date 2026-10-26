@@ -2,6 +2,18 @@
 
 All notable changes to this project are written here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - unreleased
+
+### Changed
+
+- Everything is named after Kengash: the command is `kengash`, the store `~/.kengash` (`KENGASH_HOME`), each project's link `.kengash`, the agent variable `KENGASH_AGENT`; new ticket commits read `kg(<id>): …` with `Kengash-*` trailers on `kg/<id>` branches; the UI's change header is `X-Kengash`; store commits read `kengash: …`; the memory skill is `kengash-memory`.
+- The first `kengash` command moves a 0.1.0 `~/.harness` to `~/.kengash` once and leaves `~/.harness` linking to it; it never merges two folders or moves a location an environment variable chose. `kengash doctor --fix` replaces old `.harness` project links, and `kengash skills install` removes the old `harness-memory` skill it installed.
+- Tickets claimed under 0.1.0 keep their `hrn/` branches and worktrees, and their `Harness-*` commits are still read.
+
+### Deprecated
+
+- The `harness` and `hrn` commands, `HARNESS_HOME` and `HARNESS_AGENT` still work and warn; the commands stop working in 0.3.0.
+
 ## [0.1.0] - 2026-10-26
 
 The first release.
@@ -24,4 +36,5 @@ The first release.
 
 - The UI checks Host, Origin, a per-run token and an `X-Harness` header on changes, and sends a strict Content Security Policy with framing, sniffing and referrer protections.
 
+[0.2.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.2.0
 [0.1.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.1.0

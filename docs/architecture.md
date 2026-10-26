@@ -1,6 +1,6 @@
 # Architecture
 
-System map of Kengash AI. The contract is the spec, `docs/superpowers/specs/2026-10-22-super-harness-design.md`; this page records what exists now. Update the Status columns whenever a module or sub-project lands.
+System map of Kengash AI. The contract is the spec, `docs/superpowers/specs/2026-10-22-kengash-design.md`; this page records what exists now. Update the Status columns whenever a module or sub-project lands.
 
 ## Flow
 
@@ -8,13 +8,13 @@ System map of Kengash AI. The contract is the spec, `docs/superpowers/specs/2026
 You ──prompt──▶ CONDUCTOR: your claude | codex | agy session, running installed skills
                       │ shell calls, compact output
                       ▼
-                 harness CLI (deterministic) ──starts──▶ detached workers, one per job
+                 kengash CLI (deterministic) ──starts──▶ detached workers, one per job
                       │                                        │ one CLI session per ticket×role, resumed
                       ▼                                        ▼
-                 store ~/.harness                        claude -p · codex exec · agy -p
+                 store ~/.kengash                        claude -p · codex exec · agy -p
                  (Markdown + JSONL, a git repo)          (official binaries, the user's login)
                       ▲
-UI: harness ui → FastAPI + SSE on 127.0.0.1, through the same `ops` layer as the CLI
+UI: kengash ui → FastAPI + SSE on 127.0.0.1, through the same `ops` layer as the CLI
 ```
 
 ## Modules
@@ -41,18 +41,18 @@ UI: harness ui → FastAPI + SSE on 127.0.0.1, through the same `ops` layer as t
 ## Store (built in SP2 M1)
 
 ```
-~/.harness/                      canonical store, a git repo (mode 0700)
+~/.kengash/                      canonical store, a git repo (mode 0700)
 ├── registry.yaml                slug → repo path, base branch
 ├── memory/                      MEMORY.md, DECISIONS.md (global), archive/
 ├── defaults/                    SETTINGS.md, PROCESS.md, roles/ (seeds)
 ├── projects/<slug>/             SETTINGS.md, PROCESS.md, memory -> ../../memory,
 │                                plans/, tasks/{in_queue,in_process,done}/
 ├── journal/YYYY-MM-DD.jsonl     events
-├── worktrees/<slug>/hrn-<id8>/  ticket worktrees (git-ignored)
+├── worktrees/<slug>/kg-<id8>/   ticket worktrees (git-ignored)
 └── runtime/                     locks, pids, heartbeats, logs (git-ignored)
 ```
 
-Each registered repo gets one directory symlink, `<repo>/.harness -> ~/.harness/projects/<slug>`, listed in its `.git/info/exclude`.
+Each registered repo gets one directory symlink, `<repo>/.kengash -> ~/.kengash/projects/<slug>`, listed in its `.git/info/exclude`.
 
 ## Repository layout
 
@@ -68,12 +68,13 @@ Each registered repo gets one directory symlink, `<repo>/.harness -> ~/.harness/
 | # | Sub-project | Status |
 |---|---|---|
 | 1 | Foundation | done: `docs/superpowers/plans/2026-10-22-foundation.md`; CI runs after the first push |
-| 2 | Store + `harness` CLI | done: M1 store core, M2 settings, memory, journal, M3 plans and tickets; plans in `docs/superpowers/plans/` |
+| 2 | Store + `kengash` CLI | done: M1 store core, M2 settings, memory, journal, M3 plans and tickets; plans in `docs/superpowers/plans/` |
 | 3 | Engine | done: spec `docs/superpowers/specs/2026-10-22-sp3-engine-design.md`; M1 engine rules, M2 providers and git, M3 workers and controls, M4 plan review, compaction and live smoke (green for claude and agy on 2026-10-23; codex once installed) |
 | 4 | Skills | done: spec `docs/superpowers/specs/2026-10-23-sp4-skills-design.md`; M1 skill toolkit and role skills, M2 eval runner, M3 the five installed skills (evals green on claude and agy on 2026-10-23; codex once installed) |
 | 5 | Web UI | done: spec `docs/superpowers/specs/2026-10-23-sp5-ui-design.md`; M1 server and monitor screens, M2 inspect and configure screens, canvas parity, M3 the `open-ui` skill (eval green on claude and agy on 2026-10-24) and the parity checklist |
-| 6 | Custom agents | done: spec `docs/superpowers/specs/2026-10-26-sp6-custom-agents-design.md`; custom steps of kind read, edit or review, `harness agent new\|remove`, the New agent dialog, CI fixed for GitHub runners and macOS, canvas follow-ups; Antigravity serves Google's subscription plans (SP7 replaced the gemini provider) |
+| 6 | Custom agents | done: spec `docs/superpowers/specs/2026-10-26-sp6-custom-agents-design.md`; custom steps of kind read, edit or review, `kengash agent new\|remove`, the New agent dialog, CI fixed for GitHub runners and macOS, canvas follow-ups; Antigravity serves Google's subscription plans (SP7 replaced the gemini provider) |
 | 7 | Production readiness | done: spec `docs/superpowers/specs/2026-10-26-sp7-production-design.md`; content-keyed parse caches (views 24 s → under 1 s on 1,500 tickets), UI security headers, ruff security rules, log retention, Windows guard, clean artifacts with `scripts/check_dist.py`, CI on 3.12–3.14 with package and audit jobs, a tag-driven PyPI release with attestations, Dependabot, accessibility (axe clean), community docs; Antigravity replaces the gemini provider |
+| 8 | Kengash naming | done: spec `docs/superpowers/specs/2026-10-26-sp8-kengash-naming-design.md`; command `kengash` (`harness`/`hrn` deprecated until 0.3.0), store `~/.kengash` with a one-time link-leaving move, `.kengash` links, `KENGASH_*` variables, `kg(`/`kg/` and `Kengash-*` git names with 0.1.0 forms still read, `kengash-memory` |
 
 ## Agent context files
 

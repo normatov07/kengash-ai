@@ -55,18 +55,18 @@ def test_a_foreign_host_is_refused(client: TestClient) -> None:
 def test_posts_need_the_harness_header(client: TestClient) -> None:
     signed_in(client)
     assert client.post("/api/pause").status_code == 403
-    paused = client.post("/api/pause", headers={"X-Harness": "1"})
+    paused = client.post("/api/pause", headers={"X-Kengash": "1"})
     assert paused.status_code == 200 and paused.json()["project"] is None
-    assert client.post("/api/resume", headers={"X-Harness": "1"}).json() == {"started": []}
+    assert client.post("/api/resume", headers={"X-Kengash": "1"}).json() == {"started": []}
 
 
 def test_a_foreign_origin_is_refused(client: TestClient) -> None:
     signed_in(client)
-    evil = {"X-Harness": "1", "Origin": "http://evil.example"}
+    evil = {"X-Kengash": "1", "Origin": "http://evil.example"}
     assert client.post("/api/pause", headers=evil).status_code == 403
-    own = {"X-Harness": "1", "Origin": f"http://127.0.0.1:{PORT}"}
+    own = {"X-Kengash": "1", "Origin": f"http://127.0.0.1:{PORT}"}
     assert client.post("/api/pause", headers=own).status_code == 200
-    assert client.post("/api/resume", headers={"X-Harness": "1"}).status_code == 200
+    assert client.post("/api/resume", headers={"X-Kengash": "1"}).status_code == 200
 
 
 def test_overview_and_board_are_json(client: TestClient) -> None:
@@ -111,7 +111,7 @@ def test_the_event_stream_ends_when_the_browser_goes_away(store_paths: StorePath
     assert asyncio.run(drain()) == []
 
 
-POST = {"X-Harness": "1"}
+POST = {"X-Kengash": "1"}
 
 
 def test_ticket_actions_go_through_ops(
@@ -141,7 +141,7 @@ def test_the_overview_says_when_everything_is_paused(client: TestClient) -> None
 def test_link_health_and_its_actions(client: TestClient, registered_repo: Path) -> None:
     signed_in(client)
     assert client.get("/api/links").json()["intact"] == 1
-    (registered_repo / ".harness").unlink()
+    (registered_repo / ".kengash").unlink()
     assert client.get("/api/links").json()["projects"][0]["fix"] == "repair"
     repaired = client.post("/api/links/repair", headers=POST).json()
     assert repaired["projects"][0]["state"] == "ok"
@@ -157,12 +157,12 @@ def test_adopt_merges_a_found_store(client: TestClient, registered_repo: Path) -
     other = registered_repo.parent / "legacy-crm"
     other.mkdir()
     subprocess.run(["git", "init", "-q", str(other)], check=True)
-    (other / ".harness").mkdir()
+    (other / ".kengash").mkdir()
     signed_in(client)
     assert [f["repo"] for f in client.get("/api/links").json()["nearby"]] == [str(other)]
     adopted = client.post("/api/links/adopt", json={"path": str(other)}, headers=POST).json()
     assert adopted["nearby"] == [] and adopted["total"] == 2
-    assert (other / ".harness").is_symlink()
+    assert (other / ".kengash").is_symlink()
 
 
 def test_settings_saves_and_refuses_invalid_values(
@@ -249,7 +249,7 @@ def test_compaction_starts_once_from_the_ui(
 def test_two_servers_on_one_host_keep_their_own_sign_in(registered_repo: Path) -> None:
     first = TestClient(ui_app.create_app(token=TOKEN, port=PORT), base_url=BASE)
     cookie = first.get(f"/?token={TOKEN}", follow_redirects=False).headers["set-cookie"]
-    assert cookie.startswith(f"harness_token_{PORT}=")  # cookies ignore ports; the name must not
+    assert cookie.startswith(f"kengash_token_{PORT}=")  # cookies ignore ports; the name must not
 
 
 NEW_AGENT = {
@@ -316,3 +316,9 @@ def test_every_response_carries_the_security_headers(client: TestClient) -> None
     assert [r.status_code for r in responses] == [401, 403, 303, 200, 200, 200]
     for response in responses:
         assert {k: response.headers.get(k) for k in SECURITY_HEADERS} == SECURITY_HEADERS
+
+
+def test_the_0_1_change_header_is_refused(client: TestClient) -> None:
+    signed_in(client)
+    assert client.post("/api/pause", headers={"X-Harness": "1"}).status_code == 403
+    assert client.post("/api/resume", headers=POST).status_code == 200

@@ -136,7 +136,7 @@ export function top(data, app) {
 
 export function view(data) {
   if (data.problem) {
-    return html`<div class="page"><div class="banner"><span class="badge danger">invalid</span>${data.problem}. Fix SETTINGS.md, or run harness settings check.</div></div>`;
+    return html`<div class="page"><div class="banner"><span class="badge danger">invalid</span>${data.problem}. Fix SETTINGS.md, or run kengash settings check.</div></div>`;
   }
   if (!data.names.includes(state.tab)) state.tab = data.names.includes("critical") ? "critical" : data.names[0] ?? "";
   return html`<div class="page wide-page">

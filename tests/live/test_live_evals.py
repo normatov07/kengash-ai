@@ -1,5 +1,5 @@
 """The eval runner on real conductors (SP4 spec §5): a one-step skill whose heredoc
-`harness plan new` must land in the scenario's store. Opt in with `-m live`."""
+`kengash plan new` must land in the scenario's store. Opt in with `-m live`."""
 
 from pathlib import Path
 
@@ -19,7 +19,7 @@ disable-model-invocation: true
 1. Run this shell command exactly as written:
 
 ```
-harness plan new --mode direct --title Probe <<'EOF'
+kengash plan new --mode direct --title Probe <<'EOF'
 Add add(a, b) to calc.py.
 EOF
 ```

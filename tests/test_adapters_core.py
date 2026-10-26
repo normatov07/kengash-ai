@@ -100,7 +100,7 @@ def test_worker_env_drops_keys_and_conductor_markers() -> None:
     }
     assert worker_env(environ, "claude", "planner", allow_api_key=False) == {
         "PATH": "/bin",
-        "HARNESS_AGENT": "planner",
+        "KENGASH_AGENT": "planner",
     }
     kept = worker_env(environ, "codex", "implementer", allow_api_key=True)
     assert {k for k in kept if k.endswith("_API_KEY")} == {"OPENAI_API_KEY", "CODEX_API_KEY"}

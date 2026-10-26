@@ -45,7 +45,7 @@ def new_plan(
     paths = StorePaths.default()
     slug = resolve_slug(project, cwd, paths)
     if slug is None:
-        raise UserError("no project here; pass --project SLUG, or run: harness init")
+        raise UserError("no project here; pass --project SLUG, or run: kengash init")
     if not prompt.strip():
         raise UserError("the prompt is empty")
     review_max = settings.load(paths, slug).plan.review_max
@@ -71,7 +71,7 @@ def new_plan(
     created = Event(
         type="plan.created", project=slug, plan=plan_id, title=plan.title, mode=mode.value, by=by
     )
-    records.record(paths, f"harness: plan new {plan_id}", created)
+    records.record(paths, f"kengash: plan new {plan_id}", created)
     return PlanResult(plan_id, slug, status.value)
 
 
@@ -96,7 +96,7 @@ def save_plan(plan_id: str, markdown: str, *, project: str | None, by: str) -> P
         plan.updated = utc_now()
         documents.save_plan(paths.project(slug), doc)
     saved = Event(type="plan.saved", project=slug, plan=plan.id, sections=list(sections), by=by)
-    records.record(paths, f"harness: plan save {plan.id}", saved)
+    records.record(paths, f"kengash: plan save {plan.id}", saved)
     return PlanResult(plan.id, slug, plan.status.value, list(sections))
 
 
@@ -133,7 +133,7 @@ def approve_plan(plan_id: str, *, skip_review: bool, project: str | None, by: st
             if review.verdict == "fail":
                 raise NeedsUser(
                     f"plan {plan.id} failed review round {review.round} of {review_max}; "
-                    f"save a revision and run: harness plan review {plan.id}, "
+                    f"save a revision and run: kengash plan review {plan.id}, "
                     "or approve with --skip-review"
                 )
             raise NeedsUser(
@@ -147,7 +147,7 @@ def approve_plan(plan_id: str, *, skip_review: bool, project: str | None, by: st
     approved = Event(
         type="plan.approved", project=slug, plan=plan.id, review_skipped=unreviewed, by=by
     )
-    records.record(paths, f"harness: plan approve {plan.id}", approved)
+    records.record(paths, f"kengash: plan approve {plan.id}", approved)
     return PlanResult(plan.id, slug, plan.status.value, review_skipped=unreviewed)
 
 
@@ -168,5 +168,5 @@ def reject_plan(plan_id: str, why: str, *, project: str | None, by: str) -> Plan
         plan.updated = utc_now()
         documents.save_plan(paths.project(slug), doc)
     rejected = Event(type="plan.rejected", project=slug, plan=plan.id, why=reason, by=by)
-    records.record(paths, f"harness: plan reject {plan.id}", rejected)
+    records.record(paths, f"kengash: plan reject {plan.id}", rejected)
     return PlanResult(plan.id, slug, plan.status.value)

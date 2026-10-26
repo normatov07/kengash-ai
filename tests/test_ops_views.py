@@ -155,28 +155,28 @@ def test_links_report_each_projects_link_and_its_fix(
     (project,) = healthy.projects
     assert (project.state, project.memory, project.excluded, project.fix) == ("ok", "ok", True, "")
     assert (healthy.intact, healthy.total) == (1, 1)
-    assert project.link == str(registered_repo / ".harness")
-    (registered_repo / ".harness").unlink()
+    assert project.link == str(registered_repo / ".kengash")
+    (registered_repo / ".kengash").unlink()
     broken = views.links(store_paths).projects[0]
-    assert (broken.state, broken.fix, broken.hint) == ("missing", "repair", "harness doctor --fix")
-    (registered_repo / ".harness").mkdir()
+    assert (broken.state, broken.fix, broken.hint) == ("missing", "repair", "kengash doctor --fix")
+    (registered_repo / ".kengash").mkdir()
     real = views.links(store_paths).projects[0]
     assert (real.state, real.fix) == ("real folder", "adopt")
-    assert real.hint == f"harness adopt {registered_repo}"
+    assert real.hint == f"kengash adopt {registered_repo}"
 
 
 def test_a_moved_repo_needs_a_relink(registered_repo: Path, store_paths: StorePaths) -> None:
     registered_repo.rename(registered_repo.with_name("moved"))
     moved = views.links(store_paths).projects[0]
     assert (moved.state, moved.fix) == ("repo missing", "relink")
-    assert moved.hint == "harness link payments-api <new-path>"
+    assert moved.hint == "kengash link payments-api <new-path>"
     assert views.overview(store_paths, window="today").links_broken == 1
 
 
 def test_stores_found_beside_registered_repos_are_listed(
     registered_repo: Path, store_paths: StorePaths
 ) -> None:
-    other = registered_repo.parent / "legacy-crm" / ".harness"
+    other = registered_repo.parent / "legacy-crm" / ".kengash"
     (other / "tasks" / "in_queue").mkdir(parents=True)
     (other / "tasks" / "in_queue" / "aaaaaaa1.md").write_text("---\n---\n")
     (other / "plans").mkdir()
@@ -215,7 +215,7 @@ def test_settings_mark_only_the_projects_overrides(
     found = views.settings_view(store_paths, project="payments-api")
     assert found.set_here == ["loop_max.critical"]
     assert found.values["loop_max"]["critical"] == 8 and found.problem == ""
-    assert found.repo_path == str(registered_repo / ".harness" / "SETTINGS.md")
+    assert found.repo_path == str(registered_repo / ".kengash" / "SETTINGS.md")
     assert "loop_max.critical: 8" in found.file
     defaults = views.settings_view(store_paths, project=None)
     assert defaults.set_here == [] and defaults.repo_path is None
@@ -305,7 +305,7 @@ def test_a_sparse_ticket_renders_empty_sections(
     assert (found.depends_on, found.blocks, found.siblings) == ([], [], [])
     assert found.sections["Scope"] == "Rotate keys." and "id: bbbbbbb1" in found.file
     assert found.store_path.endswith("tasks/in_queue/bbbbbbb1.md")
-    assert found.repo_path == str(registered_repo / ".harness/tasks/in_queue/bbbbbbb1.md")
+    assert found.repo_path == str(registered_repo / ".kengash/tasks/in_queue/bbbbbbb1.md")
     assert [step.step for step in found.chain][:2] == ["plan", "review_plan"]
     assert {step.state for step in found.chain} == {"pending"}
     assert found.grant == 2

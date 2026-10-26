@@ -44,7 +44,7 @@ def test_new_plan_keeps_the_prompt_verbatim(
         "grill",
         "claude",
     )
-    assert f"harness: plan new {result.id}" in run_git(store_paths.home, "log", "--format=%s")
+    assert f"kengash: plan new {result.id}" in run_git(store_paths.home, "log", "--format=%s")
 
 
 @pytest.mark.parametrize(

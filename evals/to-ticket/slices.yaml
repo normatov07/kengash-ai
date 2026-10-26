@@ -1,7 +1,7 @@
 skill: to-ticket
 description: an approved plan is sliced into tickets the user checks before they are added
 notes: >-
-  RED 2026-10-23: claude (haiku) added no tickets; agy found `harness ticket add` on its own
+  RED 2026-10-23: claude (haiku) added no tickets; agy found `kengash ticket add` on its own
   and added two simple tickets after showing the list.
 files:
   calc.py: "\"\"\"Small arithmetic helpers.\"\"\"\n\n\ndef sub(a: int, b: int) -> int:\n    return a - b\n"

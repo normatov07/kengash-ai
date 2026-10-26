@@ -1,8 +1,8 @@
-skill: harness-memory
-description: a lasting preference, stated in passing, is remembered through harness
+skill: kengash-memory
+description: a lasting preference, stated in passing, is remembered through kengash
 notes: >-
   RED 2026-10-23: claude (haiku) only promised to remember (no memory.write); agy found the
-  `harness memory add` hint in .harness/memory/MEMORY.md and recorded it, once also writing
+  `kengash memory add` hint in .kengash/memory/MEMORY.md and recorded it, once also writing
   an AGENTS.md into the repo unasked, which `clean` catches.
 turns:
   - "From now on, always show me the diff instead of describing changes in prose. Keep that in mind for every future session."

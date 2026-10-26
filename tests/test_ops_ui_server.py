@@ -1,4 +1,4 @@
-"""`harness ui open|stop`: one detached server per store, reused while it lives
+"""`kengash ui open|stop`: one detached server per store, reused while it lives
 (SP5 spec decisions 2 and 3)."""
 
 import json

@@ -19,10 +19,7 @@ from kengash_ai.store import runtime
 from kengash_ai.store.locks import locked
 from kengash_ai.store.paths import StorePaths
 
-INSTALL = (
-    "install the UI: uv tool install --force "
-    "'kengash-ai[ui] @ git+https://github.com/normatov07/kengash-ai'"
-)
+INSTALL = "install the UI: uv tool install --force 'kengash-ai[ui]'"
 START_S = 10.0
 STOP_S = 5.0
 
@@ -44,7 +41,7 @@ def open_ui(*, browser: bool) -> UiServer:
     """The running server, or a new one; opens the browser on its link unless told not to."""
     paths = StorePaths.default()
     if not paths.home.is_dir():
-        raise NeedsSetup("no store yet; run: harness init")
+        raise NeedsSetup("no store yet; run: kengash init")
     if not has_extra():
         raise NeedsSetup(INSTALL)
     with locked(paths.locks / "ui.lock"):
@@ -79,7 +76,7 @@ def _start(paths: StorePaths) -> UiRecord:
     port = _free_port()
     token = secrets.token_urlsafe(32)
     paths.logs.mkdir(parents=True, exist_ok=True)
-    env = dict(os.environ, HARNESS_UI_TOKEN=token)
+    env = dict(os.environ, KENGASH_UI_TOKEN=token)
     with (paths.logs / "ui.log").open("ab") as log:
         process = subprocess.Popen(
             [sys.executable, "-m", "kengash_ai.ui", "--port", str(port)],

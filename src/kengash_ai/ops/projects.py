@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from kengash_ai.model import NeedsSetup, Plan, ProjectEntry, Ticket, UserError, utc_now
 from kengash_ai.ops import jobs, providers, waiting
 from kengash_ai.ops.records import repo_root
-from kengash_ai.store import documents, links, seed, storegit
+from kengash_ai.store import documents, links, migrate, seed, storegit
 from kengash_ai.store.locks import locked
 from kengash_ai.store.paths import ProjectPaths, StorePaths
 from kengash_ai.store.registry import (
@@ -25,7 +25,9 @@ from kengash_ai.store.registry import (
 from kengash_ai.store.seed import ensure_project, ensure_store
 
 SCAN_DEPTH = 3
-SCAN_SKIP = frozenset({".git", ".venv", "node_modules", "__pycache__", links.LINK})
+SCAN_SKIP = frozenset(
+    {".git", ".venv", "node_modules", "__pycache__", links.LINK, links.LEGACY_LINK}
+)
 NOT_GIT = "not a git repository: ticket worktrees will need git"
 
 
@@ -36,6 +38,11 @@ class InitResult:
     link_target: Path
     created: bool
     warnings: list[str] = field(default_factory=list)
+
+    @property
+    def link(self) -> Path:
+        """The repo's folder link, `<repo>/.kengash`."""
+        return self.repo / links.LINK
 
 
 @dataclass
@@ -69,12 +76,12 @@ def init_project(path: Path, paths: StorePaths | None = None) -> InitResult:
     slug, created = _register(paths, repo)
     project = ensure_project(paths, slug)
     warnings = _attach(repo, project)
-    storegit.commit_store(paths, f"harness: init {slug}")
+    storegit.commit_store(paths, f"kengash: init {slug}")
     return InitResult(slug, repo, project.root, created, warnings)
 
 
 def relink(slug: str, new_path: Path, paths: StorePaths | None = None) -> InitResult:
-    """Point a moved project's registry entry and `.harness` link at its new place."""
+    """Point a moved project's registry entry and `.kengash` link at its new place."""
     paths = paths or StorePaths.default()
     repo = repo_root(new_path)
     _refuse_obstruction(repo)
@@ -90,8 +97,14 @@ def relink(slug: str, new_path: Path, paths: StorePaths | None = None) -> InitRe
         save_registry(paths, registry)
     project = ensure_project(paths, slug)
     warnings = _attach(repo, project)
-    storegit.commit_store(paths, f"harness: link {slug}")
+    storegit.commit_store(paths, f"kengash: link {slug}")
     return InitResult(slug, repo, project.root, False, warnings)
+
+
+def migrate_home() -> str | None:
+    """Move a 0.1.0 store (~/.harness) to ~/.kengash once, leaving a link; the note to
+    show, or None (SP8 spec decision 2)."""
+    return migrate.legacy_home()
 
 
 def doctor(
@@ -100,7 +113,7 @@ def doctor(
     """Check every project's repo, link, exclude entry, documents and trust, then providers."""
     paths = paths or StorePaths.default()
     if not paths.home.is_dir():
-        return DoctorReport(0, [Problem(f"no store at {paths.home}; run: harness init")])
+        return DoctorReport(0, [Problem(f"no store at {paths.home}; run: kengash init")])
     registry = load_registry(paths)
     problems: list[Problem] = []
     for slug, entry in sorted(registry.projects.items()):
@@ -113,7 +126,7 @@ def doctor(
         for found in real_folders(scan.resolve(), SCAN_DEPTH):
             if found.parent not in known:
                 problems.append(
-                    Problem(f"unmanaged store {found}; run: harness adopt {found.parent}")
+                    Problem(f"unmanaged store {found}; run: kengash adopt {found.parent}")
                 )
     if fix:
         jobs.prune_logs(paths, jobs.keep_days(paths))
@@ -122,7 +135,7 @@ def doctor(
         waiting.check_workers(paths)
     for record in dead:
         done = "marked failed" if record.job == "ticket" else "dropped"
-        hint = done if fix else "run: harness doctor --fix"
+        hint = done if fix else "run: kengash doctor --fix"
         problems.append(Problem(f"worker of {record.id} died; {hint}", record.project, fix))
     problems += [
         Problem(check.message, warning=not check.blocking)
@@ -135,12 +148,14 @@ def doctor(
 
 
 def adopt(path: Path, paths: StorePaths | None = None) -> AdoptResult:
-    """Merge a project's real `.harness/` folder into the store, archive it, and link."""
+    """Merge a project's real `.kengash/` (or 0.1.0 `.harness/`) folder into the store,
+    archive it, and link."""
     paths = paths or StorePaths.default()
     repo = repo_root(path)
-    source = repo / links.LINK
-    if links.obstruction(repo) is not links.LinkState.real_dir:
-        raise UserError(f"nothing to adopt: {source} is not a real folder")
+    found = links.real_folder(repo)
+    if found is None:
+        raise UserError(f"nothing to adopt: {repo / links.LINK} is not a real folder")
+    source = found
     ensure_store(paths)
     slug, _ = _register(paths, repo)
     project = paths.project(slug)
@@ -156,15 +171,15 @@ def adopt(path: Path, paths: StorePaths | None = None) -> AdoptResult:
         archive.mkdir(parents=True, exist_ok=True)
         shutil.move(source, archive / "original")
     _attach(repo, project)
-    storegit.commit_store(paths, f"harness: adopt {slug}")
+    storegit.commit_store(paths, f"kengash: adopt {slug}")
     return AdoptResult(slug, added, conflicts, archive)
 
 
 def _refuse_obstruction(repo: Path) -> None:
-    blocker = links.obstruction(repo)
-    if blocker is links.LinkState.real_dir:
-        raise NeedsSetup(f"{repo / links.LINK} is a real folder; run: harness adopt {repo}")
-    if blocker is links.LinkState.blocked:
+    real = links.real_folder(repo)
+    if real is not None:
+        raise NeedsSetup(f"{real} is a real folder; run: kengash adopt {repo}")
+    if links.obstruction(repo) is links.LinkState.blocked:
         raise UserError(f"{repo / links.LINK} is a file; move it away first")
 
 
@@ -193,39 +208,47 @@ def _branch(repo: Path) -> str:
 def _attach(repo: Path, project: ProjectPaths) -> list[str]:
     if links.link_state(repo, project.root) is not links.LinkState.ok:
         links.make_link(repo, project.root)
+    legacy = links.legacy_link(repo, project.root)
+    if legacy is not None:
+        legacy.unlink()  # the 0.1.0 name of this same link
     return [] if links.ensure_excluded(repo) else [NOT_GIT]
 
 
 def _check_project(paths: StorePaths, slug: str, repo: Path, fix: bool) -> list[Problem]:
     if not repo.is_dir():
         return [
-            Problem(f"repo missing at {repo}; if it moved: harness link {slug} <new-path>", slug)
+            Problem(f"repo missing at {repo}; if it moved: kengash link {slug} <new-path>", slug)
         ]
     project = paths.project(slug)
     problems: list[Problem] = []
     state = links.link_state(repo, project.root)
-    if state is links.LinkState.real_dir:
-        problems.append(
-            Problem(f"{repo / links.LINK} is a real folder; run: harness adopt {repo}", slug)
-        )
+    legacy = links.legacy_link(repo, project.root)
+    real = links.real_folder(repo)
+    if real is not None:
+        problems.append(Problem(f"{real} is a real folder; run: kengash adopt {repo}", slug))
     elif state is links.LinkState.blocked:
-        message = f"{repo / links.LINK} is a file; move it away, then: harness doctor --fix"
+        message = f"{repo / links.LINK} is a file; move it away, then: kengash doctor --fix"
         problems.append(Problem(message, slug))
     elif state is not links.LinkState.ok:
         if fix:
             links.make_link(repo, project.root)
-        problems.append(_fixable(f"link {state.value}", slug, fix))
+        if legacy is None or state is not links.LinkState.missing:
+            problems.append(_fixable(f"link {state.value}", slug, fix))
+    if legacy is not None:  # 0.1.0's name for this link (SP8 spec decision 3)
+        if fix:
+            legacy.unlink()
+        problems.append(_fixable(f"legacy .harness link: {links.LINK} replaces it", slug, fix))
     if links.is_excluded(repo) is False:
         if fix:
             links.ensure_excluded(repo)
-        problems.append(_fixable(".harness missing from .git/info/exclude", slug, fix))
+        problems.append(_fixable(".kengash missing from .git/info/exclude", slug, fix))
     memory = links.state_of(project.memory_link, paths.memory)
     if memory in (links.LinkState.real_dir, links.LinkState.blocked):
         where = project.memory_link.relative_to(paths.home)
         kind = "folder" if memory is links.LinkState.real_dir else "file"
         message = (
             f"{where} is a real {kind}: move what it holds into {paths.memory} "
-            "(harness memory add), remove it, then run: harness doctor --fix"
+            "(kengash memory add), remove it, then run: kengash doctor --fix"
         )
         problems.append(Problem(message, slug))
     elif memory is not links.LinkState.ok:
@@ -240,18 +263,18 @@ def _check_project(paths: StorePaths, slug: str, repo: Path, fix: bool) -> list[
 
 
 def _fixable(message: str, slug: str, fixed: bool) -> Problem:
-    hint = "repaired" if fixed else "run: harness doctor --fix"
+    hint = "repaired" if fixed else "run: kengash doctor --fix"
     return Problem(f"{message}; {hint}", slug, fixed)
 
 
 def real_folders(root: Path, depth: int) -> list[Path]:
-    """Real `.harness/` folders at most `depth` levels below `root`."""
+    """Real `.kengash/` (or 0.1.0 `.harness/`) folders at most `depth` levels below `root`."""
     found: list[Path] = []
     pending = [(root, 0)]
     while pending:
         directory, level = pending.pop()
-        candidate = directory / links.LINK
-        if candidate.is_dir() and not candidate.is_symlink():
+        candidate = links.real_folder(directory)
+        if candidate is not None:
             found.append(candidate)
         if level == depth:
             continue

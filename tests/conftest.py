@@ -42,10 +42,20 @@ def run_git() -> Callable[..., str]:
     return git
 
 
+@pytest.fixture(autouse=True)
+def _hermetic_store(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No test reaches the developer's real store, nor moves a real ~/.harness: every test
+    starts with KENGASH_HOME in a temporary folder (tests of the move unset it)."""
+    monkeypatch.setenv("KENGASH_HOME", str(tmp_path_factory.mktemp("store") / ".kengash"))
+    monkeypatch.delenv("HARNESS_HOME", raising=False)
+
+
 @pytest.fixture
 def store_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> StorePaths:
     home = tmp_path / "home" / ".harness"
-    monkeypatch.setenv("HARNESS_HOME", str(home))
+    monkeypatch.setenv("KENGASH_HOME", str(home))
     return StorePaths(home)
 
 
@@ -263,12 +273,12 @@ def engine(
         loop_max=3,
         status="in_process/under_planning",
         step="plan",
-        branch="hrn/7b55e0c1",
+        branch="kg/7b55e0c1",
     )
     doc.sections["Acceptance"] = "- [ ] retries 3 times"
     documents.save_ticket(project, doc)
     worktree = store_paths.worktree("payments-api", "7b55e0c1")
-    gitops.ensure_worktree(registered_repo, worktree, "hrn/7b55e0c1", "main")
+    gitops.ensure_worktree(registered_repo, worktree, "kg/7b55e0c1", "main")
     return Engine(store_paths, registered_repo)
 
 

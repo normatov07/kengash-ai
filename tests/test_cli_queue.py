@@ -50,4 +50,4 @@ def test_next_prints_at_most_five_lines(
         documents.save_ticket(project, make_ticket(f"aaaaaaa{number}", touches=[f"d{number}"]))
     lines = runner.invoke(app, ["next"]).stdout.splitlines()
     assert len(lines) == 5
-    assert lines[-1] == "+3 more; run: harness next --json"
+    assert lines[-1] == "+3 more; run: kengash next --json"

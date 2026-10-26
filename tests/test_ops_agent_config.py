@@ -66,7 +66,7 @@ def test_new_agent_writes_one_valid_save_and_a_starter_skill(
         change.keys,
         "cli",
     )
-    assert "harness: agent new perf-reviewer" in git(store_paths.home, "log", "--format=%s")
+    assert "kengash: agent new perf-reviewer" in git(store_paths.home, "log", "--format=%s")
 
 
 def test_an_existing_skill_is_kept(registered_repo: Path, store_paths: StorePaths) -> None:

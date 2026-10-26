@@ -28,16 +28,16 @@ An installed skill's name and description load into every session of every agent
 
 ## Body
 
-- Numbered steps. Each step is one `harness …` command or one judgment, and ends on a checkable condition, e.g. "`harness plan show <id>` prints `status: approved`".
-- Flags and options live in `harness <command> --help`, not in the skill.
+- Numbered steps. Each step is one `kengash …` command or one judgment, and ends on a checkable condition, e.g. "`kengash plan show <id>` prints `status: approved`".
+- Flags and options live in `kengash <command> --help`, not in the skill.
 - Give the shape of any output as a template.
 - References sit one level deep and are named by their trigger: "read `references/importance.md` when assigning importance".
-- Step 0 of every installed skill runs `harness --version`. If it does not print `kengash-ai <version>`, the skill prints the install line and stops.
+- Step 0 of every installed skill runs `kengash --version`. If it does not print `kengash-ai <version>`, the skill prints the install line and stops.
 
 ## Invocation
 
 - User commands (`to-plan-with-grill`, `to-plan`, `to-ticket`, `to-loop`, `open-ui`) set `disable-model-invocation: true` for Claude Code, so only the user starts them.
-- Model-invoked skills (`harness-memory`) need sharp triggers, because the agent decides when to load them.
+- Model-invoked skills (`kengash-memory`) need sharp triggers, because the agent decides when to load them.
 
 ## Test first
 
@@ -47,22 +47,22 @@ Skills are built like code, test first (superpowers `writing-skills`):
 2. **GREEN**: write the smallest skill that makes the scenario pass.
 3. **REFACTOR**: find new loopholes, close them, re-run.
 
-`harness skills eval <skill> --agent claude,codex,antigravity` replays `evals/<skill>/*.yaml` scenarios headless against a temporary store, so each skill is proven on every supported agent; `--baseline` runs them without the skills for the RED step. The scenario format is in `evals/README.md`.
+`kengash skills eval <skill> --agent claude,codex,antigravity` replays `evals/<skill>/*.yaml` scenarios headless against a temporary store, so each skill is proven on every supported agent; `--baseline` runs them without the skills for the RED step. The scenario format is in `evals/README.md`.
 
 ## Enforcement
 
-`harness skills lint` (sub-project 4) runs in CI and at install time. It checks the frontmatter, the "Use when" prefix and description length, the line and word caps, and that every `harness` command a skill mentions exists in the CLI.
+`kengash skills lint` (sub-project 4) runs in CI and at install time. It checks the frontmatter, the "Use when" prefix and description length, the line and word caps, and that every `kengash` command a skill mentions exists in the CLI.
 
 ## Distribution
 
 | Route | Where skills land |
 |---|---|
 | `npx skills add <owner>/Kengash AI [-g]` | Claude Code: `.claude/skills/`; Codex, Antigravity, Gemini CLI, Cursor, Copilot, OpenCode: `.agents/skills/` |
-| `harness skills install --agent claude,codex,antigravity [--global]` | the same paths, no Node needed |
+| `kengash skills install --agent claude,codex,antigravity [--global]` | the same paths, no Node needed |
 | Claude and Codex plugin marketplaces | managed by the agent, with auto-update |
 
-Role skills are never installed into agents: `harness` injects them into worker sessions.
+Role skills are never installed into agents: `kengash` injects them into worker sessions.
 
 - Format: `src/kengash_ai/roles/<role>/SKILL.md` with `name` and `description`; workers get the body without the frontmatter.
-- Lookup: `projects/<slug>/roles/<role>/SKILL.md`, then `defaults/roles/` (seeded by `harness init`, never overwritten), then the package.
+- Lookup: `projects/<slug>/roles/<role>/SKILL.md`, then `defaults/roles/` (seeded by `kengash init`, never overwritten), then the package.
 - Install folders: claude `.claude/skills/`, codex and antigravity `.agents/skills/` in a repo; with `--global`, `~/.claude/skills/`, `~/.agents/skills/` and `~/.gemini/config/skills/`. Antigravity reads its plugin manifest from `.antigravity-plugin/plugin.json`.

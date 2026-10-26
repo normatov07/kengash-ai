@@ -1,7 +1,7 @@
 {
   "name": "kengash-ai",
-  "version": "0.1.0",
-  "description": "Plan, ticket and run many projects at once with the coding-agent subscriptions you already have, through the harness CLI.",
+  "version": "0.2.0",
+  "description": "Plan, ticket and run many projects at once with the coding-agent subscriptions you already have, through the kengash CLI.",
   "author": { "name": "normatov13" },
   "homepage": "https://github.com/normatov07/kengash-ai",
   "repository": "https://github.com/normatov07/kengash-ai",

@@ -1,4 +1,4 @@
-"""Provider and repo-trust checks for `harness doctor` (SP3 spec §10)."""
+"""Provider and repo-trust checks for `kengash doctor` (SP3 spec §10)."""
 
 import hashlib
 import json
@@ -36,7 +36,7 @@ class _Use:
 def check_providers(paths: StorePaths) -> list[ProviderCheck]:
     """Providers that enabled agents or the compactor need and cannot use as things stand.
 
-    Scopes whose SETTINGS.md does not validate are skipped; `harness settings check`
+    Scopes whose SETTINGS.md does not validate are skipped; `kengash settings check`
     reports them.
     """
     scopes: list[Settings] = []
@@ -79,13 +79,13 @@ def check_providers(paths: StorePaths) -> list[ProviderCheck]:
 
 
 def cli_clash() -> str | None:
-    """A warning when the first `harness` on PATH is another tool (system spec §12): skills
-    then need `--cli-name hrn`. None when it is kengash-ai's own, or there is none."""
-    found = shutil.which("harness")
+    """A warning when the first `kengash` on PATH is another tool (system spec §12): skills
+    then need `--cli-name` set to this one's full path. None when it is ours, or none."""
+    found = shutil.which("kengash")
     if found is None:
         return None
     if Path(found).resolve().parent == Path(sys.executable).resolve().parent:
-        return None  # the environment running this harness: ours
+        return None  # the environment running this kengash: ours
     try:
         result = subprocess.run(
             [found, "--version"], capture_output=True, text=True, timeout=10, check=False
@@ -93,11 +93,11 @@ def cli_clash() -> str | None:
         output = result.stdout
     except (OSError, subprocess.TimeoutExpired):
         output = ""
-    if output.startswith(("kengash-ai ", "super-harness ")):  # ours, before or after the rename
+    if output.startswith("kengash-ai "):
         return None
     return (
-        f"the first harness on PATH ({found}) is not kengash-ai; "
-        "run hrn instead, and install skills with --cli-name hrn"
+        f"the first kengash on PATH ({found}) is not kengash-ai; put kengash-ai's first on "
+        "PATH, or install skills with --cli-name set to its full path"
     )
 
 

@@ -1,4 +1,4 @@
-"""`harness agent new` and `harness agent remove` (SP6 spec decision 6)."""
+"""`kengash agent new` and `kengash agent remove` (SP6 spec decision 6)."""
 
 import json
 from pathlib import Path

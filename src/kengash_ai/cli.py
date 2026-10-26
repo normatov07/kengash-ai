@@ -1,4 +1,4 @@
-"""Command-line entry point for `harness` (alias `hrn`)."""
+"""Command-line entry point for `kengash` (0.1.0's `harness` and `hrn` until 0.3.0)."""
 
 import dataclasses
 import json
@@ -12,7 +12,7 @@ from typing import Annotated, Any
 import typer
 
 from kengash_ai import __version__
-from kengash_ai.model import Folder, HarnessError, PlanMode, UserError
+from kengash_ai.model import Folder, KengashError, PlanMode, UserError
 from kengash_ai.ops import (
     agent_config,
     changes,
@@ -33,7 +33,7 @@ from kengash_ai.ops import (
 )
 
 app = typer.Typer(
-    name="harness",
+    name="kengash",
     help="Run many projects at once with subscription coding-agent CLIs.",
     no_args_is_help=True,
     add_completion=False,
@@ -43,14 +43,32 @@ AsJson = Annotated[bool, typer.Option("--json", help="Print machine-readable JSO
 
 
 def _require_posix() -> None:
-    """harness drives process groups and folder links: Linux and macOS (system spec §1)."""
+    """kengash drives process groups and folder links: Linux and macOS (system spec §1)."""
     if sys.platform == "win32":
-        typer.echo("harness runs on Linux and macOS; on Windows use WSL", err=True)
+        typer.echo("kengash runs on Linux and macOS; on Windows use WSL", err=True)
         raise typer.Exit(4)
 
 
-def _print_version(value: bool) -> None:
+DEPRECATED = "harness is now kengash; the harness and hrn names stop working in 0.3.0"
+
+
+def legacy() -> None:
+    """The 0.1.0 entry points, `harness` and `hrn`: one stderr line, then the same app, so
+    `--json` output stays clean (SP8 spec decision 1)."""
+    print(DEPRECATED, file=sys.stderr)
+    app()
+
+
+def _prepare() -> None:
+    """Every run starts here: a supported platform, then a 0.1.0 store moved once."""
     _require_posix()
+    note = projects.migrate_home()
+    if note is not None:
+        typer.echo(note, err=True)
+
+
+def _print_version(value: bool) -> None:
+    _prepare()
     if value:
         typer.echo(f"kengash-ai {__version__}")
         raise typer.Exit()
@@ -69,15 +87,15 @@ def main(
     ] = False,
 ) -> None:
     """Run many projects at once with subscription coding-agent CLIs."""
-    _require_posix()
+    _prepare()
 
 
 @contextmanager
 def _errors() -> Iterator[None]:
-    """Turn a harness error into one stderr line and the spec's exit code."""
+    """Turn a kengash error into one stderr line and the spec's exit code."""
     try:
         yield
-    except HarnessError as error:
+    except KengashError as error:
         typer.echo(str(error), err=True)
         raise typer.Exit(error.exit_code) from None
 
@@ -87,7 +105,7 @@ def _emit_json(result: Any) -> None:
 
 
 def _emit_link(verb: str, result: projects.InitResult) -> None:
-    typer.echo(f"{verb} {result.slug}: {result.repo / '.harness'} -> {result.link_target}")
+    typer.echo(f"{verb} {result.slug}: {result.link} -> {result.link_target}")
     for warning in result.warnings:
         typer.echo(f"warning: {warning}")
 
@@ -99,7 +117,7 @@ def init(
     ] = None,
     as_json: AsJson = False,
 ) -> None:
-    """Register a project and link its .harness folder to the store."""
+    """Register a project and link its .kengash folder to the store."""
     with _errors():
         result = projects.init_project(path or Path.cwd())
     if as_json:
@@ -118,7 +136,7 @@ def doctor(
     quiet: Annotated[bool, typer.Option("--quiet", help="Print problems only.")] = False,
     scan: Annotated[
         Path | None,
-        typer.Option(metavar="DIR", help="Also find unmanaged .harness folders under DIR."),
+        typer.Option(metavar="DIR", help="Also find unmanaged .kengash folders under DIR."),
     ] = None,
     as_json: AsJson = False,
 ) -> None:
@@ -155,10 +173,10 @@ def link(
 
 @app.command()
 def adopt(
-    path: Annotated[Path, typer.Argument(help="Project folder that holds a real .harness/.")],
+    path: Annotated[Path, typer.Argument(help="Project folder that holds a real .kengash/.")],
     as_json: AsJson = False,
 ) -> None:
-    """Move a project's real .harness/ folder into the store and link it."""
+    """Move a project's real .kengash/ folder into the store and link it."""
     with _errors():
         result = projects.adopt(path)
     if as_json:
@@ -185,7 +203,10 @@ Project = Annotated[
 ]
 Only = Annotated[str | None, typer.Option("--project", "-p", help="Look only in this project.")]
 By = Annotated[
-    str, typer.Option("--by", envvar="HARNESS_AGENT", help="Who is acting, for the journal.")
+    str,
+    typer.Option(
+        "--by", envvar=["KENGASH_AGENT", "HARNESS_AGENT"], help="Who is acting, for the journal."
+    ),
 ]
 
 
@@ -404,7 +425,7 @@ def plan_review(
         count = _plural(len(result.findings), "finding")
         lines = [f"plan {result.id} round {result.round}: {result.verdict}, {count}"]
         lines += [f"warning: {result.warning}"] if result.warning else []
-        for line in _capped([*lines, *result.findings], f"harness plan show {result.id}"):
+        for line in _capped([*lines, *result.findings], f"kengash plan show {result.id}"):
             typer.echo(line)
     if result.used_up:
         typer.echo(reviews.used_up_message(result.round, result.max), err=True)
@@ -592,8 +613,8 @@ def show_status(project: Every = None, as_json: AsJson = False) -> None:
         for gate in item.gates
     ]
     if not lines:
-        lines = ["no projects; run: harness init"]
-    for line in _capped(lines, "harness status --json"):
+        lines = ["no projects; run: kengash init"]
+    for line in _capped(lines, "kengash status --json"):
         typer.echo(line)
 
 
@@ -609,7 +630,7 @@ def show_next(project: Every = None, as_json: AsJson = False) -> None:
         f"{item.id} {item.project} {item.importance} {item.step}→{item.provider} {item.title}"
         for item in found.runnable
     ] or [_nothing_runnable(found)]
-    for line in _capped(lines, "harness next --json"):
+    for line in _capped(lines, "kengash next --json"):
         typer.echo(line)
 
 
@@ -649,7 +670,7 @@ def run_tickets(
     else:
         lines = [f"started {s.id} {s.step}→{s.provider}" for s in result.started]
         lines += [f"skipped {tid}: {reason}" for tid, reason in result.skipped.items()]
-        for line in _capped(lines, "harness run --json"):
+        for line in _capped(lines, "kengash run --json"):
             typer.echo(line)
     if not result.started:
         raise typer.Exit(1)
@@ -757,7 +778,7 @@ def wait(
         _emit_json(result)
     elif result.events:
         lines = [_wait_line(event) for event in result.events]
-        for line in _capped(lines, "harness wait --json"):
+        for line in _capped(lines, "kengash wait --json"):
             typer.echo(line)
     elif result.idle:
         typer.echo("idle")
@@ -930,8 +951,9 @@ def skills_install(
         Path | None, typer.Option("--path", help="A folder in the repo; default: this folder.")
     ] = None,
     cli_name: Annotated[
-        str, typer.Option("--cli-name", help="The command the skills call, e.g. hrn.")
-    ] = "harness",
+        str,
+        typer.Option("--cli-name", help="The command the skills call: kengash, or a full path."),
+    ] = "kengash",
     yes: Annotated[bool, typer.Option("--yes", help="Replace skills that differ.")] = False,
     as_json: AsJson = False,
 ) -> None:
@@ -949,7 +971,7 @@ def skills_install(
         )
     else:
         lines = [f"{e.agent} {e.name}: {e.state} → {e.folder}" for e in result.entries]
-        for line in _capped(lines, "harness skills install --json"):
+        for line in _capped(lines, "kengash skills install --json"):
             typer.echo(line)
         for diff in result.diffs.values():
             typer.echo(diff, nl=False)

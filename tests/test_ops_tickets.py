@@ -61,7 +61,7 @@ def test_add_queues_ready_and_blocked_tickets(
     plan = plans.show_plan(plan_id, project=None).meta
     assert (plan["status"], plan["tickets"]) == ("ticketed", [keyring.id, rotate.id])
     log = run_git(store_paths.home, "log", "--format=%s")
-    assert f"harness: ticket add {keyring.id} {rotate.id}" in log
+    assert f"kengash: ticket add {keyring.id} {rotate.id}" in log
 
 
 @pytest.mark.parametrize(
@@ -98,7 +98,7 @@ def test_add_refuses_bad_batches(registered_repo: Path, batch: str, message: str
 
 def test_add_needs_an_approved_or_quick_plan(registered_repo: Path) -> None:
     draft = plan_for(registered_repo, approve=False)
-    with pytest.raises(NeedsUser, match=f"harness plan approve {draft}"):
+    with pytest.raises(NeedsUser, match=f"kengash plan approve {draft}"):
         tickets.add_tickets(draft, BATCH, project=None, by="x")
     quick = plan_for(registered_repo, PlanMode.quick, approve=False)
     assert len(tickets.add_tickets(quick, BATCH, project=None, by="x").tickets) == 2
@@ -142,9 +142,9 @@ def test_moving_a_dependency_to_done_unblocks_its_dependents(
     ]
     assert moves == [
         (keyring, "done/closed", "claude"),
-        (rotate, "in_queue/ready", "harness"),
+        (rotate, "in_queue/ready", "kengash"),
         (keyring, "in_queue/ready", "claude"),
-        (rotate, "in_queue/blocked", "harness"),
+        (rotate, "in_queue/blocked", "kengash"),
     ]
 
 
@@ -189,7 +189,7 @@ def test_set_changes_fields_and_requeues(registered_repo: Path, journal_events: 
     ("pair", "message"),
     [
         ("title", "is not KEY=VALUE"),
-        ("status=done/closed", "harness ticket move"),
+        ("status=done/closed", "kengash ticket move"),
         ("titel=x", "did you mean title"),
         ("importance=urgent", "importance: "),
         ("workflow=nightly", "no workflow 'nightly'"),

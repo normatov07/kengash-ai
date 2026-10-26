@@ -1,7 +1,7 @@
 """Merge a finished ticket (SP3 spec §9, decisions 13 and 23; system spec §5).
 
 Rebase the ticket branch onto the base branch in its worktree, fast-forward the base
-branch in the main working tree, then remove the worktree and the branch. Harness never
+branch in the main working tree, then remove the worktree and the branch. Kengash never
 pushes.
 """
 
@@ -41,7 +41,7 @@ def merge_ticket(ticket_id: str, *, project: str | None, by: str) -> Merged:
                 f"{ticket_id} is {ticket.status}; merge needs awaiting_merge or branch_ready"
             )
         worktree = paths.worktree(slug, ticket_id)
-        branch = ticket.branch or f"hrn/{ticket_id}"
+        branch = ticket.branch or f"kg/{ticket_id}"
         with locked(paths.locks / f"repo-{slug}.lock"):
             conflicts = gitops.rebase(worktree, entry.base) if worktree.exists() else []
             if conflicts:
@@ -62,7 +62,7 @@ def merge_ticket(ticket_id: str, *, project: str | None, by: str) -> Merged:
         merged = lifecycle.status_event(slug, ticket, before, reason, by=by)
         events = [merged.model_copy(update={"commits": commits})]
         events += [_unblocked(slug, dependent, ticket_id) for dependent in ready]
-        records.record(paths, f"harness: merge {ticket_id}", *events)
+        records.record(paths, f"kengash: merge {ticket_id}", *events)
     return Merged(ticket_id, slug, commits, entry.base)
 
 
@@ -127,7 +127,7 @@ def _send_back(
     ticket.updated = utc_now()
     documents.save_ticket(paths.project(slug), doc)
     runtime.save_ticket_state(paths, ticket.id, state)
-    records.record(paths, f"harness: merge conflict {ticket.id}", event)
+    records.record(paths, f"kengash: merge conflict {ticket.id}", event)
     return message
 
 
@@ -140,7 +140,7 @@ def _unblocked(slug: str, ticket_id: str, merged: str) -> Event:
             "from": "in_queue/blocked",
             "to": "in_queue/ready",
             "why": f"{merged} merged",
-            "by": "harness",
+            "by": "kengash",
         }
     )
 

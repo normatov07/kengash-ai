@@ -35,13 +35,13 @@ STARTER_STEPS = {
     "edit": (
         "1. Read the ticket's Scope, Acceptance, Handoff and Findings.\n"
         "2. Make the change in this worktree, with tests where behaviour changes. "
-        "Do not commit; harness commits.\n"
+        "Do not commit; kengash commits.\n"
         "3. Run the project's tests when you can, and say what you ran.\n"
         "4. Reply with JSON: `summary` in one line and `handoff` for the next step.\n"
     ),
     "review": (
         "1. Read the changes: `git log --oneline` lists the ticket's commits (subjects start "
-        "with `hrn(<ticket id>)`), and `git show <commit>` shows each. Edit nothing.\n"
+        "with `kg(<ticket id>)`), and `git show <commit>` shows each. Edit nothing.\n"
         "2. Check them against the instruction above.\n"
         "3. Fail only for real problems; rate each finding high, medium or low.\n"
         "4. Reply with JSON: `verdict`, `summary` in one line, and `findings` with `severity`, "
@@ -96,7 +96,7 @@ def new_agent(
         keys = settings.set_values(paths, project, changes)
         written = _starter(paths, project, role, kind, does)
     event = Event(type="settings.changed", project=project, keys=keys, by=by)
-    records.record(paths, f"harness: agent new {role}", event)
+    records.record(paths, f"kengash: agent new {role}", event)
     return AgentChange(project, role, name, keys, str(written) if written else "")
 
 
@@ -130,7 +130,7 @@ def remove_agent(role: str, *, project: str | None, by: str) -> AgentChange:
                 changes[f"workflows.{flow_name}"] = {"steps": kept, "on_fail": edges}
         keys = settings.set_values(paths, project, changes)
     event = Event(type="settings.changed", project=project, keys=keys, by=by)
-    records.record(paths, f"harness: agent remove {role}", event)
+    records.record(paths, f"kengash: agent remove {role}", event)
     return AgentChange(project, role, ", ".join(steps), keys)
 
 

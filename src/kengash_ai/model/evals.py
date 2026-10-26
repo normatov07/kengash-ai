@@ -8,7 +8,7 @@ class _Eval(BaseModel):
 
 
 class SetupStep(_Eval):
-    """One `harness` command run before the conductor starts."""
+    """One `kengash` command run before the conductor starts."""
 
     args: list[str]
     stdin: str = ""

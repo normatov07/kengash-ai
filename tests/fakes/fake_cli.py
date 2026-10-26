@@ -23,7 +23,7 @@ WATCHED = (
     "CLAUDECODE",
     "BROWSER",
     "CLAUDE_CODE_ENTRYPOINT",
-    "HARNESS_AGENT",
+    "KENGASH_AGENT",
 )
 VERSIONS = {"claude": "2.1.309 (Claude Code)", "codex": "codex-cli 0.161.0", "agy": "1.4.5"}
 NO_REPLY = 97

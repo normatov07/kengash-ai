@@ -58,7 +58,7 @@ class Run:
 
 @dataclass(frozen=True)
 class Halt:
-    """Stop at `status`; `approval` names what `harness approve` grants, if anything."""
+    """Stop at `status`; `approval` names what `kengash approve` grants, if anything."""
 
     status: str
     reason: str

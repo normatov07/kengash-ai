@@ -18,8 +18,8 @@ from typing import Any
 from kengash_ai import journal, settings
 from kengash_ai.model import (
     Event,
-    HarnessError,
     JournalCursor,
+    KengashError,
     Logs,
     SlotEntry,
     WorkerRecord,
@@ -86,7 +86,7 @@ def keep_days(paths: StorePaths) -> int:
     """`logs.keep_days` of the user's defaults; the package default when they are broken."""
     try:
         return settings.load(paths).logs.keep_days
-    except HarnessError:
+    except KengashError:
         return Logs().keep_days
 
 

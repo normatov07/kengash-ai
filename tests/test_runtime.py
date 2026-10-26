@@ -4,8 +4,8 @@ import pytest
 
 from kengash_ai.model import (
     Claims,
-    HarnessError,
     JournalCursor,
+    KengashError,
     SlotEntry,
     SlotTable,
     TicketState,
@@ -43,7 +43,7 @@ def test_pause_flags_cover_one_project_or_everything(store_paths: StorePaths) ->
 def test_a_damaged_runtime_file_names_itself(store_paths: StorePaths) -> None:
     store_paths.slots.parent.mkdir(parents=True)
     store_paths.slots.write_text("{", encoding="utf-8")
-    with pytest.raises(HarnessError, match=r"slots\.json: damaged runtime file"):
+    with pytest.raises(KengashError, match=r"slots\.json: damaged runtime file"):
         runtime.load_slots(store_paths)
 
 
@@ -74,5 +74,5 @@ def test_ticket_state_park_flags_and_cursors(store_paths: StorePaths) -> None:
     runtime.save_cursor(store_paths, "all", JournalCursor(day="2026-10-23", line=4))
     assert runtime.load_cursor(store_paths, "all") == JournalCursor(day="2026-10-23", line=4)
     assert store_paths.worktree("payments-api", "7b55e0c1") == (
-        store_paths.home / "worktrees" / "payments-api" / "hrn-7b55e0c1"
+        store_paths.home / "worktrees" / "payments-api" / "kg-7b55e0c1"
     )

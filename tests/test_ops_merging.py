@@ -7,7 +7,7 @@ from conftest import Engine
 
 from kengash_ai import gitops
 from kengash_ai.model import Doc, Ticket, UserError
-from kengash_ai.ops import merging, records
+from kengash_ai.ops import changes, merging, records
 from kengash_ai.ops.merging import Merged
 from kengash_ai.store import documents
 
@@ -73,6 +73,29 @@ def test_merge_refuses_other_states_and_a_dirty_tree(
     with pytest.raises(UserError, match="main working tree has uncommitted changes"):
         merging.merge_ticket("7b55e0c1", project=None, by="user")
     assert (
-        merging.merge_if_clean(engine.paths, engine.slug, "7b55e0c1", by="harness")
+        merging.merge_if_clean(engine.paths, engine.slug, "7b55e0c1", by="kengash")
         == "in_process/awaiting_merge"
     )
+
+
+def test_a_ticket_claimed_before_0_2_shows_its_changes_and_merges(
+    engine: Engine, run_git: Callable[..., str]
+) -> None:
+    """A 0.1.0 claim: branch hrn/<id>, worktree hrn-<id>, Harness-* trailers."""
+    gitops.remove_worktree(engine.repo, engine.worktree, "kg/7b55e0c1")
+    legacy = engine.paths.worktrees / engine.slug / "hrn-7b55e0c1"
+    gitops.ensure_worktree(engine.repo, legacy, "hrn/7b55e0c1", "main")
+    doc = engine.ticket()
+    doc.meta.branch = "hrn/7b55e0c1"
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    assert engine.paths.worktree(engine.slug, "7b55e0c1") == legacy
+    (legacy / "retry.py").write_text("retries = 3\n")
+    trailers = {"Harness-Ticket": str(doc.meta.uuid), "Harness-Model": "codex/default"}
+    gitops.commit_all(legacy, "hrn(7b55e0c1): loop 1 implement: retry", trailers)
+    [change] = changes.ticket_changes("7b55e0c1", diff=False, project=None).changes
+    assert (change.path, change.model) == ("retry.py", "codex/default")
+    doc = engine.ticket()
+    doc.meta.status, doc.meta.step = "in_process/awaiting_merge", None
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    assert merging.merge_ticket("7b55e0c1", project=None, by="user").commits == 1
+    assert not legacy.exists() and (engine.repo / "retry.py").exists()

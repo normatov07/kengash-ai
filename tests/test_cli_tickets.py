@@ -78,4 +78,4 @@ def test_status_prints_at_most_five_lines(
         "payments-api: 0 in_queue, 6 in_process, 0 done",
         "- aaaaaaa0 stalled: Rotate keys (payments-api)",
     ]
-    assert (len(lines), lines[-1]) == (5, "+3 more; run: harness status --json")
+    assert (len(lines), lines[-1]) == (5, "+3 more; run: kengash status --json")

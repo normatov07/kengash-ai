@@ -144,7 +144,7 @@ def add_tickets(plan_id: str, text: str, *, project: str | None, by: str) -> Bat
         )
         for new in made
     ]
-    records.record(paths, f"harness: ticket add {' '.join(new.id for new in made)}", *created)
+    records.record(paths, f"kengash: ticket add {' '.join(new.id for new in made)}", *created)
     return Batch(plan.id, slug, made)
 
 
@@ -209,9 +209,9 @@ def move_ticket(ticket_id: str, target: str, why: str, *, project: str | None, b
         ready, blocked = refresh_queue(project_paths, tickets)
     note = f"{ticket.id} moved to {after}"
     events = [_moved(slug, ticket.id, before, after, reason, by)]
-    events += [_moved(slug, tid, QUEUED[1], QUEUED[0], note, "harness") for tid in ready]
-    events += [_moved(slug, tid, QUEUED[0], QUEUED[1], note, "harness") for tid in blocked]
-    records.record(paths, f"harness: ticket move {ticket.id}", *events)
+    events += [_moved(slug, tid, QUEUED[1], QUEUED[0], note, "kengash") for tid in ready]
+    events += [_moved(slug, tid, QUEUED[0], QUEUED[1], note, "kengash") for tid in blocked]
+    records.record(paths, f"kengash: ticket move {ticket.id}", *events)
     return Moved(ticket.id, slug, before, after, ready, blocked, stopped)
 
 
@@ -255,7 +255,7 @@ def set_fields(ticket_id: str, pairs: Sequence[str], *, project: str | None, by:
         status=ticket.status,
         by=by,
     )
-    records.record(paths, f"harness: ticket set {ticket.id}", updated)
+    records.record(paths, f"kengash: ticket set {ticket.id}", updated)
     return Updated(ticket.id, slug, fields, ticket.status)
 
 
@@ -282,7 +282,7 @@ def _check_plan(plan: Plan) -> None:
         raise UserError(f"plan {plan.id} was rejected")
     raise NeedsUser(
         f"plan {plan.id} is {plan.status.value}; the user approves it first: "
-        f"harness plan approve {plan.id}"
+        f"kengash plan approve {plan.id}"
     )
 
 
@@ -402,7 +402,7 @@ def _parse_pairs(pairs: Sequence[str]) -> dict[str, Any]:
         if not sep:
             raise UserError(f"{pair!r} is not KEY=VALUE")
         if key == "status":
-            raise UserError("status changes through: harness ticket move ID FOLDER[/SUB] --why W")
+            raise UserError("status changes through: kengash ticket move ID FOLDER[/SUB] --why W")
         if key not in SETTABLE:
             hint = difflib.get_close_matches(key, SETTABLE, n=1)
             help_text = f"did you mean {hint[0]}?" if hint else f"settable: {', '.join(SETTABLE)}"

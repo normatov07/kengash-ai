@@ -2,7 +2,7 @@
 
 - Date: 2026-10-23
 - Status: approved by default (user prefers momentum; assumptions listed in §2 for veto)
-- Implements: system spec `2026-10-22-super-harness-design.md` §9 (UI), §6 (`harness ui open|stop`), §13 row 5, the `open-ui` skill (§8.1, moved here by the SP4 spec); the Claude Design canvas `https://claude.ai/artifact/JiMGMkbaw8qhafeaNbqU7d` (seven boards: Overview, Task board, Ticket detail, Workflow editor, Agents and providers, Project settings, Memory store).
+- Implements: system spec `2026-10-22-kengash-design.md` §9 (UI), §6 (`harness ui open|stop`), §13 row 5, the `open-ui` skill (§8.1, moved here by the SP4 spec); the Claude Design canvas `https://claude.ai/artifact/JiMGMkbaw8qhafeaNbqU7d` (seven boards: Overview, Task board, Ticket detail, Workflow editor, Agents and providers, Project settings, Memory store).
 - This spec only adds what the system spec leaves open; where the canvas and the system spec differ, the system spec wins (§4 lists each case).
 
 ## 1. Milestones

@@ -1,5 +1,5 @@
 """Memory compaction (SP3 spec decision 31): the `compact` worker's job, its start from
-`memory add`, and `harness memory compact`, which waits for it."""
+`memory add`, and `kengash memory compact`, which waits for it."""
 
 import os
 from pathlib import Path
@@ -30,7 +30,7 @@ def compact_memory(*, timeout: float, poll_s: float = 0.5) -> memory.Compaction:
     """Start the compaction job, or join the running one, and wait for its result."""
     paths = StorePaths.default()
     if not paths.memory.is_dir():
-        raise NeedsSetup("no store yet; run: harness init")
+        raise NeedsSetup("no store yet; run: kengash init")
     provider, _ = split_cli(settings.load(paths).memory.compactor)
     cursor = journal.end(paths)  # before the job starts, so its end cannot slip past
     with locked(paths.locks / "compact.lock"):
@@ -43,7 +43,7 @@ def compact_memory(*, timeout: float, poll_s: float = 0.5) -> memory.Compaction:
     if end is None:
         raise WaitTimeout(
             "MEMORY.md compaction is still running; "
-            "run harness memory compact again to keep waiting"
+            "run kengash memory compact again to keep waiting"
         )
     extra = end.model_extra or {}
     if end.type == "worker.exited":
@@ -69,7 +69,7 @@ def start_checked() -> bool:
     CLI can run (NeedsSetup naming why not); the job journals `memory.compacted`."""
     paths = StorePaths.default()
     if not paths.memory.is_dir():
-        raise NeedsSetup("no store yet; run: harness init")
+        raise NeedsSetup("no store yet; run: kengash init")
     provider, _ = split_cli(settings.load(paths).memory.compactor)
     problem = agents.problem(provider, agents.detector(paths))
     if problem is not None:

@@ -1,4 +1,4 @@
-"""Schemas and errors shared by every unit; no I/O and no harness imports."""
+"""Schemas and errors shared by every unit; no I/O and no kengash imports."""
 
 from kengash_ai.model.core import Folder, Gate, Importance, ShortId, Title, utc_now
 from kengash_ai.model.documents import (
@@ -14,7 +14,7 @@ from kengash_ai.model.documents import (
     Ticket,
     TicketInput,
 )
-from kengash_ai.model.errors import HarnessError, NeedsSetup, NeedsUser, UserError, WaitTimeout
+from kengash_ai.model.errors import KengashError, NeedsSetup, NeedsUser, UserError, WaitTimeout
 from kengash_ai.model.evals import EvalScenario, Expect, RecordsExpect, SetupStep
 from kengash_ai.model.events import Event
 from kengash_ai.model.registry import ProjectEntry, Registry
@@ -86,9 +86,9 @@ __all__ = [
     "Finding",
     "Folder",
     "Gate",
-    "HarnessError",
     "Importance",
     "JournalCursor",
+    "KengashError",
     "Kind",
     "Logs",
     "NeedsSetup",

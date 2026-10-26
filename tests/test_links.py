@@ -16,9 +16,9 @@ def test_link_states(tmp_path: Path) -> None:
 
 
 def test_real_folder_and_file_are_obstructions(tmp_path: Path) -> None:
-    (tmp_path / "a" / ".harness").mkdir(parents=True)
+    (tmp_path / "a" / ".kengash").mkdir(parents=True)
     (tmp_path / "b").mkdir()
-    (tmp_path / "b" / ".harness").write_text("x", encoding="utf-8")
+    (tmp_path / "b" / ".kengash").write_text("x", encoding="utf-8")
     assert links.link_state(tmp_path / "a", tmp_path) is links.LinkState.real_dir
     assert links.obstruction(tmp_path / "b") is links.LinkState.blocked
     assert links.obstruction(tmp_path) is None
@@ -29,7 +29,7 @@ def test_exclude_entry_is_added_once(repo: Path) -> None:
     assert links.ensure_excluded(repo) is True
     assert links.ensure_excluded(repo) is True
     exclude = repo / ".git" / "info" / "exclude"
-    assert exclude.read_text(encoding="utf-8").splitlines().count("/.harness") == 1
+    assert exclude.read_text(encoding="utf-8").splitlines().count("/.kengash") == 1
     assert links.is_excluded(repo) is True
 
 

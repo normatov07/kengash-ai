@@ -3,15 +3,15 @@
 import subprocess
 from pathlib import Path
 
-from kengash_ai.model import HarnessError
+from kengash_ai.model import KengashError
 from kengash_ai.store.locks import locked
 from kengash_ai.store.paths import StorePaths
 
 IDENTITY = (
     "-c",
-    "user.name=harness",
+    "user.name=kengash",
     "-c",
-    "user.email=harness@localhost",
+    "user.email=kengash@localhost",
     "-c",
     "commit.gpgsign=false",
     "-c",
@@ -31,7 +31,7 @@ def ensure_repo(home: Path) -> None:
     if not (home / ".git").exists():
         result = _git(home, "init", "-q", "-b", "main")
         if result.returncode != 0:
-            raise HarnessError(f"store git init failed: {result.stderr.strip()}")
+            raise KengashError(f"store git init failed: {result.stderr.strip()}")
     ignore = home / ".gitignore"
     if not ignore.exists():
         ignore.write_text(IGNORED, encoding="utf-8")
@@ -44,7 +44,7 @@ def commit(home: Path, message: str) -> bool:
         return False
     result = _git(home, "commit", "-q", "-m", message)
     if result.returncode != 0:
-        raise HarnessError(f"store commit failed: {result.stderr.strip()}")
+        raise KengashError(f"store commit failed: {result.stderr.strip()}")
     return True
 
 
