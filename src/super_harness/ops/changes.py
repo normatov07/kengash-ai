@@ -3,8 +3,8 @@
 import shlex
 from dataclasses import dataclass, field
 
-from super_harness import adapters, gitops
-from super_harness.model import STEP_ROLES, Doc, Ticket, UserError
+from super_harness import adapters, gitops, settings
+from super_harness.model import STEP_ROLES, Doc, HarnessError, Ticket, UserError
 from super_harness.ops import records
 from super_harness.store import documents
 from super_harness.store.paths import StorePaths
@@ -76,7 +76,10 @@ def attach_command(ticket_id: str, *, role: str | None, project: str | None) -> 
     slug, doc = _ticket(paths, ticket_id, project)
     sessions = doc.meta.sessions
     if role is None:
-        current = STEP_ROLES.get(doc.meta.step or "")
+        try:
+            current = settings.load(paths, slug).role_of(doc.meta.step or "")
+        except HarnessError:  # broken settings: the built-in steps still name their roles
+            current = STEP_ROLES.get(doc.meta.step or "")
         role = current if current in sessions else next(reversed(sessions), None)
         if role is None:
             raise UserError(f"{ticket_id} has no sessions")

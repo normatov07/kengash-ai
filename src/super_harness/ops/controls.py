@@ -7,7 +7,6 @@ from pathlib import Path
 
 from super_harness import gitops, journal, scheduler, settings, workflow
 from super_harness.model import (
-    STEP_ROLES,
     Doc,
     Event,
     Folder,
@@ -274,7 +273,7 @@ def _claim(
         else:
             halt = decision.decision
             return _Skip(halt.reason if isinstance(halt, workflow.Halt) else "every step passed")
-        role = STEP_ROLES[step]
+        role = resolved.role_of(step)
         provider = "user"
         if role is not None:
             try:

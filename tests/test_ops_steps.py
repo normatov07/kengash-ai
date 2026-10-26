@@ -262,3 +262,59 @@ def test_a_denied_command_gets_one_repair_turn(engine: Engine, fake_clis: FakeCl
     second = fake_clis.calls("agy")[1]["argv"]
     assert "--conversation" in second and "RunCommand" in second[1]
     assert engine.ticket().meta.step == "implement"
+
+
+CUSTOM = """\
+agents:
+  helper: {{cli: claude/sonnet, skill: helper}}
+steps.{step}: {{role: helper, kind: {kind}, does: Polish the change.}}
+workflows:
+  simple: {{steps: [plan, implement, {step}], on_fail: {edges}}}
+"""
+
+
+def custom_step(paths: StorePaths, step: str, kind: str, edges: str = "{}") -> None:
+    write_settings(paths, CUSTOM.format(step=step, kind=kind, edges=edges))
+
+
+def test_a_custom_edit_step_is_committed(
+    engine: Engine, fake_clis: FakeClis, store_paths: StorePaths, run_git: Callable[..., str]
+) -> None:
+    custom_step(store_paths, "tidy", "edit")
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "retries = 3\n"})
+    fake_clis.queue("claude", fixture="claude/work_resume.json", edits={"notes.md": "tidy\n"})
+    end = steps.run_job("7b55e0c1")
+    assert end == JobEnd("in_process/awaiting_merge", "every step passed")
+    subjects = run_git(engine.worktree, "log", "--format=%s", "main..HEAD").splitlines()
+    assert subjects[0].startswith("hrn(7b55e0c1): loop 1 tidy: Renamed")
+    tidy = fake_clis.calls("claude")[1]
+    assert "Polish the change. Do not commit; harness commits." in " ".join(tidy["argv"])
+
+
+def test_a_custom_review_step_sends_the_ticket_back(
+    engine: Engine, fake_clis: FakeClis, store_paths: StorePaths
+) -> None:
+    custom_step(store_paths, "perf_review", "review", "{perf_review: implement}")
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "retries = 3\n"})
+    fake_clis.queue("claude", stdout=fake_clis.claude_output(REVIEW_FAIL))
+    steps.run_job("7b55e0c1", steps=3)
+    doc = engine.ticket()
+    assert (doc.meta.loop, doc.meta.step) == (2, "implement")
+    assert doc.sections["Findings"] == "- medium · retry.py:3 · no jitter · add jitter"
+    assert doc.meta.sessions["helper"].id
+
+
+def test_a_custom_read_step_hands_notes_on(
+    engine: Engine, fake_clis: FakeClis, store_paths: StorePaths, run_git: Callable[..., str]
+) -> None:
+    custom_step(store_paths, "advise", "read")
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "retries = 3\n"})
+    raw = fake_clis.fixture_json("claude/work_resume.json")
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    steps.run_job("7b55e0c1")
+    assert engine.ticket().sections["Handoff"] == raw["structured_output"]["handoff"]
+    subjects = run_git(engine.worktree, "log", "--format=%s", "main..HEAD").splitlines()
+    assert [s for s in subjects if " advise:" in s] == []

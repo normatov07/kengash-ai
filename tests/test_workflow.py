@@ -169,3 +169,34 @@ def test_fingerprints_ignore_case_numbers_and_spacing() -> None:
     assert one == fingerprint("src/keys.py", "missing check on line 40")
     assert one != fingerprint("src/other.py", "missing check on line 12")
     assert len(one) == 12
+
+
+PERF = {"perf-reviewer": {"cli": "claude/sonnet", "skill": "perf-reviewer"}}
+PERF_FLOW = {
+    "steps": ["plan", "implement", "review_code", "perf_review"],
+    "on_fail": {"review_code": "implement", "perf_review": "implement"},
+}
+
+
+def custom(**agent: Any) -> Settings:
+    step = {"role": "perf-reviewer", "kind": "review", "does": "Check hot paths."}
+    return settings(
+        {"perf-reviewer": PERF["perf-reviewer"] | agent},
+        steps={"perf_review": step},
+        workflows=WORKFLOWS | {"standard": PERF_FLOW},
+    )
+
+
+def test_a_custom_review_step_routes_like_review_code() -> None:
+    routed = after(custom(), progress("perf_review"), fail("p1"))
+    assert routed.decision == Run("implement", 2)
+    assert routed.progress.streaks == {"perf_review": {"p1": 1}}
+    capped = after(custom(), progress("perf_review", loop=4), fail("p1"))
+    assert capped.decision == Halt(NEEDS_APPROVAL, "loop cap: 4 of 4", "loop_cap")
+    assert after(custom(), progress("review_code"), PASS).decision == Run("perf_review", 1)
+
+
+def test_a_custom_step_follows_its_agents_switches() -> None:
+    assert steps_for(custom(on=False), "standard", hitl=False)[-1] == "review_code"
+    halted = before(custom(on=False, blocking=True), progress("perf_review"))
+    assert halted.decision == Halt(FAILED, "role perf-reviewer is off and blocking")

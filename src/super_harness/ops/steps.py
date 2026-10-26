@@ -14,7 +14,6 @@ from uuid import uuid4
 
 from super_harness import adapters, gitops, journal, settings, workflow
 from super_harness.model import (
-    STEP_ROLES,
     Doc,
     Event,
     Folder,
@@ -185,7 +184,7 @@ def _begin(job: _Job, *, budget_left: bool) -> _Ready | JobEnd:
 
 def _step(job: _Job, ready: _Ready) -> JobEnd | None:
     """Run one step's CLI call, commit its edits, then write and route its result."""
-    role = STEP_ROLES[ready.step]
+    role = ready.resolved.role_of(ready.step)
     assert role is not None  # the approve step halts in _begin
     try:
         pick = agents.pick(ready.resolved, role, job.detect)
@@ -196,7 +195,7 @@ def _step(job: _Job, ready: _Ready) -> JobEnd | None:
     ran = _call(job, ready, pick)
     if isinstance(ran, JobEnd):
         return ran
-    if ready.step in prompts.EDIT_STEPS:
+    if ready.resolved.kind_of(ready.step) == "edit":
         committed = _commit(job, ready, ran)
         if isinstance(committed, JobEnd):
             return committed
@@ -274,7 +273,7 @@ def _prepare(job: _Job, ready: _Ready, pick: agents.Pick) -> StepRequest:
     session_id = ref.id if resume and ref is not None else None
     if pick.provider == "claude" and not resume:
         session_id = str(uuid4())  # known before the step ends, so a killed step can resume
-    start = gitops.head(job.worktree) if step in prompts.EDIT_STEPS else None
+    start = gitops.head(job.worktree) if resolved.kind_of(step) == "edit" else None
     log = _next_log(job)
 
     def begin(doc: Doc[Ticket], state: TicketState) -> None:
@@ -369,15 +368,23 @@ def _request(
         ready.resolved,
         ready.step,
     )
-    diff_stat = (
-        gitops.diff(job.worktree, job.base, stat=True) if step in prompts.REVIEW_STEPS else ""
-    )
+    review = resolved.kind_of(step) == "review"
+    told = prompts.instruction(resolved, step)
+    diff_stat = gitops.diff(job.worktree, job.base, stat=True) if review else ""
     if resume:
-        prompt = prompts.resumed_prompt(ticket, sections, step=step, diff_stat=diff_stat)
+        prompt = prompts.resumed_prompt(
+            ticket, sections, step=step, diff_stat=diff_stat, instruction=told, review=review
+        )
         skill = None
     else:
         prompt = prompts.new_prompt(
-            ticket, sections, _goal(job, ticket), role=pick.role, step=step, diff_stat=diff_stat
+            ticket,
+            sections,
+            _goal(job, ticket),
+            role=pick.role,
+            step=step,
+            diff_stat=diff_stat,
+            instruction=told,
         )
         skill = prompts.role_skill(job.paths, job.slug, resolved.agents[pick.role].skill)
     options = ProviderOptions() if pick.provider == "shell" else resolved.provider(pick.provider)
@@ -385,8 +392,8 @@ def _request(
         role=pick.role,
         cwd=job.worktree,
         prompt=prompt,
-        output=prompts.output_kind(step),
-        profile=prompts.profile(step),
+        output=prompts.output_kind(step, resolved),
+        profile=prompts.profile(step, resolved),
         timeout_s=calls.step_timeout(resolved),
         log=log,
         model=pick.model,

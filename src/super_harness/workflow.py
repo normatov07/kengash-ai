@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Literal
 
-from super_harness.model import STEP_ROLES, Settings
+from super_harness.model import Settings
 
 Approval = Literal["loop_cap", "token_cap", "approve_step"]
 Verdict = Literal["pass", "fail"]
@@ -20,7 +20,6 @@ FAILED = "in_process/failed"
 AWAITING_MERGE = "in_process/awaiting_merge"
 PARKED = "in_queue/parked"
 BRANCH_READY = "done/branch_ready"
-REVIEWS = frozenset({"review_plan", "review_code", "security"})
 
 _DIGITS = re.compile(r"[0-9]+")
 _SPACES = re.compile(r"\s+")
@@ -100,7 +99,7 @@ def first_step(settings: Settings, workflow: str, *, hitl: bool) -> str | None:
 def blocking_off(settings: Settings, workflow: str) -> str | None:
     """The first role of the workflow that is switched off although it is blocking."""
     for step in settings.workflows[workflow].steps:
-        role = STEP_ROLES[step]
+        role = settings.role_of(step)
         if role is not None and settings.agents[role].blocking and not settings.agents[role].on:
             return role
     return None
@@ -136,7 +135,7 @@ def after(settings: Settings, progress: Progress, outcome: Outcome) -> Routed:
     step = progress.step
     if step is None:
         raise ValueError("after() needs the step that ran")
-    now = _count(progress, step, outcome)
+    now = _count(settings, progress, step, outcome)
     if outcome.verdict == "pass":
         following = _next(settings, now, step)
         if following is None:
@@ -175,7 +174,7 @@ def fingerprint(file: str, issue: str) -> str:
 
 
 def _on(settings: Settings, step: str) -> bool:
-    role = STEP_ROLES[step]
+    role = settings.role_of(step)
     return role is None or settings.agents[role].on
 
 
@@ -199,9 +198,9 @@ def _end(settings: Settings, progress: Progress) -> Routed:
     return Routed(Halt(BRANCH_READY, "every step passed; the branch waits for the user"), done)
 
 
-def _count(progress: Progress, step: str, outcome: Outcome) -> Progress:
+def _count(settings: Settings, progress: Progress, step: str, outcome: Outcome) -> Progress:
     """Fold a review outcome into the stall streaks and the failing plan-review rounds."""
-    if step not in REVIEWS:
+    if settings.kind_of(step) != "review":
         return progress
     failing = outcome.verdict == "fail"
     previous = progress.streaks.get(step, {})

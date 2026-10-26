@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from super_harness.model import Doc, Finding, Ticket
+from super_harness.model import Doc, Finding, Settings, Ticket
 from super_harness.ops import prompts
 from super_harness.store import StorePaths
 from super_harness.store.seed import ensure_project, ensure_store
@@ -68,3 +68,28 @@ def test_role_skills_come_from_the_package_by_default(store_paths: StorePaths) -
     ensure_project(store_paths, "payments-api")
     text = prompts.role_skill(store_paths, "payments-api", "review-code")
     assert text is not None and text.strip() and not text.startswith("---")
+
+
+def test_custom_step_prompts_follow_their_kind() -> None:
+    agents = {"x-agent": {"cli": "claude", "skill": "x-agent"}}
+    steps = {
+        name: {"role": "x-agent", "kind": kind, "does": "Do the thing."}
+        for name, kind in (("advise", "read"), ("tidy", "edit"), ("perf_review", "review"))
+    }
+    settings = Settings.model_validate({"agents": agents, "steps": steps})
+    assert prompts.instruction(settings, "advise") == "Do the thing. Do not edit files."
+    assert prompts.instruction(settings, "tidy") == "Do the thing. Do not commit; harness commits."
+    assert prompts.instruction(settings, "perf_review") == (
+        "Do the thing. Read the changes with read-only git; fail only for real problems."
+    )
+    assert prompts.instruction(settings, "implement") == prompts.INSTRUCTIONS["implement"]
+    assert [prompts.output_kind(s, settings) for s in ("advise", "tidy", "perf_review")] == [
+        "work",
+        "work",
+        "review",
+    ]
+    assert [prompts.profile(s, settings) for s in ("advise", "tidy", "perf_review")] == [
+        "read_only",
+        "edit_worktree",
+        "read_only",
+    ]
