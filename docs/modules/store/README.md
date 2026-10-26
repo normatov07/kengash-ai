@@ -8,8 +8,8 @@ Everything under `~/.harness`: paths, atomic writes, frontmatter documents, ids,
 
 - `StorePaths.default()` and `ProjectPaths`: the layout of system spec §4.1, plus `StorePaths.slots`, `claims`, `trust`, `flags`, `workers`, `ticket_states`, `conductors` and `logs` under `runtime/`, and `worktrees` with `worktree(slug, id)` (`worktrees/<slug>/hrn-<id>`); `HARNESS_HOME` overrides `~/.harness`.
 - `seed.ensure_store`, `seed.ensure_project`: create folders and copy default files only when missing; `ensure_store` also seeds each package role skill missing from `defaults/roles/`; `seed.link_memory(paths, project)` points a project's `memory` at `../../memory`, replacing a missing or stale link but never a real file or folder.
-- `documents`: `load_plan`, `load_ticket`, `load_any`, `save_plan`, `save_ticket` (a ticket lands in the folder its status names), `save_any`, `find_ticket`, `iter_documents`, `check_document`.
-- `frontmatter.parse`, `frontmatter.split_frontmatter` (mapping and the text after it), `frontmatter.render`, `files.atomic_write`, `ids.new_id`, `locks.locked`, `yamlio.load_yaml`, `yamlio.dump_yaml`.
+- `documents`: `load_plan`, `load_ticket` (each parsed once per file content and returned as a copy, SP7), `load_any`, `save_plan`, `save_ticket` (a ticket lands in the folder its status names), `save_any`, `find_ticket`, `iter_documents`, `check_document`.
+- `frontmatter.parse`, `frontmatter.split_frontmatter` (mapping and the text after it), `frontmatter.render`, `files.atomic_write`, `ids.new_id`, `locks.locked`, `yamlio.load_yaml` (a per-thread YAML 1.2 safe loader, C-accelerated by `ruamel.yaml.clib`), `yamlio.dump_yaml`. `memo.Memo` (thread-safe LRU, `get_or_make`) and `memo.digest` key parse caches by file content, never by stat: an in-place rewrite within one timestamp tick keeps size and inode.
 - `yamledit.set_key(text, key, value, source=)`: one dotted key set (None removes it) with every other line byte-identical; the longest dotted prefix present wins at each mapping; a one-line scalar is swapped in place, anything else rewrites the nearest block-mapping entry on one line in flow style (the spacing after its key and its trailing comment kept); a removal that empties a block drops the block. Every line it writes ends as the text's first line does, so a CRLF file stays CRLF (an unterminated last line stays unterminated). `yamledit.flow(value)`: one-line flow YAML, quoting strings that would not read back as themselves.
 - `frontmatter.read_sections`: `## ` sections typed by an agent; unknown or repeated headings and text before the first heading are refused, and ``` fences are respected.
 - `registry`: `load_registry`, `save_registry`, `slugify`, `unique_slug`, `slug_for_path`.
@@ -29,6 +29,7 @@ Everything under `~/.harness`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
+- 2026-10-26: `memo` parse caches; cached document loads; C-accelerated safe YAML (SP7).
 - 2026-10-24: `yamledit` keeps a CRLF file's line ending on every line it writes.
 - 2026-10-23: `yamledit` (SP5 M2 settings writes).
 - 2026-10-23: `links.state_of` (any folder link), `seed.link_memory` (system spec §4.2).

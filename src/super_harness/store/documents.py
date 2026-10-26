@@ -18,19 +18,37 @@ from super_harness.model import (
 )
 from super_harness.store.files import atomic_write
 from super_harness.store.frontmatter import parse, render
+from super_harness.store.memo import Memo, digest
 from super_harness.store.paths import ProjectPaths
 
 Kind = Literal["plan", "ticket"]
 
 
+# Each document parsed once per content (SP7 spec decision 1); callers get copies.
+_plans: Memo[Doc[Plan]] = Memo(maxsize=1024)
+_tickets: Memo[Doc[Ticket]] = Memo(maxsize=4096)
+
+
 def load_plan(path: Path) -> Doc[Plan]:
-    meta, sections = parse(path.read_text(encoding="utf-8"), PLAN_SECTIONS)
-    return Doc(Plan.model_validate(meta), sections)
+    data = path.read_bytes()
+
+    def make() -> Doc[Plan]:
+        meta, sections = parse(data.decode("utf-8"), PLAN_SECTIONS)
+        return Doc(Plan.model_validate(meta), sections)
+
+    doc = _plans.get_or_make(digest(data), make)
+    return Doc(doc.meta.model_copy(deep=True), dict(doc.sections))
 
 
 def load_ticket(path: Path) -> Doc[Ticket]:
-    meta, sections = parse(path.read_text(encoding="utf-8"), TICKET_SECTIONS)
-    return Doc(Ticket.model_validate(meta), sections)
+    data = path.read_bytes()
+
+    def make() -> Doc[Ticket]:
+        meta, sections = parse(data.decode("utf-8"), TICKET_SECTIONS)
+        return Doc(Ticket.model_validate(meta), sections)
+
+    doc = _tickets.get_or_make(digest(data), make)
+    return Doc(doc.meta.model_copy(deep=True), dict(doc.sections))
 
 
 def load_any(path: Path, kind: Kind) -> tuple[Plan | Ticket, dict[str, str]]:

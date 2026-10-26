@@ -417,7 +417,8 @@ def overview(paths: StorePaths | None = None, *, window: Window = "today") -> Ov
     found.links_broken = sum(1 for link in links(paths, nearby=False).projects if link.fix)
     events = _events(paths)
     reasons = _reasons(events)
-    for slug, doc in _tickets(paths, None):
+    scanned = _tickets(paths, None)  # one scan of the store serves the whole screen
+    for slug, doc in scanned:
         ticket = doc.meta
         found.tickets_total += 1
         if ticket.folder is Folder.in_queue:
@@ -452,7 +453,7 @@ def overview(paths: StorePaths | None = None, *, window: Window = "today") -> Ov
                     ticket.updated,
                 )
             )
-    tickets = {doc.meta.id: doc.meta for _, doc in _tickets(paths, None)}
+    tickets = {doc.meta.id: doc.meta for _, doc in scanned}
     today, since = _since("today"), _since(window)
     done_today = {event.ticket for event in events if _done(event) and event.ts >= today}
     found.done_today = len(done_today)

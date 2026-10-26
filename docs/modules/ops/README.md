@@ -56,6 +56,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-26: `views.overview` scans the store once; `scripts/bench_views.py` times every view (SP7).
 - 2026-10-26: `providers`, `agents` and the Agents cards give gemini's reason from `adapters.UNSUPPORTED` (SP6).
 - 2026-10-26: `agent_config.new_agent`, `remove_agent` (SP6).
 - 2026-10-26: views show custom steps: board columns, `Role.custom`/`step`, `WorkflowsView.kinds`/`does` (SP6).

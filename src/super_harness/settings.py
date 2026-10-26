@@ -1,5 +1,6 @@
 """Resolved settings: package defaults, then ~/.harness/defaults, then the project file."""
 
+import copy
 import difflib
 from collections.abc import Mapping
 from functools import cache
@@ -12,6 +13,7 @@ from pydantic_core import ErrorDetails
 from super_harness.model import Settings, UserError
 from super_harness.store import yamledit
 from super_harness.store.files import atomic_write
+from super_harness.store.memo import Memo, digest
 from super_harness.store.paths import StorePaths
 from super_harness.store.registry import load_registry
 from super_harness.store.seed import package_default
@@ -60,15 +62,25 @@ def merge(
     return out
 
 
+# Parsed layers and resolved settings, once per content (SP7 spec decision 1)
+_layers: Memo[dict[str, Any]] = Memo(maxsize=256)
+_resolved: Memo[Settings] = Memo(maxsize=64)
+
+
 def layers(paths: StorePaths, slug: str | None) -> list[dict[str, Any]]:
     """Package defaults, the user's defaults and the project file, in override order."""
-    found = [_parse(package_default("SETTINGS.md"), "package SETTINGS.md")]
+    return [_parse(text, source) for text, source in _texts(paths, slug)]
+
+
+def _texts(paths: StorePaths, slug: str | None) -> list[tuple[str, str]]:
+    """Each layer's text and the name errors give it."""
+    found = [(package_default("SETTINGS.md"), "package SETTINGS.md")]
     files = [(paths.defaults / "SETTINGS.md", "defaults/SETTINGS.md")]
     if slug is not None:
         files.append((paths.project(slug).settings, f"projects/{slug}/SETTINGS.md"))
     for path, source in files:
         if path.is_file():
-            found.append(_parse(path.read_text(encoding="utf-8"), source))
+            found.append((path.read_text(encoding="utf-8"), source))
     return found
 
 
@@ -217,17 +229,28 @@ def _leaves(data: Mapping[str, Any], prefix: str = "") -> list[str]:
 
 
 def _resolve(paths: StorePaths, slug: str | None) -> Settings:
-    resolved: dict[str, Any] = {}
-    for layer in layers(paths, slug):
-        resolved = merge(resolved, layer)
-    return Settings.model_validate(resolved)
+    texts = _texts(paths, slug)
+
+    def make() -> Settings:
+        resolved: dict[str, Any] = {}
+        for text, source in texts:
+            resolved = merge(resolved, _parse(text, source))
+        return Settings.model_validate(resolved)
+
+    key = tuple(digest(text.encode()) for text, _ in texts)
+    return _resolved.get_or_make(key, make).model_copy(deep=True)
 
 
 def _parse(text: str, source: str) -> dict[str, Any]:
-    data = load_yaml(text, source) or {}
-    if not isinstance(data, Mapping):
-        raise UserError(f"{source}: expected key: value lines")
-    return unflatten(data)
+    """One layer as nested keys; errors name `source` and are never cached."""
+
+    def make() -> dict[str, Any]:
+        data = load_yaml(text, source) or {}
+        if not isinstance(data, Mapping):
+            raise UserError(f"{source}: expected key: value lines")
+        return unflatten(data)
+
+    return copy.deepcopy(_layers.get_or_make(digest(text.encode()), make))
 
 
 def _describe(error: ErrorDetails) -> str:

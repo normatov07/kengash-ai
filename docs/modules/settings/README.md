@@ -6,7 +6,7 @@ Resolve SETTINGS.md into a validated `Settings` model so agents never parse the 
 
 ## Interface
 
-- `load(paths, slug=None)` → `Settings`: package defaults, then `~/.harness/defaults/SETTINGS.md`, then `projects/<slug>/SETTINGS.md`. Raises `UserError` naming the first problem: `settings: …` for schema problems, or the file name for invalid YAML.
+- `load(paths, slug=None)` → `Settings`: package defaults, then `~/.harness/defaults/SETTINGS.md`, then `projects/<slug>/SETTINGS.md`. Raises `UserError` naming the first problem: `settings: …` for schema problems, or the file name for invalid YAML. Each layer is parsed once per content and the resolved `Settings` cached by the layers' digests; callers get copies, and errors are never cached (SP7).
 - `problems(paths, slug=None)` → one line per problem, empty when valid (`harness settings check`).
 - `get(settings, key)` → the value at a dotted key, with a "did you mean" hint for unknown keys.
 - `unflatten`, `merge`: the YAML rules below, usable on any mapping.
@@ -21,6 +21,7 @@ Resolve SETTINGS.md into a validated `Settings` model so agents never parse the 
 
 ## Changes
 
+- 2026-10-26: content-keyed layer and resolve caches (SP7).
 - 2026-10-24: writes keep a CRLF file's line endings.
 - 2026-10-24: a defaults save is refused when a registered project would no longer validate.
 - 2026-10-23: comment-preserving writes, `scope_keys`, `overrides` (SP5 M2).
