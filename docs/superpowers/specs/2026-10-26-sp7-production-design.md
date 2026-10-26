@@ -43,7 +43,7 @@ An audit on 2026-10-26 found the features complete but the product not yet fit t
 - [x] `uv build` artifacts pass `scripts/check_dist.py`; a clean venv install runs `harness --version` and imports the UI (Python 3.12 venv, 2026-10-26; the CI `package` job repeats it).
 - [x] UI responses carry the §3.4 headers and every screen renders under the CSP in Chrome with no console violations (`test_every_response_carries_the_security_headers`; headless Chrome on the demo store).
 - [x] `ruff` with `S` is clean; native Windows exits 4 with the WSL message; log retention prunes old files only (`test_native_windows_stops_with_the_wsl_message`, `test_old_logs_are_pruned_and_new_ones_kept`, `test_doctor_fix_prunes_old_logs`).
-- [ ] CI green on ubuntu and macOS for 3.12, 3.13, 3.14, plus package and audit jobs; release workflow and Dependabot config reviewed. (Workflows pass actionlint; the GitHub run comes with the pull request.)
+- [x] CI green on ubuntu and macOS for 3.12, 3.13, 3.14, plus package and audit jobs; release workflow and Dependabot config reviewed (run #18 on `main`; Dependabot's first grouped actions update, PR #8, merged green).
 - [x] README, CHANGELOG, CONTRIBUTING, SECURITY, code of conduct, templates and `docs/releasing.md` exist; `make check` green (605 passed, 2026-10-26).
 - [x] `gemini` is gone from the providers, defaults and UI; old settings naming it get the replacement message; legacy `per_provider.gemini` loads (`test_gemini_is_replaced_by_antigravity`, `test_the_legacy_gemini_slot_is_dropped`, `test_gemini_points_to_antigravity`).
 - [x] axe-core reports no serious or critical violations on the seven screens (axe-core 4.13.0, demo store, plus the New agent dialog).
