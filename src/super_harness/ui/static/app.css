@@ -285,7 +285,7 @@ body[data-screen="board"] #view { flex: 1 1 auto; min-height: 0; display: flex; 
 .board-body { flex: 1 1 auto; min-height: 0; padding: 0 20px 20px; overflow-x: auto; }
 /* columns shrink to --col-min, so seven fit beside the sidebar at 1440 px; more scroll */
 .cols { --col-min: 156px; --col-gap: 10px; display: flex; gap: var(--col-gap); align-items: stretch; height: 100%; min-height: 420px; min-width: calc(var(--n, 1) * (var(--col-min) + var(--col-gap)) - var(--col-gap)); }
-.col { flex: 1 1 var(--col-min); min-width: var(--col-min); display: flex; flex-direction: column; min-height: 0; border: 1px solid #22272e; border-radius: 12px; background: #14171a; overflow: hidden; }
+.col { container-type: inline-size; flex: 1 1 var(--col-min); min-width: var(--col-min); display: flex; flex-direction: column; min-height: 0; border: 1px solid #22272e; border-radius: 12px; background: #14171a; overflow: hidden; }
 .col-bar { flex: 0 0 auto; height: 2px; }
 .col-head { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; padding: 11px 11px 9px; }
 .col-head h2 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -297,9 +297,18 @@ body[data-screen="board"] #view { flex: 1 1 auto; min-height: 0; display: flex; 
 .col-empty { padding: 20px 10px; border: 1px dashed #2e343c; border-radius: 10px; text-align: center; font-size: 11px; line-height: 1.5; color: var(--dim); }
 .col-foot { flex: 0 0 auto; padding: 8px 9px; border-top: 1px solid #1f242a; }
 .col-note { padding: 8px; text-align: center; font-family: var(--mono); font-size: 10px; }
-.col-add { width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px; border: 1px dashed #2e343c; border-radius: 8px; background: transparent; color: var(--faint); font-size: 12px; cursor: pointer; }
+.col-add { width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px; border: 1px dashed #2e343c; border-radius: 8px; background: transparent; color: var(--faint); font-size: 12px; cursor: pointer; white-space: nowrap; }
 .col-add:hover, .col-open:hover { color: var(--text); border-color: var(--faint); }
 .col-open { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--faint); font-size: 12px; cursor: pointer; }
+/* narrow columns (seven fit at 1440 px): the "more" button floats over the head on hover so
+   titles keep their room, and the queue footer drops its verb */
+@container (max-width: 176px) {
+.col-head { position: relative; }
+.col-head h2 { letter-spacing: 0.05em; }
+.col-more { position: absolute; right: 7px; top: 8px; opacity: 0; background: #14171a; }
+.col-head:hover .col-more, .col-more:focus-visible { opacity: 1; }
+.col-add .long { display: none; }
+}
 .card { display: block; flex: 0 0 auto; padding: 9px 10px; border: 1px solid #262b32; border-left-width: 3px; border-radius: 10px; color: var(--text); }
 .card:hover { color: var(--text); filter: brightness(1.12); }
 .card-top { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 6px; margin-bottom: 7px; }

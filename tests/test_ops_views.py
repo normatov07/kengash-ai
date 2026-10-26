@@ -476,3 +476,10 @@ def test_the_board_has_a_column_for_a_custom_step(seeded: StorePaths, make_ticke
     assert keys.index("perf_review") == keys.index("security") + 1 and keys[-1] == "done"
     perf = columns[keys.index("perf_review")]
     assert (perf.title, [card.id for card in perf.cards]) == ("Perf review", ["aaaaaaa6"])
+
+
+def test_the_agents_view_carries_each_workflows_loop_cap(
+    seeded: StorePaths, detected: list[str]
+) -> None:
+    found = views.agents_view(seeded, project="payments-api")
+    assert found.loop_max == {"simple": 3, "standard": 4, "critical": 6}

@@ -97,7 +97,8 @@ function routing(data) {
     const steps = data.routing[name];
     const before = i ? data.routing[names[i - 1]] : [];
     const added = steps.filter((s) => !before.includes(s));
-    const text = i === 0 || !added.length ? steps.map(label).join(" → ") : `+ ${added.map(label).join(", ")}`;
+    let text = i === 0 || !added.length ? steps.map(label).join(" → ") : `+ ${added.map(label).join(", ")}`;
+    if (name === "critical" && data.loop_max?.[name]) text += `, ${data.loop_max[name]} loops`; // as the canvas shows it
     return html`<div class="route ${name === "critical" ? "is-crit" : ""}"><span class="bar" style="background: ${IMP[name] ?? "#78828F"}"></span><span>${name}</span><span class="end mono muted">${text}</span></div>`;
   });
 }

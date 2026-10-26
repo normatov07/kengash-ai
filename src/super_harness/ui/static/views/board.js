@@ -82,7 +82,7 @@ function card(item, key) {
 
 function columnFoot(column) {
   const tint = TINTS[column.key] ?? TINTS.in_queue;
-  if (column.key === "in_queue") return html`<button class="col-add" type="button" data-copy="/to-ticket" data-note="Copied: run /to-ticket in your agent to cut tickets from a plan.">${icon("plus", { size: 12, width: 1.9 })}Add with /to-ticket</button>`;
+  if (column.key === "in_queue") return html`<button class="col-add" type="button" data-copy="/to-ticket" data-note="Copied: run /to-ticket in your agent to cut tickets from a plan.">${icon("plus", { size: 12, width: 1.9 })}<span class="long">Add with</span> /to-ticket</button>`;
   if (column.key === "done") return html`<button class="col-open" type="button" data-only="done">Open tasks/done</button>`;
   return html`<div class="col-note" style="color: ${tint.foot[1]}">${column.footer}</div>`;
 }

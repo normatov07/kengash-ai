@@ -117,3 +117,36 @@ def test_custom_steps_borrow_their_kinds_look() -> None:
     graph = (STATIC / "graph.js").read_text()
     assert "export function learnSteps" in graph
     assert "learnSteps(data.kinds)" in (STATIC / "views" / "workflow.js").read_text()
+
+
+def test_board_titles_fit_seven_columns() -> None:
+    css = (STATIC / "app.css").read_text()
+    assert css_rule(".col")["container-type"] == "inline-size"
+    narrow = re.search(r"@container \(max-width: (\d+)px\) \{(.*?)\n\}", css, re.S)
+    assert narrow and int(narrow[1]) >= 156  # the 7-column width at 1440 px
+    assert re.search(r"\.col-more \{[^}]*position: absolute", narrow[2])
+    assert re.search(
+        r"\.col-head:hover \.col-more, \.col-more:focus-visible \{[^}]*opacity: 1", narrow[2]
+    )
+
+
+def test_queue_footer_stays_on_one_line() -> None:
+    assert css_rule(".col-add")["white-space"] == "nowrap"
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_done_node_is_numbered() -> None:
+    script = (
+        f"import {{ canvas, layout }} from '{(STATIC / 'graph.js').as_uri()}';"
+        f"import {{ render }} from '{(STATIC / 'html.js').as_uri()}';"
+        "console.log(render(canvas(layout(['plan', 'implement', 'review_code'], {}))));"
+    )
+    done = subprocess.run(
+        [str(NODE), "--input-type=module", "-e", script], capture_output=True, text=True, check=True
+    )
+    assert "<b>4 · Done</b>" in done.stdout and "<b>Trigger</b>" in done.stdout
+
+
+def test_routing_names_the_critical_loop_cap() -> None:
+    agents = (STATIC / "views" / "agents.js").read_text()
+    assert "${data.loop_max[name]} loops" in agents
