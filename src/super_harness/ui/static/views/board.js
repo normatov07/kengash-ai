@@ -9,16 +9,16 @@ const state = { view: "board", group: "status", importance: "", agent: "", text:
 
 // Each column's canvas palette: top bar, title, count pill, column and card tints, footer.
 const TINTS = {
-  in_queue: { bar: "#78828F", title: "#C4CBD4", pill: ["#22262C", "#A7B0BC"], col: ["#22272E", "#14171A"], card: ["#262B32", "#1A1E22"], foot: ["#1F242A", "#78828F"] },
-  plan: { bar: "#68A4E0", title: "#68A4E0", pill: ["#1B2733", "#68A4E0"], col: ["#22272E", "#14171A"], card: ["#2C3A48", "#1A1E22"], foot: ["#1F242A", "#5A646F"] },
-  review_plan: { bar: "#B191E8", title: "#B191E8", pill: ["#241F33", "#B191E8"], col: ["#2B2538", "#14171A"], card: ["#332B44", "#1A1E22"], foot: ["#1F242A", "#5A646F"] },
-  implement: { bar: "#F0883E", title: "#F0883E", pill: ["#2A1E10", "#F0883E"], col: ["#332A1E", "#16171A"], card: ["#3A2E1E", "#1D1F22"], foot: ["#2A2318", "#8A7658"] },
-  review_code: { bar: "#B191E8", title: "#B191E8", pill: ["#241F33", "#B191E8"], col: ["#2B2538", "#14171A"], card: ["#332B44", "#1A1E22"], foot: ["#1F242A", "#5A646F"] },
-  security: { bar: "#D8B24C", title: "#D8B24C", pill: ["#2A2320", "#D8B24C"], col: ["#332C1C", "#14171A"], card: ["#332C1C", "#1A1E22"], foot: ["#1F242A", "#5A646F"] },
-  run_tests: { bar: "#5FC08B", title: "#5FC08B", pill: ["#1E2A20", "#5FC08B"], col: ["#22302A", "#14171A"], card: ["#2E4030", "#1A1E22"], foot: ["#1F242A", "#5A646F"] },
-  docs: { bar: "#5FC08B", title: "#5FC08B", pill: ["#1E2A20", "#5FC08B"], col: ["#22302A", "#14171A"], card: ["#2E4030", "#1A1E22"], foot: ["#1F242A", "#5A646F"] },
-  approve: { bar: "#EF7A72", title: "#EF7A72", pill: ["#3A2024", "#EF7A72"], col: ["#3A2A26", "#14171A"], card: ["#4A2B2B", "#1F1B1C"], foot: ["#1F242A", "#5A646F"] },
-  done: { bar: "#5FC08B", title: "#5FC08B", pill: ["#1E2A20", "#5FC08B"], col: ["#22302A", "#14171A"], card: ["#262B32", "#181B1E"], foot: ["#1F242A", "#78828F"] },
+  in_queue: { bar: "#78828F", title: "#C4CBD4", pill: ["#22262C", "#A7B0BC"], col: ["#22272E", "#14171A"], card: ["#262B32", "#1A1E22"], foot: ["#1F242A", "#7E8895"] },
+  plan: { bar: "#68A4E0", title: "#68A4E0", pill: ["#1B2733", "#68A4E0"], col: ["#22272E", "#14171A"], card: ["#2C3A48", "#1A1E22"], foot: ["#1F242A", "#7E8895"] },
+  review_plan: { bar: "#B191E8", title: "#B191E8", pill: ["#241F33", "#B191E8"], col: ["#2B2538", "#14171A"], card: ["#332B44", "#1A1E22"], foot: ["#1F242A", "#7E8895"] },
+  implement: { bar: "#F0883E", title: "#F0883E", pill: ["#2A1E10", "#F0883E"], col: ["#332A1E", "#16171A"], card: ["#3A2E1E", "#1D1F22"], foot: ["#2A2318", "#9A845F"] },
+  review_code: { bar: "#B191E8", title: "#B191E8", pill: ["#241F33", "#B191E8"], col: ["#2B2538", "#14171A"], card: ["#332B44", "#1A1E22"], foot: ["#1F242A", "#7E8895"] },
+  security: { bar: "#D8B24C", title: "#D8B24C", pill: ["#2A2320", "#D8B24C"], col: ["#332C1C", "#14171A"], card: ["#332C1C", "#1A1E22"], foot: ["#1F242A", "#7E8895"] },
+  run_tests: { bar: "#5FC08B", title: "#5FC08B", pill: ["#1E2A20", "#5FC08B"], col: ["#22302A", "#14171A"], card: ["#2E4030", "#1A1E22"], foot: ["#1F242A", "#7E8895"] },
+  docs: { bar: "#5FC08B", title: "#5FC08B", pill: ["#1E2A20", "#5FC08B"], col: ["#22302A", "#14171A"], card: ["#2E4030", "#1A1E22"], foot: ["#1F242A", "#7E8895"] },
+  approve: { bar: "#EF7A72", title: "#EF7A72", pill: ["#3A2024", "#EF7A72"], col: ["#3A2A26", "#14171A"], card: ["#4A2B2B", "#1F1B1C"], foot: ["#1F242A", "#7E8895"] },
+  done: { bar: "#5FC08B", title: "#5FC08B", pill: ["#1E2A20", "#5FC08B"], col: ["#22302A", "#14171A"], card: ["#262B32", "#181B1E"], foot: ["#1F242A", "#7E8895"] },
 };
 const IMPORTANCE = {
   critical: { color: "#EF7A72", soft: "#3A2024" },

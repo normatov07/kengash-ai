@@ -160,3 +160,27 @@ def test_the_page_names_its_icon() -> None:
     index = (STATIC / "index.html").read_text()
     assert '<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">' in index
     assert (STATIC / "favicon.svg").read_text().startswith("<svg")
+
+
+def _contrast(fg: str, bg: str) -> float:
+    def luminance(color: str) -> float:
+        channels = [int(color.lstrip("#")[i : i + 2], 16) / 255 for i in (0, 2, 4)]
+        linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    light, dark = sorted([luminance(fg), luminance(bg)], reverse=True)
+    return (light + 0.05) / (dark + 0.05)
+
+
+def test_faint_text_meets_wcag_aa_on_every_surface() -> None:
+    tokens = dict(re.findall(r"--([\w-]+): (#[0-9a-fA-F]{6});", (STATIC / "app.css").read_text()))
+    surfaces = ["bg", "panel", "raised", "#191c21", "#1a1e22", "#14171a", "#121518"]
+    for surface in surfaces:
+        background = tokens.get(surface, surface)
+        assert _contrast(tokens["faint"], background) >= 4.5, surface
+    assert css_rule(".pstate.plain")["color"] == "var(--muted)"
+
+
+def test_the_settings_file_view_scrolls_by_keyboard() -> None:
+    settings = (STATIC / "views" / "settings.js").read_text()
+    assert '<div class="yaml-box" tabindex="0" role="region" aria-label="SETTINGS.md">' in settings
