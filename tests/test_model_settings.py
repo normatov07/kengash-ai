@@ -92,3 +92,59 @@ def test_the_plan_reviewer_is_different_provider_or_a_known_provider() -> None:
     )
     with pytest.raises(ValidationError, match="unknown provider"):
         Settings.model_validate({"plan": {"reviewer": "same-provider"}})
+
+
+PERF_AGENTS: dict[str, Any] = {**AGENTS, "perf-reviewer": {"cli": "claude/sonnet", "skill": "x"}}
+PERF_STEP: dict[str, Any] = {"role": "perf-reviewer", "kind": "review", "does": "Check hot paths."}
+
+
+def _custom(**changes: Any) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        "agents": PERF_AGENTS,
+        "steps": {"perf_review": PERF_STEP},
+        "workflows": {
+            "simple": {
+                "steps": ["plan", "implement", "review_code", "perf_review"],
+                "on_fail": {"review_code": "implement", "perf_review": "implement"},
+            }
+        },
+    }
+    return {**data, **changes}
+
+
+def test_a_custom_step_validates_and_resolves() -> None:
+    settings = Settings.model_validate(_custom())
+    assert settings.role_of("perf_review") == "perf-reviewer"
+    assert settings.kind_of("perf_review") == "review"
+    assert (settings.kind_of("run_tests"), settings.kind_of("implement")) == ("check", "edit")
+    assert settings.role_of("approve") is None and settings.role_of("deploy") is None
+    assert settings.step_names()[:2] == ["plan", "review_plan"]
+    assert settings.step_names()[-1] == "perf_review"
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"steps": {"security": PERF_STEP}}, "built-in"),
+        ({"steps": {"Perf": PERF_STEP}}, "step name"),
+        ({"steps": {"perf_review": {**PERF_STEP, "role": "ghost"}}}, "no agent"),
+        ({"steps": {"perf_review": {**PERF_STEP, "does": "one\ntwo"}}}, "one line"),
+        ({"steps": {"perf_review": {**PERF_STEP, "does": "x" * 201}}}, "one line"),
+        ({"steps": {"perf_review": {**PERF_STEP, "kind": "check"}}}, "kind"),
+        ({"workflows": {"x": {"steps": ["plan", "perf_tune"]}}}, r"unknown steps \['perf_tune'\]"),
+        (
+            {"steps": {"perf_review": {**PERF_STEP, "kind": "edit"}}},
+            "only review steps",
+        ),
+        (
+            {
+                "agents": {**PERF_AGENTS, "Perf_Reviewer": PERF_AGENTS["planner"]},
+                "steps": {"perf_review": {**PERF_STEP, "role": "Perf_Reviewer"}},
+            },
+            "role name",
+        ),
+    ],
+)
+def test_custom_step_problems(changes: dict[str, Any], message: str) -> None:
+    with pytest.raises(ValidationError, match=message):
+        Settings.model_validate(_custom(**changes))

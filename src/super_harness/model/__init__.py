@@ -31,11 +31,15 @@ from super_harness.model.runtime import (
     WorkerRecord,
 )
 from super_harness.model.settings import (
+    BUILTIN_KINDS,
     PROVIDERS,
     STEP_ROLES,
     Agent,
+    CustomStep,
+    Kind,
     ProviderOptions,
     Settings,
+    StepKind,
     Workflow,
     split_cli,
 )
@@ -58,6 +62,7 @@ from super_harness.model.steps import (
 )
 
 __all__ = [
+    "BUILTIN_KINDS",
     "OUTPUT_SCHEMAS",
     "PLAN_SECTIONS",
     "PROVIDERS",
@@ -68,6 +73,7 @@ __all__ = [
     "Claims",
     "CompactOutput",
     "ConductorPing",
+    "CustomStep",
     "Doc",
     "ErrorKind",
     "EvalScenario",
@@ -79,6 +85,7 @@ __all__ = [
     "HarnessError",
     "Importance",
     "JournalCursor",
+    "Kind",
     "NeedsSetup",
     "NeedsUser",
     "OutputKind",
@@ -101,6 +108,7 @@ __all__ = [
     "SkillMeta",
     "SlotEntry",
     "SlotTable",
+    "StepKind",
     "StepOutput",
     "StepRequest",
     "StepResult",
