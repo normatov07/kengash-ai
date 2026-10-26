@@ -18,5 +18,6 @@ Role skills, data only (system spec §8.2; SP4 spec decision 3): the instruction
 
 ## Changes
 
+- 2026-10-26: reviewers read `kg(<ticket id>)` commit subjects (`hrn(` before 0.2.0) (SP8).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-23: the seven role skills (SP4 M1).

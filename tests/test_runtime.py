@@ -74,5 +74,5 @@ def test_ticket_state_park_flags_and_cursors(store_paths: StorePaths) -> None:
     runtime.save_cursor(store_paths, "all", JournalCursor(day="2026-10-23", line=4))
     assert runtime.load_cursor(store_paths, "all") == JournalCursor(day="2026-10-23", line=4)
     assert store_paths.worktree("payments-api", "7b55e0c1") == (
-        store_paths.home / "worktrees" / "payments-api" / "hrn-7b55e0c1"
+        store_paths.home / "worktrees" / "payments-api" / "kg-7b55e0c1"
     )

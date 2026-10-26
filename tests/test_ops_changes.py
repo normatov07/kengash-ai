@@ -24,7 +24,7 @@ def test_changes_list_files_with_their_loop_and_model(engine: Engine) -> None:
     sha = gitops.commit_all(engine.worktree, "hrn(7b55e0c1): loop 1 implement: retry", trailers)
     assert sha is not None
     found = changes.ticket_changes("7b55e0c1", diff=True, project=None)
-    assert found.ref == "hrn/7b55e0c1"
+    assert found.ref == "kg/7b55e0c1"
     assert found.changes == [Change("retry.py", 2, 0, "1", "implement", "codex/default", sha)]
     assert "+b = 2" in found.diff
 

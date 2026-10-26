@@ -41,7 +41,7 @@ STARTER_STEPS = {
     ),
     "review": (
         "1. Read the changes: `git log --oneline` lists the ticket's commits (subjects start "
-        "with `hrn(<ticket id>)`), and `git show <commit>` shows each. Edit nothing.\n"
+        "with `kg(<ticket id>)`), and `git show <commit>` shows each. Edit nothing.\n"
         "2. Check them against the instruction above.\n"
         "3. Fail only for real problems; rate each finding high, medium or low.\n"
         "4. Reply with JSON: `verdict`, `summary` in one line, and `findings` with `severity`, "

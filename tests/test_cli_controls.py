@@ -56,6 +56,7 @@ def test_doctor_reports_a_dead_worker(engine: Engine) -> None:
 
 
 def test_ticket_changes_and_attach_print_lines(engine: Engine) -> None:
+    # a commit made before 0.2.0: Harness-* trailers are still read
     (engine.worktree / "retry.py").write_text("a = 1\nb = 2\n")
     trailers = {
         "Harness-Ticket": str(engine.ticket().meta.uuid),

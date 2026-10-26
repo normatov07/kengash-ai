@@ -75,11 +75,11 @@ def test_a_ticket_goes_from_ready_to_merged(
     assert reviews[1][reviews[1].index("--resume") + 1] == stored and session
     uuid = lifecycle_repo.ticket().meta.uuid
     grep = run_git(
-        lifecycle_repo.repo, "log", "--format=%s", f"--grep=Harness-Ticket: {uuid}", "main"
+        lifecycle_repo.repo, "log", "--format=%s", f"--grep=Kengash-Ticket: {uuid}", "main"
     )
     assert grep.splitlines() == [
-        "hrn(7b55e0c1): loop 2 implement: Added retry with backoff.",
-        "hrn(7b55e0c1): loop 1 implement: Added retry with backoff.",
+        "kg(7b55e0c1): loop 2 implement: Added retry with backoff.",
+        "kg(7b55e0c1): loop 1 implement: Added retry with backoff.",
     ]
     ends = [e for e in journal_events() if e["type"] == "step.end"]
     keys = {"provider", "model", "session", "tokens", "duration_s", "verdict"}

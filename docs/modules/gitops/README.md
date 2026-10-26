@@ -26,6 +26,7 @@ The git commands harness runs in the user's repo (SP3 spec §9): ticket worktree
 
 ## Changes
 
+- 2026-10-26: `TRAILER = "Kengash-"`; `ticket_commits` finds `Kengash-Ticket` or 0.1.0 `Harness-Ticket` commits and returns every trailer under its `Kengash-` name (SP8).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-23: `show`, `branch_exists` (SP3 M3).
 - 2026-10-23: `commit_files` (SP3 M3).

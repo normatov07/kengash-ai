@@ -417,13 +417,13 @@ def _commit(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
     output = ran.result.output
     summary = output.summary if isinstance(output, WorkOutput) else ""
     first = summary.strip().splitlines()[0] if summary.strip() else ready.step
-    subject = f"hrn({ticket.id}): loop {ran.loop} {ready.step}: {first}"
+    subject = f"kg({ticket.id}): loop {ran.loop} {ready.step}: {first}"
     trailers = {
-        "Harness-Ticket": str(ticket.uuid),
-        "Harness-Step": ready.step,
-        "Harness-Loop": str(ran.loop),
-        "Harness-Agent": ran.pick.role,
-        "Harness-Model": f"{ran.pick.provider}/{ran.pick.model or 'default'}",
+        f"{gitops.TRAILER}Ticket": str(ticket.uuid),
+        f"{gitops.TRAILER}Step": ready.step,
+        f"{gitops.TRAILER}Loop": str(ran.loop),
+        f"{gitops.TRAILER}Agent": ran.pick.role,
+        f"{gitops.TRAILER}Model": f"{ran.pick.provider}/{ran.pick.model or 'default'}",
     }
     for attempt in (1, 2):
         _fold(job)

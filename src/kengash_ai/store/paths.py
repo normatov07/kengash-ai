@@ -116,7 +116,9 @@ class StorePaths:
         return self.home / "worktrees"
 
     def worktree(self, slug: str, ticket_id: str) -> Path:
-        return self.worktrees / slug / f"hrn-{ticket_id}"
+        """`worktrees/<slug>/kg-<id>`; a ticket claimed before 0.2.0 keeps its `hrn-<id>`."""
+        legacy = self.worktrees / slug / f"hrn-{ticket_id}"
+        return legacy if legacy.is_dir() else self.worktrees / slug / f"kg-{ticket_id}"
 
     @property
     def trust(self) -> Path:

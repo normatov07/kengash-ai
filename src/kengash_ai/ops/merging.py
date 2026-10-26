@@ -41,7 +41,7 @@ def merge_ticket(ticket_id: str, *, project: str | None, by: str) -> Merged:
                 f"{ticket_id} is {ticket.status}; merge needs awaiting_merge or branch_ready"
             )
         worktree = paths.worktree(slug, ticket_id)
-        branch = ticket.branch or f"hrn/{ticket_id}"
+        branch = ticket.branch or f"kg/{ticket_id}"
         with locked(paths.locks / f"repo-{slug}.lock"):
             conflicts = gitops.rebase(worktree, entry.base) if worktree.exists() else []
             if conflicts:

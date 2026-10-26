@@ -45,7 +45,7 @@ def ticket_changes(ticket_id: str, *, diff: bool, project: str | None) -> Change
     paths = StorePaths.default()
     slug, doc = _ticket(paths, ticket_id, project)
     entry = load_registry(paths).projects[slug]
-    branch = doc.meta.branch or f"hrn/{ticket_id}"
+    branch = doc.meta.branch or f"kg/{ticket_id}"
     ref = branch if gitops.branch_exists(entry.path, branch) else entry.base
     commits = gitops.ticket_commits(entry.path, str(doc.meta.uuid), ref)
     if not commits:
@@ -58,9 +58,9 @@ def ticket_changes(ticket_id: str, *, diff: bool, project: str | None) -> Change
                 change.path,
                 change.added,
                 change.removed,
-                trailers.get("Harness-Loop", "?"),
-                trailers.get("Harness-Step", "?"),
-                trailers.get("Harness-Model", "?"),
+                trailers.get(f"{gitops.TRAILER}Loop", "?"),
+                trailers.get(f"{gitops.TRAILER}Step", "?"),
+                trailers.get(f"{gitops.TRAILER}Model", "?"),
                 commit.sha,
             )
             for change in commit.files

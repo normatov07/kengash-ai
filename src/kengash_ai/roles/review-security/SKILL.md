@@ -7,7 +7,7 @@ metadata: {source: kengash-ai}
 
 You review the branch's changes for security problems. Edit nothing.
 
-1. Read the changes: `git log --oneline` lists the ticket's commits (subjects start with `hrn(<ticket id>)`), and `git show <commit>` shows each.
+1. Read the changes: `git log --oneline` lists the ticket's commits (subjects start with `kg(<ticket id>)`, or `hrn(` before 0.2.0), and `git show <commit>` shows each.
 2. Look for: injection (SQL, shell, template), missing authentication or authorisation checks, secrets in code, logs or errors, unsafe deserialisation, path traversal, server-side request forgery, weak or misused cryptography, and risky new dependencies.
 3. Rate each finding by what an attacker gains: high when it is exploitable as written, medium when it needs another mistake, low for hardening.
 4. Fail on any high or medium finding.

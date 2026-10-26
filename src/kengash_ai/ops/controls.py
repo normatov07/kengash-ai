@@ -284,7 +284,7 @@ def _claim(
             slot = SlotEntry(provider=provider, project=slug, ticket=ticket_id, step=step, pid=0)
             if not slots.reserve(paths, slot):
                 return _Skip(f"no free {provider} slot")
-        branch = f"hrn/{ticket_id}"
+        branch = f"kg/{ticket_id}"
         try:
             with locked(paths.locks / f"repo-{slug}.lock"):
                 gitops.ensure_worktree(

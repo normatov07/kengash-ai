@@ -138,15 +138,29 @@ def remove_worktree(repo: Path, path: Path, branch: str) -> None:
         _git(repo, "branch", "-D", branch)
 
 
+# Trailers on every ticket commit (`Kengash-Ticket`, `-Step`, `-Loop`, `-Agent`, `-Model`);
+# 0.1.0 wrote them as `Harness-*` (SP8 spec decision 5)
+TRAILER = "Kengash-"
+LEGACY_TRAILER = "Harness-"
+
+
+def _current(key: str) -> str:
+    return TRAILER + key.removeprefix(LEGACY_TRAILER) if key.startswith(LEGACY_TRAILER) else key
+
+
 def ticket_commits(repo: Path, ticket_uuid: str, ref: str) -> list[Commit]:
-    """Commits on `ref` that carry `Harness-Ticket: <uuid>`, oldest first."""
-    grep = f"--grep=Harness-Ticket: {ticket_uuid}"
-    shas = _git(repo, "log", "--reverse", "--fixed-strings", grep, "--format=%H", ref).split()
+    """Commits on `ref` that carry `Kengash-Ticket: <uuid>` (or 0.1.0's `Harness-Ticket`),
+    oldest first; their trailers come back under the `Kengash-` names."""
+    greps = [f"--grep={prefix}Ticket: {ticket_uuid}" for prefix in (TRAILER, LEGACY_TRAILER)]
+    shas = _git(repo, "log", "--reverse", "--fixed-strings", *greps, "--format=%H", ref).split()
     commits: list[Commit] = []
     for sha in shas:
         subject = _git(repo, "show", "-s", "--format=%s", sha).strip()
         raw = _git(repo, "show", "-s", "--format=%(trailers:only,unfold)", sha)
-        trailers = dict(line.split(": ", 1) for line in raw.splitlines() if ": " in line)
+        trailers = {
+            _current(key): value
+            for key, value in (line.split(": ", 1) for line in raw.splitlines() if ": " in line)
+        }
         commits.append(Commit(sha, subject, trailers, commit_files(repo, sha)))
     return commits
 

@@ -53,7 +53,7 @@ def test_run_claims_a_ready_ticket(
     assert (doc.meta.status, doc.meta.step, doc.meta.branch) == (
         "in_process/under_planning",
         "plan",
-        "hrn/7b55e0c1",
+        "kg/7b55e0c1",
     )
     assert store_paths.worktree("payments-api", "7b55e0c1").is_dir()
     worker = runtime.load_worker(store_paths, "7b55e0c1")

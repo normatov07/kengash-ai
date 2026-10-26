@@ -273,12 +273,12 @@ def engine(
         loop_max=3,
         status="in_process/under_planning",
         step="plan",
-        branch="hrn/7b55e0c1",
+        branch="kg/7b55e0c1",
     )
     doc.sections["Acceptance"] = "- [ ] retries 3 times"
     documents.save_ticket(project, doc)
     worktree = store_paths.worktree("payments-api", "7b55e0c1")
-    gitops.ensure_worktree(registered_repo, worktree, "hrn/7b55e0c1", "main")
+    gitops.ensure_worktree(registered_repo, worktree, "kg/7b55e0c1", "main")
     return Engine(store_paths, registered_repo)
 
 

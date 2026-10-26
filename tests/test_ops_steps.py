@@ -75,8 +75,8 @@ def test_a_full_simple_workflow(
     doc = engine.ticket()
     assert (doc.meta.loop, doc.meta.step, doc.sections["Findings"]) == (2, None, "")
     log = run_git(engine.worktree, "log", "--format=%s%n%(trailers:only,unfold)", "main..HEAD")
-    assert "hrn(7b55e0c1): loop 2 implement: Added retry with backoff." in log
-    assert f"Harness-Ticket: {doc.meta.uuid}" in log and "Harness-Model: codex/default" in log
+    assert "kg(7b55e0c1): loop 2 implement: Added retry with backoff." in log
+    assert f"Kengash-Ticket: {doc.meta.uuid}" in log and "Kengash-Model: codex/default" in log
     reviews = [c["argv"] for c in fake_clis.calls("claude")][1:]
     assert (
         "--session-id" in reviews[0]
@@ -110,7 +110,7 @@ def test_an_agent_commit_is_folded_into_the_harness_commit(
     )
     steps.run_job("7b55e0c1", steps=2)
     subjects = run_git(engine.worktree, "log", "--format=%s", "main..HEAD").splitlines()
-    assert subjects == ["hrn(7b55e0c1): loop 1 implement: Added retry with backoff."]
+    assert subjects == ["kg(7b55e0c1): loop 1 implement: Added retry with backoff."]
 
 
 def test_a_timeout_retries_once_then_fails(
@@ -304,7 +304,7 @@ def test_a_custom_edit_step_is_committed(
     end = steps.run_job("7b55e0c1")
     assert end == JobEnd("in_process/awaiting_merge", "every step passed")
     subjects = run_git(engine.worktree, "log", "--format=%s", "main..HEAD").splitlines()
-    assert subjects[0].startswith("hrn(7b55e0c1): loop 1 tidy: Renamed")
+    assert subjects[0].startswith("kg(7b55e0c1): loop 1 tidy: Renamed")
     tidy = fake_clis.calls("claude")[1]
     assert "Polish the change. Do not commit; harness commits." in " ".join(tidy["argv"])
 

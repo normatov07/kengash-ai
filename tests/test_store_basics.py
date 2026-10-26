@@ -89,3 +89,11 @@ def test_store_commits_ignore_runtime_and_skip_empty_changes(
     assert storegit.commit(home, "harness: one") is True
     assert storegit.commit(home, "harness: none") is False
     assert run_git(home, "ls-files").split() == [".gitignore", "registry.yaml"]
+
+
+def test_a_ticket_worktree_keeps_its_0_1_folder(tmp_path: Path) -> None:
+    paths = StorePaths(tmp_path / ".kengash")
+    assert paths.worktree("app", "7b55e0c1") == paths.worktrees / "app" / "kg-7b55e0c1"
+    legacy = paths.worktrees / "app" / "hrn-7b55e0c1"
+    legacy.mkdir(parents=True)  # claimed before 0.2.0
+    assert paths.worktree("app", "7b55e0c1") == legacy
