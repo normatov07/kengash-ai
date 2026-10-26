@@ -1,3 +1,4 @@
+import json
 import re
 import shutil
 import subprocess
@@ -25,14 +26,33 @@ def test_help_lists_the_version_option() -> None:
     assert "--version" in re.sub(r"\x1b\[[0-9;]*m", "", result.output)
 
 
-@pytest.mark.parametrize("command", ["harness", "hrn"])
+DEPRECATED = "harness is now kengash; the harness and hrn names stop working in 0.3.0\n"
+
+
+@pytest.mark.parametrize("command", ["kengash", "harness", "hrn"])
 def test_console_scripts_print_version(command: str) -> None:
     executable = shutil.which(command)
     assert executable, f"{command} is not on PATH; run `make setup`"
-    output = subprocess.run(
-        [executable, "--version"], check=True, capture_output=True, text=True
-    ).stdout
-    assert output.strip() == f"kengash-ai {__version__}"
+    done = subprocess.run([executable, "--version"], check=True, capture_output=True, text=True)
+    assert done.stdout == f"kengash-ai {__version__}\n"
+    assert done.stderr == ("" if command == "kengash" else DEPRECATED)
+
+
+def test_the_old_names_keep_json_clean(registered_repo: Path) -> None:
+    hrn = shutil.which("hrn")
+    assert hrn
+    done = subprocess.run(
+        [hrn, "settings", "get", "loop_max", "--json"],
+        cwd=registered_repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert json.loads(done.stdout)["critical"] == 6 and done.stderr == DEPRECATED
+
+
+def test_the_version_is_0_2_0() -> None:
+    assert __version__ == "0.2.0"
 
 
 def test_native_windows_stops_with_the_wsl_message(monkeypatch: pytest.MonkeyPatch) -> None:

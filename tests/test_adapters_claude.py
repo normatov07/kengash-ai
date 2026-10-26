@@ -139,7 +139,7 @@ def test_environment_is_scrubbed(
     fake_clis.queue("claude", fixture="claude/review_new.json")
     Claude().run(_request(tmp_path, prompt="p"))
     [call] = fake_clis.calls("claude")
-    assert call["env"] == {"HARNESS_AGENT": "code-reviewer"}
+    assert call["env"] == {"KENGASH_AGENT": "code-reviewer"}
 
 
 def test_oversized_prompts_fail_before_the_cli_starts(fake_clis: FakeClis, tmp_path: Path) -> None:

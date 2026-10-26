@@ -56,6 +56,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-26: `providers.cli_clash` looks for a foreign `kengash` on PATH; `waiting.ping` reads `KENGASH_AGENT`, then `HARNESS_AGENT`; the eval sandbox sets `KENGASH_HOME` and runs `kengash` (SP8).
 - 2026-10-26: `init`, `link` and `adopt` write `.kengash` and drop a `.harness` link to the same project; `doctor` reports such a legacy link once and `--fix` removes it; `adopt`, the nearby scan and the init refusal take a real `.kengash/` or `.harness/` folder; `InitResult.link` (SP8).
 - 2026-10-26: `projects.migrate_home()` (the CLI's one-time store move); the UI server gets its token as `KENGASH_UI_TOKEN` (SP8).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).

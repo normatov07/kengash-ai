@@ -97,7 +97,7 @@ def test_wait_times_out_while_work_runs(engine: Engine) -> None:
 def test_ping_records_the_conductor(
     store_paths: StorePaths, registered_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("HARNESS_AGENT", "codex")
+    monkeypatch.setenv("HARNESS_AGENT", "codex")  # the 0.1.0 name, still read
     waiting.ping(store_paths, "payments-api")
     [ping] = [json.loads(p.read_text()) for p in store_paths.conductors.glob("[0-9]*.json")]
     assert (ping["agent"], ping["project"]) == ("codex", "payments-api")
@@ -150,3 +150,13 @@ def test_a_running_plan_review_is_not_idle(registered_repo: Path, store_paths: S
     )
     waiting.wait(None, timeout=0.1)  # sets the cursor
     assert waiting.wait(None, timeout=0.2, poll_s=0.05).timed_out
+
+
+def test_kengash_agent_wins_over_the_old_name(
+    store_paths: StorePaths, registered_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HARNESS_AGENT", "codex")
+    monkeypatch.setenv("KENGASH_AGENT", "claude")
+    waiting.ping(store_paths, "payments-api")
+    [ping] = [json.loads(p.read_text()) for p in store_paths.conductors.glob("[0-9]*.json")]
+    assert ping["agent"] == "claude"

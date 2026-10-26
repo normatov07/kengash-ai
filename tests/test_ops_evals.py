@@ -118,7 +118,7 @@ def test_a_scenario_passes_when_the_conductor_does_the_work(
     assert argv[:2] == ["-p", "/to-plan Add add(a, b)"] and call["cwd"] == str(work / "repo")
     assert argv[argv.index("--model") + 1] == "haiku" and "dontAsk" in argv
     assert argv[-4:] == ["Read", "Grep", "Glob", "Bash(harness:*)"]
-    assert call["env"]["HARNESS_AGENT"] == "claude" and "CLAUDECODE" not in call["env"]
+    assert call["env"]["KENGASH_AGENT"] == "claude" and "CLAUDECODE" not in call["env"]
     assert (work / "repo" / ".claude" / "skills" / "to-plan" / "SKILL.md").is_file()
 
 
@@ -221,7 +221,7 @@ def test_settings_and_turns_get_the_agent_placeholders(
     fake_clis.queue("claude", stdout=claude_reply(), shell=PLAN_NEW)
     case = scenario(settings="plan.reviewer: {cli}\n", turns=["/to-plan on {agent} {model}"])
     assert run(work, source, case).passed
-    settings = (work / "home" / ".harness" / "defaults" / "SETTINGS.md").read_text()
+    settings = (work / "home" / ".kengash" / "defaults" / "SETTINGS.md").read_text()
     assert settings == "plan.reviewer: claude/haiku\n"
     assert fake_clis.calls("claude")[0]["argv"][1] == "/to-plan on claude haiku"
     assert evals.agent_values("codex", None) == {"agent": "codex", "model": "", "cli": "codex"}
@@ -243,7 +243,7 @@ def test_a_clean_expectation_names_changed_files(
 UI_STANDIN = (
     "import json, os, subprocess; "
     "quiet = subprocess.DEVNULL; "
-    'home = os.environ["HARNESS_HOME"]; '
+    'home = os.environ["KENGASH_HOME"]; '
     'server = subprocess.Popen(["sleep", "60"], start_new_session=True, '
     "stdin=quiet, stdout=quiet, stderr=quiet); "
     'os.makedirs(home + "/runtime", exist_ok=True); '
@@ -268,7 +268,7 @@ def test_a_ui_the_conductor_starts_is_stopped_after_the_run(
     fake_clis.queue("claude", stdout=claude_reply(), shell=START_UI)
     result = run(work, source, scenario(expect={"ui": True}))
     assert (result.passed, result.failure) == (True, "")
-    record = work / "home" / ".harness" / "runtime" / "ui.json"
+    record = work / "home" / ".kengash" / "runtime" / "ui.json"
     pid = int((work / "home" / "ui.pid").read_text())
     assert not record.exists() and not lifecycle.pid_alive(pid)
     (call,) = fake_clis.calls("claude")

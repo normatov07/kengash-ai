@@ -169,30 +169,30 @@ def test_relink_refuses_a_path_registered_under_another_slug(
         projects.relink("payments-api", other)
 
 
-def test_doctor_warns_about_a_foreign_harness(
+def test_doctor_warns_about_a_foreign_kengash(
     registered_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     foreign = tmp_path / "foreign-bin"
     foreign.mkdir()
-    script = foreign / "harness"
-    script.write_text("#!/bin/sh\necho 'harness 2.1.0'\n")
+    script = foreign / "kengash"
+    script.write_text("#!/bin/sh\necho 'kengash 2.1.0'\n")
     script.chmod(0o755)
     monkeypatch.setenv("PATH", f"{foreign}{os.pathsep}{os.environ['PATH']}")
     assert providers.cli_clash() == (
-        f"the first harness on PATH ({script}) is not kengash-ai; "
-        "run hrn instead, and install skills with --cli-name hrn"
+        f"the first kengash on PATH ({script}) is not kengash-ai; put kengash-ai's first on "
+        "PATH, or install skills with --cli-name set to its full path"
     )
     report = projects.doctor(fix=False, scan=None)
     assert any(p.warning and "not kengash-ai" in p.message for p in report.problems)
 
 
-@pytest.mark.parametrize("banner", ["kengash-ai 0.1.0", "super-harness 0.1.0"])
-def test_a_harness_of_ours_before_or_after_the_rename_is_fine(
+@pytest.mark.parametrize("banner", ["kengash-ai 0.1.0", "kengash-ai 0.2.0"])
+def test_a_kengash_of_ours_is_fine(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, banner: str
 ) -> None:
     ours = tmp_path / "older-bin"
     ours.mkdir()
-    script = ours / "harness"
+    script = ours / "kengash"
     script.write_text(f"#!/bin/sh\necho '{banner}'\n")
     script.chmod(0o755)
     monkeypatch.setenv("PATH", f"{ours}{os.pathsep}{os.environ['PATH']}")

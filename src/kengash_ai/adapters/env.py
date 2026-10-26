@@ -18,5 +18,5 @@ def worker_env(
     dropped = {key for keys in API_KEYS.values() for key in keys} - kept
     dropped.update(CONDUCTOR_MARKERS)
     env = {key: value for key, value in environ.items() if key not in dropped}
-    env["HARNESS_AGENT"] = role
+    env["KENGASH_AGENT"] = role
     return env

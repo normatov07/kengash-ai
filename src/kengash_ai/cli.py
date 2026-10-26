@@ -33,7 +33,7 @@ from kengash_ai.ops import (
 )
 
 app = typer.Typer(
-    name="harness",
+    name="kengash",
     help="Run many projects at once with subscription coding-agent CLIs.",
     no_args_is_help=True,
     add_completion=False,
@@ -47,6 +47,16 @@ def _require_posix() -> None:
     if sys.platform == "win32":
         typer.echo("harness runs on Linux and macOS; on Windows use WSL", err=True)
         raise typer.Exit(4)
+
+
+DEPRECATED = "harness is now kengash; the harness and hrn names stop working in 0.3.0"
+
+
+def legacy() -> None:
+    """The 0.1.0 entry points, `harness` and `hrn`: one stderr line, then the same app, so
+    `--json` output stays clean (SP8 spec decision 1)."""
+    print(DEPRECATED, file=sys.stderr)
+    app()
 
 
 def _prepare() -> None:
@@ -193,7 +203,10 @@ Project = Annotated[
 ]
 Only = Annotated[str | None, typer.Option("--project", "-p", help="Look only in this project.")]
 By = Annotated[
-    str, typer.Option("--by", envvar="HARNESS_AGENT", help="Who is acting, for the journal.")
+    str,
+    typer.Option(
+        "--by", envvar=["KENGASH_AGENT", "HARNESS_AGENT"], help="Who is acting, for the journal."
+    ),
 ]
 
 
@@ -938,8 +951,9 @@ def skills_install(
         Path | None, typer.Option("--path", help="A folder in the repo; default: this folder.")
     ] = None,
     cli_name: Annotated[
-        str, typer.Option("--cli-name", help="The command the skills call, e.g. hrn.")
-    ] = "harness",
+        str,
+        typer.Option("--cli-name", help="The command the skills call: kengash, or a full path."),
+    ] = "harness",  # becomes kengash once the skills call kengash (SP8 Task 6)
     yes: Annotated[bool, typer.Option("--yes", help="Replace skills that differ.")] = False,
     as_json: AsJson = False,
 ) -> None:

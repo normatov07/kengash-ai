@@ -80,9 +80,12 @@ def check_workers(paths: StorePaths, *, fix: bool = True) -> list[str]:
 
 def ping(paths: StorePaths, project: str | None) -> None:
     """Record the conductor: the nearest ancestor named claude, codex or agy, else the
-    parent; its agent is $HARNESS_AGENT, else the detected name, else `unknown`."""
+    parent; its agent is $KENGASH_AGENT ($HARNESS_AGENT before 0.2.0), else the detected
+    name, else `unknown`."""
     pid, detected = _conductor()
-    agent = os.environ.get("HARNESS_AGENT") or detected or "unknown"
+    agent = (
+        os.environ.get("KENGASH_AGENT") or os.environ.get("HARNESS_AGENT") or detected or "unknown"
+    )
     runtime.save_ping(paths, ConductorPing(pid=pid, agent=agent, project=project))
 
 

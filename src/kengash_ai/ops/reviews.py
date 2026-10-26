@@ -142,8 +142,8 @@ def review_plan(
 
 
 def conductor_provider(by: str) -> str | None:
-    """The conductor's provider: `--by` (default $HARNESS_AGENT) when it names an agent CLI,
-    else claude when running inside Claude Code."""
+    """The conductor's provider: `--by` (default $KENGASH_AGENT, then $HARNESS_AGENT) when it
+    names an agent CLI, else claude when running inside Claude Code."""
     found = CONDUCTORS.get(by)
     if found is None and by in ("", "unknown") and os.environ.get("CLAUDECODE") == "1":
         return "claude"

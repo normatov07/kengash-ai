@@ -42,6 +42,16 @@ def run_git() -> Callable[..., str]:
     return git
 
 
+@pytest.fixture(autouse=True)
+def _hermetic_store(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No test reaches the developer's real store, nor moves a real ~/.harness: every test
+    starts with KENGASH_HOME in a temporary folder (tests of the move unset it)."""
+    monkeypatch.setenv("KENGASH_HOME", str(tmp_path_factory.mktemp("store") / ".kengash"))
+    monkeypatch.delenv("HARNESS_HOME", raising=False)
+
+
 @pytest.fixture
 def store_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> StorePaths:
     home = tmp_path / "home" / ".harness"

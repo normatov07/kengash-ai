@@ -185,7 +185,7 @@ def run_scenario(
     source: Path | None = None,
 ) -> EvalRun:
     """Build the sandbox, run every turn headless, stop leftover workers, check."""
-    home, repo = work / "home" / ".harness", work / "repo"
+    home, repo = work / "home" / ".kengash", work / "repo"
     paths = StorePaths(home)
     env = _env(agent, home, work)
 
@@ -194,7 +194,7 @@ def run_scenario(
 
     _scratch_repo(repo, scenario.files, env)
     values = agent_values(agent, model)
-    init = _harness(["init", str(repo)], env, repo)
+    init = _kengash(["init", str(repo)], env, repo)
     if init.returncode != 0:
         return failed(f"harness init failed: {_tail(init.stderr)}")
     slug = next(iter(load_registry(paths).projects))
@@ -203,7 +203,7 @@ def run_scenario(
             target.write_text(fill(scenario.settings, values), encoding="utf-8")
     for number, step in enumerate(scenario.setup, 1):
         args = [fill(arg, values) for arg in step.args]
-        done = _harness(args, env, repo, stdin=fill(step.stdin, values))
+        done = _kengash(args, env, repo, stdin=fill(step.stdin, values))
         if done.returncode != 0:
             return failed(f"setup step {number} failed: {_tail(done.stderr or done.stdout)}")
         if step.save:
@@ -326,9 +326,10 @@ def _env(agent: str, home: Path, work: Path) -> dict[str, str]:
     config = work / "gitconfig"
     config.write_text("[user]\n\tname = Eval\n\temail = eval@example.com\n", encoding="utf-8")
     env = worker_env(os.environ, agent, agent, allow_api_key=False)
-    env |= {"HARNESS_HOME": str(home), "GIT_CONFIG_GLOBAL": str(config), "GIT_CONFIG_NOSYSTEM": "1"}
+    env |= {"KENGASH_HOME": str(home), "GIT_CONFIG_GLOBAL": str(config), "GIT_CONFIG_NOSYSTEM": "1"}
+    env.pop("HARNESS_HOME", None)  # the sandbox store, whatever the caller set
     env["PATH"] = os.pathsep.join([str(BIN), env.get("PATH", "")])
-    env["BROWSER"] = "true"  # `harness ui open` opens no window on the user's desktop
+    env["BROWSER"] = "true"  # `kengash ui open` opens no window on the user's desktop
     return env
 
 
@@ -342,11 +343,11 @@ def _scratch_repo(repo: Path, files: Mapping[str, str], env: Mapping[str, str]) 
         subprocess.run(["git", *args], cwd=repo, env=dict(env), check=True, capture_output=True)
 
 
-def _harness(
+def _kengash(
     args: list[str], env: Mapping[str, str], cwd: Path, *, stdin: str = ""
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [str(BIN / "harness"), *args],
+        [str(BIN / "kengash"), *args],
         cwd=cwd,
         env=dict(env),
         input=stdin,
