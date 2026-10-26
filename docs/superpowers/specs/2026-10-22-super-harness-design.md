@@ -533,12 +533,12 @@ super-harness/
 
 ### 12.3 Acceptance
 
-- [ ] `make setup && make check` passes on a fresh clone on Linux and macOS.
-- [ ] `uv run harness --version` and `uv run hrn --version` print the version.
-- [ ] AGENTS.md has at most 100 lines; CLAUDE.md and GEMINI.md import it; a Codex session and an `agy` session started in the repo both see its rules (manual check, recorded in the plan).
-- [ ] `check_docs_sync.py` fails on a deliberate undocumented module change and passes once the doc is updated.
-- [ ] `check_md_caps.py` fails on an oversized doc.
-- [ ] CI runs `make check` and is green.
+- [ ] `make setup && make check` passes on a fresh clone on Linux and macOS. (Linux: fresh clone of `main` at c7c6419 on 2026-10-26, 534 passed; macOS: not yet run, no Mac available.)
+- [x] `uv run harness --version` and `uv run hrn --version` print the version (`super-harness 0.1.0`, same run).
+- [ ] AGENTS.md has at most 100 lines; CLAUDE.md and GEMINI.md import it; a Codex session and an `agy` session started in the repo both see its rules (manual check, recorded in the plan). (agy 1.4.5 on 2026-10-22, see `docs/architecture.md`; Codex rests on its documentation until the CLI is installed.)
+- [x] `check_docs_sync.py` fails on a deliberate undocumented module change and passes once the doc is updated (`tests/test_check_docs_sync.py::test_base_mode_fails_until_the_doc_lands`).
+- [x] `check_md_caps.py` fails on an oversized doc (`tests/test_check_md_caps.py`).
+- [ ] CI runs `make check` and is green. (`.github/workflows/ci.yml` runs it; confirm the latest run on GitHub.)
 
 ## 13. Roadmap
 

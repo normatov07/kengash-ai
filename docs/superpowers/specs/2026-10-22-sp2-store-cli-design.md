@@ -86,8 +86,8 @@ Harness fills `id`, `uuid`, `project`, `plan`, `workflow` (= importance), `loop:
 
 ## 6. Acceptance (SP2 exit)
 
-- [ ] `harness init` in a git repo creates the store, the link and the exclude entry; a second run changes nothing.
-- [ ] After moving a repo, `harness doctor` reports it and `harness link` repairs it; a broken link is fixed by `harness doctor --fix`.
-- [ ] `harness adopt` merges by uuid, keeps every losing copy in the archive, and leaves the link in place.
-- [ ] Settings, memory, plan and ticket commands behave as in §3, including caps, redaction, journal events, dependency validation and blocked → ready transitions.
-- [ ] `make check` (with import-linter) is green; module docs exist for every new module.
+- [x] `harness init` in a git repo creates the store, the link and the exclude entry; a second run changes nothing (`test_init_registers_links_and_seeds`, `test_init_is_idempotent_and_keeps_edits`).
+- [x] After moving a repo, `harness doctor` reports it and `harness link` repairs it; a broken link is fixed by `harness doctor --fix` (`test_moved_repo_is_reported_and_relinked`, `test_doctor_fix_repairs_a_broken_link`).
+- [x] `harness adopt` merges by uuid, keeps every losing copy in the archive, and leaves the link in place (`test_adopt_merges_by_uuid_and_archives_everything`).
+- [x] Settings, memory, plan and ticket commands behave as in §3, including caps, redaction, journal events, dependency validation and blocked → ready transitions (`tests/test_settings.py`, `test_memory.py`, `test_redact.py`, `test_journal.py`, `test_ops_plans.py`, `test_ops_tickets.py`).
+- [x] `make check` (with import-linter) is green; module docs exist for every new module (`make check` on 2026-10-26; `scripts/check_docs_sync.py`).
