@@ -7,13 +7,16 @@ from typing import Self
 
 from kengash_ai.model import Folder
 
-ENV_HOME = "HARNESS_HOME"
+ENV_HOME = "KENGASH_HOME"
+LEGACY_ENV_HOME = "HARNESS_HOME"  # read until 0.3.0 (SP8 spec decision 2)
+HOME_NAME = ".kengash"
+LEGACY_HOME_NAME = ".harness"
 
 
-def harness_home() -> Path:
-    """The store root: $HARNESS_HOME, else ~/.harness."""
-    value = os.environ.get(ENV_HOME)
-    return Path(value).expanduser() if value else Path.home() / ".harness"
+def kengash_home() -> Path:
+    """The store root: $KENGASH_HOME, else $HARNESS_HOME, else ~/.kengash."""
+    value = os.environ.get(ENV_HOME) or os.environ.get(LEGACY_ENV_HOME)
+    return Path(value).expanduser() if value else Path.home() / HOME_NAME
 
 
 @dataclass(frozen=True)
@@ -50,7 +53,7 @@ class StorePaths:
 
     @classmethod
     def default(cls) -> Self:
-        return cls(harness_home().absolute())
+        return cls(kengash_home().absolute())
 
     @property
     def registry(self) -> Path:

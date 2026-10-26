@@ -45,7 +45,7 @@ def run_git() -> Callable[..., str]:
 @pytest.fixture
 def store_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> StorePaths:
     home = tmp_path / "home" / ".harness"
-    monkeypatch.setenv("HARNESS_HOME", str(home))
+    monkeypatch.setenv("KENGASH_HOME", str(home))
     return StorePaths(home)
 
 

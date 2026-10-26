@@ -56,6 +56,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-26: `projects.migrate_home()` (the CLI's one-time store move); the UI server gets its token as `KENGASH_UI_TOKEN` (SP8).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-26: no unsupported providers remain: `agents`, `providers` and the Agents cards lose the gemini branch; `ProviderCard.supported` removed (SP7).
 - 2026-10-26: `jobs.prune_logs(paths, keep_days)` removes runtime/logs files untouched longer than `logs.keep_days`, at every worker spawn and on `doctor --fix` (SP7).

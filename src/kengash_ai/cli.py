@@ -49,8 +49,16 @@ def _require_posix() -> None:
         raise typer.Exit(4)
 
 
-def _print_version(value: bool) -> None:
+def _prepare() -> None:
+    """Every run starts here: a supported platform, then a 0.1.0 store moved once."""
     _require_posix()
+    note = projects.migrate_home()
+    if note is not None:
+        typer.echo(note, err=True)
+
+
+def _print_version(value: bool) -> None:
+    _prepare()
     if value:
         typer.echo(f"kengash-ai {__version__}")
         raise typer.Exit()
@@ -69,7 +77,7 @@ def main(
     ] = False,
 ) -> None:
     """Run many projects at once with subscription coding-agent CLIs."""
-    _require_posix()
+    _prepare()
 
 
 @contextmanager

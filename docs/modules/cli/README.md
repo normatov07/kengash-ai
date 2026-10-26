@@ -27,6 +27,7 @@ Typer command surface for `harness` (alias `hrn`): parses arguments and formats 
 
 ## Changes
 
+- 2026-10-26: every run first moves a 0.1.0 store once and prints the note on stderr (SP8).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-26: on native Windows every command exits 4 with "harness runs on Linux and macOS; on Windows use WSL" (SP7).
 - 2026-10-26: `agent new`, `agent remove` (SP6).

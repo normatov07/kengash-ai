@@ -79,7 +79,7 @@ def _start(paths: StorePaths) -> UiRecord:
     port = _free_port()
     token = secrets.token_urlsafe(32)
     paths.logs.mkdir(parents=True, exist_ok=True)
-    env = dict(os.environ, HARNESS_UI_TOKEN=token)
+    env = dict(os.environ, KENGASH_UI_TOKEN=token)
     with (paths.logs / "ui.log").open("ab") as log:
         process = subprocess.Popen(
             [sys.executable, "-m", "kengash_ai.ui", "--port", str(port)],

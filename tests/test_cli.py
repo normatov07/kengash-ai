@@ -1,6 +1,7 @@
 import re
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -40,3 +41,15 @@ def test_native_windows_stops_with_the_wsl_message(monkeypatch: pytest.MonkeyPat
         result = runner.invoke(app, args)
         assert result.exit_code == 4
         assert "harness runs on Linux and macOS; on Windows use WSL" in result.output
+
+
+def test_the_first_command_moves_a_0_1_store_and_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.delenv("KENGASH_HOME", raising=False)
+    monkeypatch.delenv("HARNESS_HOME", raising=False)
+    (tmp_path / ".harness").mkdir()
+    result = runner.invoke(app, ["--version"])
+    assert result.exit_code == 0 and (tmp_path / ".kengash").is_dir()
+    assert f"moved {tmp_path / '.harness'} to {tmp_path / '.kengash'}" in result.stderr

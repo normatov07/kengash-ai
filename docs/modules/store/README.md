@@ -29,6 +29,7 @@ Everything under `~/.harness`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
+- 2026-10-26: the store is `~/.kengash` (`KENGASH_HOME`, then `HARNESS_HOME`; `kengash_home()`); `migrate.legacy_home()` moves a plain `~/.harness` there once and leaves `~/.harness` linking to it, never merging two real folders or moving a custom location (SP8).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-26: defaults `sessions.per_provider` drops gemini (SP7).
 - 2026-10-26: defaults SETTINGS.md documents `logs.keep_days` (SP7).

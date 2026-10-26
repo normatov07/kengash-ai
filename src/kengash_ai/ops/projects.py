@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from kengash_ai.model import NeedsSetup, Plan, ProjectEntry, Ticket, UserError, utc_now
 from kengash_ai.ops import jobs, providers, waiting
 from kengash_ai.ops.records import repo_root
-from kengash_ai.store import documents, links, seed, storegit
+from kengash_ai.store import documents, links, migrate, seed, storegit
 from kengash_ai.store.locks import locked
 from kengash_ai.store.paths import ProjectPaths, StorePaths
 from kengash_ai.store.registry import (
@@ -92,6 +92,12 @@ def relink(slug: str, new_path: Path, paths: StorePaths | None = None) -> InitRe
     warnings = _attach(repo, project)
     storegit.commit_store(paths, f"harness: link {slug}")
     return InitResult(slug, repo, project.root, False, warnings)
+
+
+def migrate_home() -> str | None:
+    """Move a 0.1.0 store (~/.harness) to ~/.kengash once, leaving a link; the note to
+    show, or None (SP8 spec decision 2)."""
+    return migrate.legacy_home()
 
 
 def doctor(
