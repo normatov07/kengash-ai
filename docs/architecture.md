@@ -1,6 +1,6 @@
 # Architecture
 
-System map of Kengash AI. The contract is the spec, `docs/superpowers/specs/2026-10-22-super-harness-design.md`; this page records what exists now. Update the Status columns whenever a module or sub-project lands.
+System map of Kengash AI. The contract is the spec, `docs/superpowers/specs/2026-10-22-kengash-design.md`; this page records what exists now. Update the Status columns whenever a module or sub-project lands.
 
 ## Flow
 

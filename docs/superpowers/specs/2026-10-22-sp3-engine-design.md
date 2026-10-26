@@ -2,7 +2,7 @@
 
 - Date: 2026-10-22
 - Status: approved by default (user prefers momentum; assumptions listed in §2 for veto)
-- Implements: system spec `2026-10-22-super-harness-design.md` §5 (loop semantics), §6 (`next`, `run`, `wait`, gates and controls, `plan review`, `ticket changes`, `memory compact`), §7 (workers and provider adapters); units `workflow`, `scheduler`, `adapters`, `gitops`, `worker`, and their `ops` use cases.
+- Implements: system spec `2026-10-22-kengash-design.md` §5 (loop semantics), §6 (`next`, `run`, `wait`, gates and controls, `plan review`, `ticket changes`, `memory compact`), §7 (workers and provider adapters); units `workflow`, `scheduler`, `adapters`, `gitops`, `worker`, and their `ops` use cases.
 - This spec only adds what the system spec leaves open. The system spec changes it needs (§2) were made in the same commit.
 - CLI facts were checked on 2026-10-22: claude 2.1.308 and agy 1.4.5 with short real runs; codex 0.161.0 through `--help` only, because it is not installed or signed in on the dev machine. Permission rows re-checked on 2026-10-23 with claude 2.1.309 and agy 1.4.5 (M2).
 

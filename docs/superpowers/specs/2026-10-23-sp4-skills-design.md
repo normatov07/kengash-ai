@@ -2,7 +2,7 @@
 
 - Date: 2026-10-23
 - Status: approved by default (user prefers momentum; assumptions listed in §2 for veto)
-- Implements: system spec `2026-10-22-super-harness-design.md` §8 (installed skills, role skills, writing standard, distribution), §12 (`--cli-name hrn` and the doctor clash report), roadmap row 4; conventions `docs/conventions/skills.md`.
+- Implements: system spec `2026-10-22-kengash-design.md` §8 (installed skills, role skills, writing standard, distribution), §12 (`--cli-name hrn` and the doctor clash report), roadmap row 4; conventions `docs/conventions/skills.md`.
 - This spec only adds what the system spec leaves open. System spec changes it needs (§2) are made in the same commit.
 - CLI facts checked on 2026-10-23 without model calls: claude 2.1.309 (`claude plugin validate`, `claude plugin eval`), agy 1.4.5 (`agy plugin validate`; workspace skills in `.agents/skills/`; `--disable-slash-commands` disables "slash command and skill expansion in print mode", so print mode expands skills). Codex is not installed on the dev machine: its paths come from its documentation only.
 
