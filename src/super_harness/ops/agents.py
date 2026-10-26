@@ -8,7 +8,7 @@ from super_harness import adapters
 from super_harness.model import NeedsSetup, ProviderStatus, Settings, split_cli
 from super_harness.store.paths import StorePaths
 
-UNSUPPORTED = ("gemini",)
+UNSUPPORTED = adapters.UNSUPPORTED
 
 
 @dataclass(frozen=True)
@@ -57,7 +57,7 @@ def detector(paths: StorePaths) -> Callable[[str], ProviderStatus]:
 def problem(provider: str, status: Callable[[str], ProviderStatus]) -> str | None:
     """Why `provider` cannot run now, or None when it can."""
     if provider in UNSUPPORTED:
-        return f"{provider} is not supported yet; pick another provider in SETTINGS.md"
+        return f"{provider} is not supported: {UNSUPPORTED[provider]}"
     found = status(provider)
     if not found.installed:
         return f"{provider} not installed; {found.hint}"

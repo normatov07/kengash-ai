@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 from super_harness import __version__, journal, settings, workflow
 from super_harness.model import (
+    BUILTIN_KINDS,
     PROVIDERS,
     STEP_ROLES,
     ConductorPing,
@@ -58,6 +59,7 @@ COLUMNS = (
     ("done", "Done"),
 )
 CORE_STEPS = frozenset({"plan", "implement", "review_code", "security"})  # shown even when empty
+BUILTIN_ROLES = frozenset(role for role in STEP_ROLES.values() if role)
 CHIPS = {
     "blocked": "blocked",
     "parked": "parked",
@@ -250,6 +252,9 @@ class Role:
     fallback: list[str]
     used_in: list[str]
     tokens: int
+    custom: bool = False  # a user's role (SP6), not one of the built-in steps' roles
+    step: str | None = None  # the custom step it runs
+    does: str = ""  # that step's instruction
 
 
 @dataclass
@@ -265,6 +270,7 @@ class AgentsView:
     fallback_on_rate_limit: bool = True
     per_provider: dict[str, int] = field(default_factory=dict)
     routing: dict[str, list[str]] = field(default_factory=dict)
+    loop_max: dict[str, int] = field(default_factory=dict)  # each importance's loop cap
     set_here: list[str] = field(default_factory=list)
     problem: str = ""
 
@@ -291,6 +297,8 @@ class WorkflowsView:
     blocking: list[str] = field(default_factory=list)  # roles that stop a ticket until they pass
     library: list[str] = field(default_factory=lambda: list(STEP_ROLES))
     roles: dict[str, str | None] = field(default_factory=lambda: dict(STEP_ROLES))
+    kinds: dict[str, str | None] = field(default_factory=lambda: dict(BUILTIN_KINDS))
+    does: dict[str, str] = field(default_factory=dict)  # each custom step's instruction
     set_here: list[str] = field(default_factory=list)
     problem: str = ""
 
@@ -521,14 +529,22 @@ def board(paths: StorePaths | None = None, *, project: str | None = None) -> Boa
                 list(ticket.tags),
             )
         )
-    shown = [
-        key for key, _ in COLUMNS if key in ("in_queue", "done") or key in CORE_STEPS or placed[key]
-    ]
-    titles = dict(COLUMNS)
     try:
         resolved: Settings | None = settings.load(paths, project)
     except HarnessError:
         resolved = None
+    titles = dict(COLUMNS)
+    order = [key for key, _ in COLUMNS]
+    used = {s for flow in resolved.workflows.values() for s in flow.steps} if resolved else set()
+    custom = [s for s in (resolved.steps if resolved else {}) if s in used]
+    custom += sorted(key for key in placed if key not in titles and key not in custom)
+    order[order.index("approve") : order.index("approve")] = custom
+    titles |= {key: key.replace("_", " ").capitalize() for key in custom}
+    shown = [
+        key
+        for key in order
+        if key in ("in_queue", "done") or key in CORE_STEPS or key in custom or placed[key]
+    ]
     columns = []
     for key in shown:
         cards = sorted(placed[key], key=lambda card: (card.updated, card.id), reverse=key == "done")
@@ -550,7 +566,7 @@ def _place(paths: StorePaths, ticket: Ticket, resolved: Settings | None) -> tupl
     chip = CHIPS.get(
         _gate_kind(paths, ticket) if ticket.sub_status in GATES else ticket.sub_status, ""
     )
-    if ticket.step in STEP_ROLES:
+    if ticket.step in STEP_ROLES or (resolved is not None and ticket.step in resolved.steps):
         return str(ticket.step), chip
     steps: list[str] = []
     if resolved is not None and ticket.workflow in resolved.workflows:
@@ -559,9 +575,9 @@ def _place(paths: StorePaths, ticket: Ticket, resolved: Settings | None) -> tupl
 
 
 def _footer(paths: StorePaths, key: str, cards: list[Card], resolved: Settings | None) -> str:
-    role = STEP_ROLES.get(key)
     if key in ("in_queue", "done") or resolved is None:
         return ""
+    role = resolved.role_of(key)
     if role is None:
         return "you approve"
     agent = resolved.agents.get(role)
@@ -704,7 +720,7 @@ def agents_view(
                 status.signed_in if status else False,
                 name not in agents.UNSUPPORTED,
                 status.version if status else None,
-                status.hint if status else "",
+                agents.UNSUPPORTED.get(name) or (status.hint if status else ""),
                 held[name],
                 resolved.sessions.per_provider.get(name, 0),
                 spend.get(name, 0),
@@ -717,8 +733,9 @@ def agents_view(
         used_in = [
             name
             for name, flow in resolved.workflows.items()
-            if any(STEP_ROLES.get(step) == role for step in flow.steps)
+            if any(resolved.role_of(step) == role for step in flow.steps)
         ]
+        own = [name for name, step in resolved.steps.items() if step.role == role]
         skill_file = skill_ops.role_file(paths, project, agent.skill)
         found.roster.append(
             Role(
@@ -733,6 +750,9 @@ def agents_view(
                 agent.fallback,
                 used_in,
                 tokens.get(role, 0),
+                role not in BUILTIN_ROLES,
+                own[0] if own else None,
+                resolved.steps[own[0]].does if own else "",
             )
         )
     found.sessions_max = resolved.sessions.max
@@ -740,6 +760,7 @@ def agents_view(
     found.fallback_on_rate_limit = resolved.fallback_on_rate_limit
     found.per_provider = dict(resolved.sessions.per_provider)
     found.routing = {name: list(flow.steps) for name, flow in resolved.workflows.items()}
+    found.loop_max = resolved.loop_max.model_dump()
     return found
 
 
@@ -771,6 +792,10 @@ def workflows_view(paths: StorePaths | None = None, *, project: str | None) -> W
     found.review_diff_only = resolved.review.diff_only
     found.sessions_reuse = resolved.sessions.reuse
     found.blocking = [role for role, agent in resolved.agents.items() if agent.blocking]
+    found.library = resolved.step_names()
+    found.roles = {step: resolved.role_of(step) for step in found.library}
+    found.kinds = {step: resolved.kind_of(step) for step in found.library}
+    found.does = {name: step.does for name, step in resolved.steps.items()}
     return found
 
 
@@ -1041,11 +1066,14 @@ def _agent(paths: StorePaths, slug: str, ticket: Ticket) -> tuple[str, str]:
     running = runtime.load_ticket_state(paths, ticket.id).running
     if running is not None:
         return running.provider, running.model or "default"
-    role = STEP_ROLES.get(ticket.step or "")
-    if role is None:
-        return ("user" if ticket.step == "approve" else ""), ""
+    if ticket.step == "approve":
+        return "user", ""
     try:
-        provider, model = split_cli(settings.load(paths, slug).agents[role].cli)
+        resolved = settings.load(paths, slug)
+        role = resolved.role_of(ticket.step or "")
+        if role is None:
+            return "", ""
+        provider, model = split_cli(resolved.agents[role].cli)
     except (HarnessError, KeyError):
         return "", ""
     return provider, model or "default"
@@ -1157,7 +1185,7 @@ def _chain(
             state = "done"
         elif index == current:
             state = here
-        chain.append(ChainStep(step, STEP_ROLES.get(step), runs, state))
+        chain.append(ChainStep(step, resolved.role_of(step), runs, state))
     return chain
 
 

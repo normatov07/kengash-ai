@@ -1,12 +1,14 @@
 // Agents and providers (canvas board Agents): which CLIs this machine has and their sign-in,
 // the role roster (on or off, CLI and model, skill, where it is used, tokens) with a row
 // editor, session and token limits, and importance routing. Provider detection runs the
-// CLIs' sign-in checks, so the page renders first and the cards fill in after.
-import { get } from "../api.js";
+// CLIs' sign-in checks, so the page renders first and the cards fill in after. "New agent"
+// (SP6) adds a user's role and its step through `harness agent new`'s ops call.
+import { get, post } from "../api.js";
 import { tokens } from "../format.js";
+import { LABELS } from "../graph.js";
 import { html, mount } from "../html.js";
 import { icon } from "../icons.js";
-import { bindScope, loadScoped, scopeOf, tabs } from "../scope.js";
+import { armed, bindScope, loadScoped, scopeOf, tabs } from "../scope.js";
 
 const BLURBS = {
   planner: "writes the ticket's implementation plan",
@@ -21,9 +23,16 @@ const BLURBS = {
 const IMP = { critical: "#EF7A72", standard: "#D8B24C", simple: "#68A4E0" };
 const SHORT = { plan: "plan", review_plan: "review plan", implement: "implement", review_code: "review", security: "security", run_tests: "tests", docs: "docs", approve: "approve" };
 const COMMON_CLIS = ["claude", "claude/opus", "claude/sonnet", "claude/haiku", "codex", "antigravity", "shell"];
-const state = { open: new Set() };
+const KINDS = [
+  ["review", "Reviewer", "Reads the changes; a fail sends the ticket back and burns a loop"],
+  ["edit", "Worker", "Edits code in the ticket's worktree; harness commits"],
+  ["read", "Advisor", "Reads only and hands notes to the next step"],
+];
+const state = { open: new Set(), creating: false };
+const label = (step) => SHORT[step] ?? (LABELS[step] ?? step.replace(/_/g, " ")).toLowerCase();
 
-export async function load(app) {
+export async function load(app, arg) {
+  state.creating = arg === "new"; // #/agents/new, from Settings' status flow
   return loadScoped(app, "/api/agents", `&window=${app.window}&detect=0`);
 }
 
@@ -40,7 +49,7 @@ function provider(card) {
   const head = html`<div class="prov-head"><span class="mono prov-name ${ready || !card.checked ? "" : "muted"}">${card.name}</span>${badge(card)}</div>`;
   if (card.checked && !ready) {
     const why = !card.supported
-      ? "Not supported yet: pick another provider for its roles in SETTINGS.md."
+      ? card.hint || "Not supported yet: pick another provider for its roles in SETTINGS.md."
       : !card.installed
         ? `The ${card.name} CLI is not on this machine's PATH.`
         : `The ${card.name} CLI${card.version ? ` ${card.version}` : ""} is installed but no session has been signed in.`;
@@ -65,7 +74,7 @@ function role(item, setHere) {
   return html`<div class="roster-item ${item.on ? "" : "is-off"} ${item.blocking ? "is-blocking" : ""}">
     <div class="trow roster-row">
       <div class="r-on"><label class="switch big" title="${item.on ? "Switch off: the loop skips its step" : "Switch on"}"><input type="checkbox" aria-label="${item.role} on" data-key="agents.${item.role}.on" data-kind="bool" data-initial="${item.on ? "1" : ""}" ${item.on ? "checked" : ""}><span></span></label></div>
-      <div class="r-name"><div><b>${item.role}</b>${item.blocking ? html`<span class="cbadge" style="background: #2A2320; color: #D8B24C">BLOCKING</span>` : ""}${set("on") || set("cli") || set("skill") ? html`<span class="set-note inline">set here</span>` : ""}</div><div class="faint">${BLURBS[item.role] ?? ""}</div></div>
+      <div class="r-name"><div><b>${item.role}</b>${item.custom ? html`<span class="cbadge custom" title="Your agent: runs the step ${item.step ?? ""}">CUSTOM</span>` : ""}${item.blocking ? html`<span class="cbadge" style="background: #2A2320; color: #D8B24C">BLOCKING</span>` : ""}${set("on") || set("cli") || set("skill") ? html`<span class="set-note inline">set here</span>` : ""}</div><div class="faint ellipsis" title="${item.custom ? item.does : ""}">${item.custom ? item.does || `runs ${label(item.step ?? "")}` : BLURBS[item.role] ?? ""}</div></div>
       <div class="r-cli mono muted ellipsis" title="${item.cli}">${item.provider} · ${item.model}</div>
       <div class="r-skill mono faint ellipsis" title="${item.skill_file || "missing"}">${item.skill_file ? `roles/${item.skill}/SKILL.md` : html`<span class="danger-text">missing: ${item.skill}</span>`}</div>
       <div class="r-used">${usedIn(item)}</div>
@@ -77,6 +86,7 @@ function role(item, setHere) {
       <div class="field ${set("skill") ? "set" : ""}"><label for="skill-${item.role}">SKILL</label><input id="skill-${item.role}" class="mono" data-key="agents.${item.role}.skill" data-kind="text" data-initial="${item.skill}" value="${item.skill}"></div>
       <div class="field wide ${set("fallback") ? "set" : ""}"><label for="fb-${item.role}">FALLBACK CLIS (COMMA-SEPARATED)</label><input id="fb-${item.role}" class="mono" data-key="agents.${item.role}.fallback" data-kind="list" data-initial="${item.fallback.join(", ")}" value="${item.fallback.join(", ")}" placeholder="claude/sonnet, antigravity"></div>
       <label class="check"><input type="checkbox" data-key="agents.${item.role}.blocking" data-kind="bool" data-initial="${item.blocking ? "1" : ""}" ${item.blocking ? "checked" : ""}>Blocking: a ticket stops here until this role passes</label>
+      ${item.custom ? html`<button class="btn small danger end" type="button" data-remove-agent="${item.role}" title="Removes the agent, its step and every workflow use of it; its skill file stays">Remove agent</button>` : ""}
     </div>
   </div>`;
 }
@@ -87,15 +97,48 @@ function routing(data) {
     const steps = data.routing[name];
     const before = i ? data.routing[names[i - 1]] : [];
     const added = steps.filter((s) => !before.includes(s));
-    const text = i === 0 || !added.length ? steps.map((s) => SHORT[s] ?? s).join(" → ") : `+ ${added.map((s) => SHORT[s] ?? s).join(", ")}`;
+    let text = i === 0 || !added.length ? steps.map(label).join(" → ") : `+ ${added.map(label).join(", ")}`;
+    if (name === "critical" && data.loop_max?.[name]) text += `, ${data.loop_max[name]} loops`; // as the canvas shows it
     return html`<div class="route ${name === "critical" ? "is-crit" : ""}"><span class="bar" style="background: ${IMP[name] ?? "#78828F"}"></span><span>${name}</span><span class="end mono muted">${text}</span></div>`;
   });
 }
 
 const providersGrid = (data) => data.providers.map(provider);
 
+// Steps every chosen workflow has, in the first one's order: where the new step can go.
+function common(data, flows) {
+  const lists = flows.map((name) => data.routing[name] ?? []);
+  return lists.length ? lists[0].filter((step) => lists.every((list) => list.includes(step))) : [];
+}
+
+function newAgentDialog(data, app) {
+  const flows = Object.keys(data.routing);
+  const scope = scopeOf(app);
+  return html`<dialog class="na-dialog" id="new-agent" aria-labelledby="na-title"><form class="na-form" method="dialog" novalidate>
+    <div class="na-head"><h2 id="na-title">New agent</h2><p class="faint">A role, the step it runs and where that step sits. Written to ${scope ? `${scope}'s` : "the defaults'"} SETTINGS.md, with a starter skill you can edit.</p></div>
+    <div class="na-body">
+      <div class="na-row">
+        <div class="field"><label for="na-role">ROLE NAME</label><input id="na-role" name="role" required maxlength="31" pattern="[a-z][a-z0-9]*(-[a-z0-9]+)*" placeholder="perf-reviewer" autocomplete="off" spellcheck="false"></div>
+        <div class="field"><label for="na-cli">CLI · MODEL</label><input id="na-cli" name="cli" class="mono" list="agent-clis" value="claude" autocomplete="off"></div>
+      </div>
+      <div class="field"><label for="na-does">WHAT ITS STEP DOES</label><input id="na-does" name="does" class="sans-input" required maxlength="200" placeholder="Flag N+1 queries and hot loops in the changed code."></div>
+      <fieldset class="na-kinds"><legend>KIND</legend>${KINDS.map(
+        ([value, title, note], i) => html`<label class="na-kind"><input type="radio" name="kind" value="${value}" ${i === 0 ? "checked" : ""}><b>${title}</b><span>${note}</span></label>`,
+      )}</fieldset>
+      <fieldset class="na-flows"><legend>ADD ITS STEP TO</legend>${flows.map(
+        (name) => html`<label class="check"><input type="checkbox" name="workflows" value="${name}" ${name === "critical" ? "checked" : ""}><span class="bar" style="background: ${IMP[name] ?? "#78828F"}"></span>${name}</label>`,
+      )}</fieldset>
+      <div class="na-row">
+        <div class="field"><label for="na-after">AFTER STEP</label><select id="na-after" name="after"></select></div>
+        <div class="field" data-review-only><label for="na-back">A FAIL SENDS THE TICKET TO</label><select id="na-back" name="send_back"></select></div>
+      </div>
+    </div>
+    <div class="na-foot"><span class="na-error danger-text" role="alert"></span><button class="btn quiet" type="button" data-na-cancel>Cancel</button><button class="btn accent sans-btn" type="submit">Add agent</button></div>
+  </form></dialog>`;
+}
+
 export function top(data, app) {
-  return html`${tabs(app, data.projects)}<span class="note">${scopeOf(app) ? "inherits defaults unless overridden" : "editing the defaults copied into every new project"}</span><span class="spacer"></span><button class="btn quiet" type="button" data-discard disabled>Discard</button><button class="btn accent sans-btn" type="button" data-save disabled>Save to SETTINGS.md</button>`;
+  return html`${tabs(app, data.projects)}<span class="note">${scopeOf(app) ? "inherits defaults unless overridden" : "editing the defaults copied into every new project"}</span><span class="spacer"></span><button class="btn sans-btn new-agent" type="button" data-new-agent ${data.problem ? "disabled" : ""}>${icon("plus", { size: 13, width: 1.9 })}New agent</button><button class="btn quiet" type="button" data-discard disabled>Discard</button><button class="btn accent sans-btn" type="button" data-save disabled>Save to SETTINGS.md</button>`;
 }
 
 export function view(data, app) {
@@ -119,6 +162,7 @@ export function view(data, app) {
       </div></div>
       <datalist id="agent-clis">${clis.map((cli) => html`<option value="${cli}"></option>`)}</datalist>
     </section>
+    ${newAgentDialog(data, app)}
     <div class="agents-row">
       <section class="panel"><div class="panel-body">
         <h2 class="section-title" style="margin-bottom: 16px">Parallelism and limits</h2>
@@ -162,7 +206,17 @@ export function bind(root, app, data, bar) {
       again.textContent = "Check sign-in again";
     }
   });
-  root.addEventListener("click", (event) => {
+  bindNewAgent(root, app, data, bar);
+  root.addEventListener("click", async (event) => {
+    const remove = event.target.closest("[data-remove-agent]");
+    if (remove) {
+      if (!armed(remove, "Click again to remove")) return;
+      const role = remove.dataset.removeAgent;
+      state.open.delete(role);
+      const done = await app.post(`/api/agents/${encodeURIComponent(role)}/remove`, { project: scopeOf(app) });
+      if (done) app.toast(`Removed ${role}, its step and its workflow edges; its skill file stays.`);
+      return;
+    }
     const edit = event.target.closest("[data-edit]");
     if (!edit) return;
     const editor = edit.closest(".roster-item").querySelector(".roster-editor");
@@ -172,4 +226,68 @@ export function bind(root, app, data, bar) {
     if (open) state.open.add(edit.dataset.edit);
     else state.open.delete(edit.dataset.edit);
   });
+}
+
+function bindNewAgent(root, app, data, bar) {
+  const dialog = root.querySelector("#new-agent");
+  const form = dialog.querySelector("form");
+  const f = form.elements; // not form.role: a form's own properties (role, …) would win
+  const error = dialog.querySelector(".na-error");
+  const options = (select, steps, keep, empty = "") => {
+    const current = select.value || keep;
+    mount(select, html`${empty ? html`<option value="">${empty}</option>` : ""}${steps.map((step) => html`<option value="${step}">${label(step)}</option>`)}`);
+    select.value = steps.includes(current) ? current : empty ? "" : steps[0] ?? "";
+  };
+  const sync = () => {
+    const flows = [...form.querySelectorAll("[name=workflows]:checked")].map((box) => box.value);
+    const steps = common(data, flows);
+    const review = f.kind.value === "review";
+    options(f.after, steps, steps.includes("review_code") ? "review_code" : "", "last, before approval");
+    options(f.send_back, steps, "implement");
+    f.after.disabled = !flows.length;
+    dialog.querySelector("[data-review-only]").hidden = !review;
+  };
+  const open = () => {
+    form.reset();
+    error.textContent = "";
+    sync();
+    dialog.showModal();
+    f.role.focus();
+  };
+  form.addEventListener("change", sync);
+  dialog.querySelector("[data-na-cancel]").addEventListener("click", () => dialog.close());
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    const flows = [...form.querySelectorAll("[name=workflows]:checked")].map((box) => box.value);
+    const review = f.kind.value === "review";
+    const body = {
+      project: scopeOf(app),
+      role: f.role.value.trim(),
+      kind: f.kind.value,
+      does: f.does.value.trim(),
+      cli: f.cli.value.trim() || "claude",
+      workflows: flows,
+      after: flows.length && f.after.value ? f.after.value : null,
+      send_back: review && flows.length && f.send_back.value ? f.send_back.value : null,
+    };
+    const submit = form.querySelector("[type=submit]");
+    submit.disabled = true;
+    try {
+      await post("/api/agents", body);
+      dialog.close();
+      app.toast(`Added ${body.role}${flows.length ? ` to ${flows.join(", ")}` : ""}; its starter skill is in roles/${body.role}/SKILL.md.`);
+      await app.refresh();
+    } catch (failure) {
+      error.textContent = failure.message;
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  bar?.querySelector("[data-new-agent]")?.addEventListener("click", open);
+  if (state.creating) {
+    state.creating = false;
+    history.replaceState(null, "", "#/agents"); // a refresh does not reopen it
+    open();
+  }
 }

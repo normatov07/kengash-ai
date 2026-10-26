@@ -1,5 +1,6 @@
-"""SETTINGS.md schema (system spec §4.6). Unknown keys are rejected."""
+"""SETTINGS.md schema (system spec §4.6, SP6 custom steps). Unknown keys are rejected."""
 
+import re
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, field_validator, model_validator
@@ -14,6 +15,23 @@ STEP_ROLES: dict[str, str | None] = {
     "docs": "doc-writer",
     "approve": None,
 }
+# What a step does: read (read-only notes, like plan), edit (edits the worktree, like
+# implement), review (verdict on the diff, like review_code); check is run_tests' shell verdict
+type StepKind = Literal["read", "edit", "review"]
+type Kind = Literal["read", "edit", "review", "check"]
+BUILTIN_KINDS: dict[str, Kind | None] = {
+    "plan": "read",
+    "review_plan": "review",
+    "implement": "edit",
+    "review_code": "review",
+    "security": "review",
+    "run_tests": "check",
+    "docs": "edit",
+    "approve": None,
+}
+STEP_NAME = re.compile(r"[a-z][a-z0-9_]{1,30}")
+# a role names its skill folder too, so it follows the skill-name rule
+ROLE_NAME = re.compile(r"(?=.{2,31}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
 PROVIDERS = ("claude", "codex", "antigravity", "gemini")
 SHELL = "shell"
 
@@ -120,15 +138,27 @@ class ProviderOptions(_Section):
     user_config: bool = False
 
 
+class CustomStep(_Section):
+    """A user's step: the role that runs it, its kind, and its one-line instruction."""
+
+    role: str
+    kind: StepKind
+    does: str = Field(min_length=1)
+
+    @field_validator("does")
+    @classmethod
+    def _one_line(cls, value: str) -> str:
+        if "\n" in value or "\r" in value or len(value) > 200:
+            raise ValueError("does must be one line of at most 200 characters")
+        return value
+
+
 class Workflow(_Section):
     steps: list[str] = Field(min_length=1)
     on_fail: dict[str, str] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def _known_steps(self) -> Self:
-        unknown = [step for step in self.steps if step not in STEP_ROLES]
-        if unknown:
-            raise ValueError(f"unknown steps {unknown}; known: {', '.join(STEP_ROLES)}")
+    def _edges_inside(self) -> Self:
         stray = [
             f"{source}->{target}"
             for source, target in self.on_fail.items()
@@ -166,23 +196,69 @@ class Settings(_Section):
     review: ReviewPolicy = Field(default_factory=ReviewPolicy)
     providers: dict[str, ProviderOptions] = Field(default_factory=dict)
     agents: dict[str, Agent] = Field(default_factory=dict)
+    steps: dict[str, CustomStep] = Field(default_factory=dict)
     workflows: dict[str, Workflow] = Field(default_factory=dict)
     status: StatusNames = Field(default_factory=StatusNames)
     merge: Merge = Field(default_factory=Merge)
 
     @model_validator(mode="after")
+    def _custom_steps(self) -> Self:
+        for name, step in self.steps.items():
+            if name in STEP_ROLES:
+                raise ValueError(f"steps.{name}: {name} is a built-in step")
+            if not STEP_NAME.fullmatch(name):
+                raise ValueError(f"steps.{name}: step name must match {STEP_NAME.pattern}")
+            if not ROLE_NAME.fullmatch(step.role):
+                raise ValueError(
+                    f"steps.{name}: role name must be lowercase words joined by single "
+                    "hyphens, 2 to 31 characters"
+                )
+            if step.role not in self.agents:
+                raise ValueError(f"steps.{name}: no agent {step.role!r} in agents")
+            if split_cli(self.agents[step.role].cli)[0] == SHELL:
+                # shell only runs project.test_cmd; it never reads a step's instruction
+                raise ValueError(f"steps.{name}: {step.role} needs a model CLI, not shell")
+        return self
+
+    @model_validator(mode="after")
     def _steps_have_agents(self) -> Self:
+        known = self.step_names()
+        for name, flow in self.workflows.items():
+            unknown = [step for step in flow.steps if step not in known]
+            if unknown:
+                raise ValueError(
+                    f"workflows.{name}: unknown steps {unknown}; known: {', '.join(known)}"
+                )
+            for source in flow.on_fail:
+                if source in self.steps and self.steps[source].kind != "review":
+                    raise ValueError(
+                        f"workflows.{name}: on_fail from {source}: only review steps send back"
+                    )
         missing = sorted(
             {
                 f"{step}: {role}"
                 for workflow in self.workflows.values()
                 for step in workflow.steps
-                if (role := STEP_ROLES[step]) is not None and role not in self.agents
+                if (role := self.role_of(step)) is not None and role not in self.agents
             }
         )
         if missing:
             raise ValueError(f"workflow steps need agents: {', '.join(missing)}")
         return self
+
+    def role_of(self, step: str) -> str | None:
+        """The role that runs `step`: built-in or custom; None for approve or an unknown step."""
+        custom = self.steps.get(step)
+        return custom.role if custom is not None else STEP_ROLES.get(step)
+
+    def kind_of(self, step: str) -> Kind | None:
+        """What `step` does (see StepKind); None for approve or an unknown step."""
+        custom = self.steps.get(step)
+        return custom.kind if custom is not None else BUILTIN_KINDS.get(step)
+
+    def step_names(self) -> list[str]:
+        """Every step a workflow may use: the built-ins, then the custom steps."""
+        return [*STEP_ROLES, *self.steps]
 
     @field_validator("providers")
     @classmethod

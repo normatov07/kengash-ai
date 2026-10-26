@@ -42,6 +42,17 @@ const PASS = { review_plan: "pass", review_code: "pass", security: "signed off",
 const BACK = { review_plan: "revise", review_code: "findings", security: "blocked", run_tests: "failing", approve: "rejected" };
 
 // Rows from the trigger to done, one pass edge between neighbours, one back edge per on_fail.
+// Custom steps (SP6) borrow the label style, colours and icon of their kind's built-in step.
+const KIND_STEP = { review: "review_code", edit: "implement", read: "plan" };
+export function learnSteps(kinds = {}) {
+  for (const [step, kind] of Object.entries(kinds)) {
+    if (step in LABELS || !KIND_STEP[kind]) continue;
+    LABELS[step] = step.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+    TONES[step] = TONES[KIND_STEP[kind]];
+    STEP_ICONS[step] = STEP_ICONS[KIND_STEP[kind]];
+  }
+}
+
 export function layout(steps, onFail) {
   const ids = ["trigger", ...steps, "done"];
   const nodes = ids.map((id, col) => ({ id, col, x: X, y: TOP + col * PITCH }));
@@ -94,7 +105,7 @@ export function canvas(graph, { selected = "", sub = () => "", off = () => false
       return html`<div class="${classes}" style="left: ${node.x}px; top: ${node.y}px" ${fixed ? "" : html`data-node="${node.id}" tabindex="0" role="button" aria-pressed="${node.id === selected ? "true" : "false"}"`}>
         ${node.id !== "trigger" ? html`<span class="port p-top"></span>` : ""}${inBack ? html`<span class="port p-in"></span>` : ""}${outBack ? html`<span class="port p-out"></span>` : ""}${node.id !== "done" ? html`<span class="port p-bottom ${node.id === selected ? "lit" : ""}"></span>` : ""}
         <span class="wf-icon" style="background: ${tile}">${icon(STEP_ICONS[node.id] ?? "plan", { size: 15, stroke, width: 1.6 })}</span>
-        <span class="wf-text"><b>${fixed ? LABELS[node.id] : `${i} · ${LABELS[node.id] ?? node.id}`}</b><span class="mono ${gate(node.id) ? "gate-sub" : ""}">${off(node.id) ? "off · skipped" : sub(node.id)}</span></span>
+        <span class="wf-text"><b>${node.id === "trigger" ? LABELS.trigger : `${i} · ${LABELS[node.id] ?? node.id}`}</b><span class="mono ${gate(node.id) ? "gate-sub" : ""}">${off(node.id) ? "off · skipped" : sub(node.id)}</span></span>
       </div>`;
     })}
     ${ghost && done ? html`<div class="wf-node ghost" style="left: ${X + W + 88}px; top: ${done.y}px" data-ghost="${ghost}" role="button" tabindex="0" title="Add ${LABELS[ghost]} to this workflow"><span class="port p-top"></span><span class="wf-icon">${icon(STEP_ICONS[ghost], { size: 15, stroke: "#5A646F", width: 1.6 })}</span><span class="wf-text"><b>${LABELS[ghost]}</b><span class="mono">off · not wired in</span></span></div>` : ""}

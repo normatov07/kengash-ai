@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 
 from super_harness import scheduler, settings, workflow
-from super_harness.model import STEP_ROLES, Folder, Settings, Ticket, split_cli
+from super_harness.model import Folder, Settings, Ticket, split_cli
 from super_harness.ops import lifecycle, records, waiting
 from super_harness.ops.workspace import GATES
 from super_harness.store import runtime
@@ -99,7 +99,7 @@ def _start(resolved: Settings, ticket: Ticket, *, paused: bool) -> tuple[str | N
 
 def _provider(resolved: Settings, step: str) -> str:
     """The CLI a step runs on: a provider, `shell`, or `user` for the approval step."""
-    role = STEP_ROLES.get(step)
+    role = resolved.role_of(step)
     if role is None:
         return "user"
     provider, _ = split_cli(resolved.agents[role].cli)

@@ -4,21 +4,21 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime
 
 from super_harness.model import (
+    BUILTIN_KINDS,
     PLAN_SECTIONS,
     Finding,
+    Kind,
     OutputKind,
     Plan,
     Profile,
     ReviewOutput,
+    Settings,
     Ticket,
 )
 from super_harness.ops import skills
 from super_harness.store.paths import StorePaths
 from super_harness.store.redact import redact
 
-WORK_STEPS = ("plan", "implement", "docs")
-REVIEW_STEPS = ("review_plan", "review_code", "security")
-EDIT_STEPS = ("implement", "docs")
 HANDOFF_LINES = 15
 INSTRUCTIONS = {
     "plan": "Write the implementation plan for this ticket: files, interfaces and tests. "
@@ -33,6 +33,12 @@ INSTRUCTIONS = {
     "read the diff with read-only git.",
     "docs": "Update the docs for the branch's changes. Do not commit; harness commits.",
 }
+# the rule a custom step's one-line `does` gets, by kind (SP6 spec decision 2)
+KIND_RULES = {
+    "read": "Do not edit files.",
+    "edit": "Do not commit; harness commits.",
+    "review": "Read the changes with read-only git; fail only for real problems.",
+}
 REPLY = "Reply with JSON that matches the schema."
 PLAN_REVIEW = (
     "Review this plan against the user's Prompt and the code in this directory, read-only. "
@@ -42,12 +48,26 @@ PLAN_REVIEW = (
 )
 
 
-def output_kind(step: str) -> OutputKind:
-    return "review" if step in REVIEW_STEPS or step == "run_tests" else "work"
+def kind(step: str, settings: Settings | None = None) -> Kind | None:
+    """What `step` does; without settings only the built-in steps are known."""
+    return settings.kind_of(step) if settings is not None else BUILTIN_KINDS.get(step)
 
 
-def profile(step: str) -> Profile:
-    return "edit_worktree" if step in EDIT_STEPS else "read_only"
+def output_kind(step: str, settings: Settings | None = None) -> OutputKind:
+    return "review" if kind(step, settings) in ("review", "check") else "work"
+
+
+def profile(step: str, settings: Settings | None = None) -> Profile:
+    return "edit_worktree" if kind(step, settings) == "edit" else "read_only"
+
+
+def instruction(settings: Settings, step: str) -> str:
+    """What the step's CLI is told to do: the built-in line, or a custom step's `does`
+    followed by its kind's rule."""
+    custom = settings.steps.get(step)
+    if custom is None:
+        return INSTRUCTIONS.get(step, "")
+    return f"{custom.does} {KIND_RULES[custom.kind]}"
 
 
 def new_prompt(
@@ -58,8 +78,10 @@ def new_prompt(
     role: str,
     step: str,
     diff_stat: str,
+    instruction: str | None = None,
 ) -> str:
-    """A new session's prompt: who it is, the step, and the ticket inline."""
+    """A new session's prompt: who it is, the step, and the ticket inline; `instruction`
+    defaults to the built-in step's."""
     head = (
         f'You are the {role} for ticket {ticket.id} "{ticket.title}", '
         f"loop {ticket.loop} of {ticket.loop_max}, step {step}."
@@ -72,15 +94,24 @@ def new_prompt(
         ("Findings", sections.get("Findings", "")),
         ("Diff stat", diff_stat),
     ]
-    return _join(f"{head}\n{INSTRUCTIONS.get(step, '')}", blocks, REPLY)
+    told = INSTRUCTIONS.get(step, "") if instruction is None else instruction
+    return _join(f"{head}\n{told}", blocks, REPLY)
 
 
 def resumed_prompt(
-    ticket: Ticket, sections: Mapping[str, str], *, step: str, diff_stat: str
+    ticket: Ticket,
+    sections: Mapping[str, str],
+    *,
+    step: str,
+    diff_stat: str,
+    instruction: str | None = None,
+    review: bool | None = None,
 ) -> str:
-    """A resumed session's prompt: the step, plus Findings to fix or a Handoff to review."""
-    head = f"Loop {ticket.loop}, step {step}: {INSTRUCTIONS.get(step, '')}"
-    if step in REVIEW_STEPS:
+    """A resumed session's prompt: the step, plus Findings to fix or a Handoff to review;
+    `instruction` and `review` default to the built-in step's."""
+    told = INSTRUCTIONS.get(step, "") if instruction is None else instruction
+    head = f"Loop {ticket.loop}, step {step}: {told}"
+    if review if review is not None else kind(step) == "review":
         blocks = [("Handoff", sections.get("Handoff", "")), ("Diff stat", diff_stat)]
     else:
         blocks = [("Findings", sections.get("Findings", ""))]

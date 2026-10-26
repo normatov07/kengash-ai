@@ -15,7 +15,7 @@ from super_harness.store.paths import StorePaths
 from super_harness.store.registry import load_registry
 
 SUBSCRIPTION = "claude.ai"
-UNSUPPORTED = ("gemini",)
+UNSUPPORTED = adapters.UNSUPPORTED
 
 
 @dataclass
@@ -57,10 +57,7 @@ def check_providers(paths: StorePaths) -> list[ProviderCheck]:
         users = list(dict.fromkeys(use.label for use in uses if name in use.chain))
         used_by = ", ".join(users)
         if name in UNSUPPORTED:
-            message = (
-                f"{name}: not supported yet; used by {used_by}; "
-                "pick another provider in SETTINGS.md"
-            )
+            message = f"{name}: not supported; used by {used_by}; {UNSUPPORTED[name]}"
         elif not status.installed:
             message = f"{name}: not installed; used by {used_by}; {status.hint}"
         elif not status.signed_in:

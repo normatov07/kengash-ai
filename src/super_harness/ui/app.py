@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 from super_harness.model import HarnessError, JournalCursor, NeedsSetup, NeedsUser
 from super_harness.ops import (
+    agent_config,
     changes,
     compaction,
     configure,
@@ -63,6 +64,26 @@ class SettingsChange(BaseModel):
     """The body of a settings save: dotted key → value; null removes the key from the scope."""
 
     changes: dict[str, Any]
+
+
+class NewAgent(BaseModel):
+    """The body of a new agent (SP6 spec §5): `agent_config.new_agent`'s arguments."""
+
+    project: str = ""
+    role: str
+    kind: Literal["read", "edit", "review"]
+    does: str
+    cli: str = "claude"
+    step: str | None = None
+    workflows: list[str] = []
+    after: str | None = None
+    send_back: str | None = None
+
+
+class Scope(BaseModel):
+    """A body naming the scope: a project, or empty for the defaults."""
+
+    project: str = ""
 
 
 class Connection(Protocol):
@@ -201,6 +222,28 @@ def create_app(*, token: str, port: int) -> FastAPI:
         return views.agents_view(
             project=project or None, window=window, refresh=refresh, detect=detect
         )
+
+    @app.post("/api/agents")
+    def new_agent(body: NewAgent) -> views.AgentsView:
+        project = body.project or None
+        agent_config.new_agent(
+            body.role,
+            kind=body.kind,
+            does=body.does,
+            cli=body.cli,
+            step=body.step,
+            workflows=body.workflows,
+            after=body.after,
+            send_back=body.send_back,
+            project=project,
+            by=BY,
+        )
+        return views.agents_view(project=project, detect=False)
+
+    @app.post("/api/agents/{role}/remove")
+    def remove_agent(role: str, body: Scope) -> views.AgentsView:
+        agent_config.remove_agent(role, project=body.project or None, by=BY)
+        return views.agents_view(project=body.project or None, detect=False)
 
     @app.get("/api/workflows")
     def workflows_view(project: str = "") -> views.WorkflowsView:

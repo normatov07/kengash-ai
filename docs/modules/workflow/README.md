@@ -18,9 +18,11 @@ Decide what a ticket does next (SP3 spec §6): which steps its workflow runs, wh
 
 - Imports only `model`; no I/O and no clock.
 - `loop` grows only on a failing verdict with an `on_fail` edge, or when a loop cap is approved; a `review_plan` failure keeps it while `loop_count_rejected_review` is false.
-- Stall streaks count consecutive failing runs of one review step per fingerprint; a pass clears that step's streaks.
+- Stall streaks count consecutive failing runs of one review step (built-in or a custom step of kind `review`) per fingerprint; a pass clears that step's streaks.
+- Roles and kinds come from `Settings.role_of`/`kind_of`, so custom steps (SP6) route exactly like the built-in step of their kind.
 - `Halt.approval` is set exactly when `harness approve` can open the gate.
 
 ## Changes
 
+- 2026-10-26: steps are looked up through `Settings.role_of`/`kind_of`; custom review steps keep stall streaks (SP6).
 - 2026-10-22: effective steps, caps, stalls, approvals, fingerprints (SP3 M1).

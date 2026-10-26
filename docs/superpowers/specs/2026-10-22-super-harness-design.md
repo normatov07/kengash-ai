@@ -300,6 +300,10 @@ workflows:
   critical: {steps: [plan, review_plan, implement, review_code, security],
              on_fail: {review_plan: plan, review_code: implement, security: implement}}
 
+# steps (SP6): your own steps; kind read, edit or review behaves like plan, implement or
+# review_code; `harness agent new` writes the agent, the step and the workflow entries
+# steps.perf_review: {role: perf-reviewer, kind: review, does: Flag N+1 queries.}
+
 # sub-status shown while a step runs
 status.names: {plan: under_planning, review_plan: under_plan_review, implement: under_implementation,
                review_code: under_review, security: under_security_review, run_tests: under_test,
@@ -406,7 +410,7 @@ class Provider(Protocol):
 | claude | `claude -p … --output-format json --json-schema … --session-id <uuid>` | `--resume <id>` | permission profile → `--permission-mode` plus `--allowedTools`; workers skip the user's settings, plugins and MCP (`--setting-sources project,local --strict-mcp-config`); never `--bare` |
 | codex | `codex exec --json --output-schema <file> -s <sandbox> …` | `codex exec resume --json --output-schema <file> -c sandbox_mode=… <id> "…"` | never `--ephemeral`; workers run with `--ignore-user-config`; full mapping in the SP3 spec §8 |
 | antigravity | `agy -p … --output-format json --json-schema … --mode <mode>` | `--conversation <id>` | empty stdout with exit 0 is an `empty` error: recover from the transcript, otherwise fail |
-| gemini | `gemini -p … --output-format json` | — | optional; not built in SP3 (SP3 spec decision 16) |
+| gemini | `gemini -p … --output-format json` | — | not built: consumer plans moved to Antigravity CLI on 2026-06-18 (SP6 spec decision 9) |
 | shell | `project.test_cmd` | — | `run_tests` steps; exit 0 = pass |
 
 Errors: `auth` stops the ticket with "sign in to <cli> interactively"; `rate_limit` switches to the role's `fallback` when `fallback_on_rate_limit` is on, otherwise waits as `waiting_quota` until `retry_after`; `timeout` retries once; `schema` retries once with a "return valid JSON" repair prompt; anything else → `failed` with the log path.
@@ -533,12 +537,12 @@ super-harness/
 
 ### 12.3 Acceptance
 
-- [ ] `make setup && make check` passes on a fresh clone on Linux and macOS.
-- [ ] `uv run harness --version` and `uv run hrn --version` print the version.
-- [ ] AGENTS.md has at most 100 lines; CLAUDE.md and GEMINI.md import it; a Codex session and an `agy` session started in the repo both see its rules (manual check, recorded in the plan).
-- [ ] `check_docs_sync.py` fails on a deliberate undocumented module change and passes once the doc is updated.
-- [ ] `check_md_caps.py` fails on an oversized doc.
-- [ ] CI runs `make check` and is green.
+- [ ] `make setup && make check` passes on a fresh clone on Linux and macOS. (Linux: fresh clone of `main` at c7c6419 on 2026-10-26, 534 passed; macOS: not yet run, no Mac available.)
+- [x] `uv run harness --version` and `uv run hrn --version` print the version (`super-harness 0.1.0`, same run).
+- [ ] AGENTS.md has at most 100 lines; CLAUDE.md and GEMINI.md import it; a Codex session and an `agy` session started in the repo both see its rules (manual check, recorded in the plan). (agy 1.4.5 on 2026-10-22, see `docs/architecture.md`; Codex rests on its documentation until the CLI is installed.)
+- [x] `check_docs_sync.py` fails on a deliberate undocumented module change and passes once the doc is updated (`tests/test_check_docs_sync.py::test_base_mode_fails_until_the_doc_lands`).
+- [x] `check_md_caps.py` fails on an oversized doc (`tests/test_check_md_caps.py`).
+- [ ] CI runs `make check` and is green. (`.github/workflows/ci.yml` runs it; confirm the latest run on GitHub.)
 
 ## 13. Roadmap
 
@@ -548,3 +552,4 @@ super-harness/
 | 3 Engine | `adapters`, `workflow`, `scheduler`, `gitops`, `worker`; next, run, wait, approve, park, stop, pause, resume, merge; plan review and compaction jobs | integration lifecycle green with fakes; live smoke green per installed provider |
 | 4 Skills | five installed skills (`open-ui` ships with SP5), seven role skills, installer, plugin manifests, lint, eval | evals pass on claude, codex and agy |
 | 5 UI | FastAPI, SSE, seven screens; the `open-ui` skill | canvas parity checklist complete; live updates; every action goes through `ops` |
+| 6 Custom agents | custom steps in SETTINGS.md, `harness agent new\|remove`, the New agent dialog, CI on GitHub, canvas follow-ups (`2026-10-26-sp6-custom-agents-design.md`) | a custom step runs like the built-in step of its kind; CI green |

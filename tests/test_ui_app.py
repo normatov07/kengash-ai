@@ -205,7 +205,9 @@ def test_the_agents_screen_reads_one_scope(
     shown = client.get("/api/agents?project=payments-api&window=7d").json()
     assert shown["scope"] == "payments-api"
     assert {role["role"] for role in shown["roster"]} >= {"planner", "implementer"}
-    assert all(card["hint"] == "install it" for card in shown["providers"])
+    hints = {card["name"]: card["hint"] for card in shown["providers"]}
+    assert "Antigravity CLI" in hints.pop("gemini")  # not driven, and the card says why
+    assert set(hints.values()) == {"install it"}
 
 
 def test_a_ticket_and_its_plan_are_served(
@@ -249,3 +251,41 @@ def test_two_servers_on_one_host_keep_their_own_sign_in(registered_repo: Path) -
     first = TestClient(ui_app.create_app(token=TOKEN, port=PORT), base_url=BASE)
     cookie = first.get(f"/?token={TOKEN}", follow_redirects=False).headers["set-cookie"]
     assert cookie.startswith(f"harness_token_{PORT}=")  # cookies ignore ports; the name must not
+
+
+NEW_AGENT = {
+    "project": "payments-api",
+    "role": "perf-reviewer",
+    "kind": "review",
+    "does": "Flag N+1 queries.",
+    "cli": "claude/sonnet",
+    "step": "perf_review",
+    "workflows": ["critical"],
+    "after": "review_code",
+}
+
+
+def test_new_agent_endpoint_saves_and_needs_the_header(
+    client: TestClient, store_paths: StorePaths
+) -> None:
+    signed_in(client)
+    assert client.post("/api/agents", json=NEW_AGENT).status_code == 403
+    added = client.post("/api/agents", json=NEW_AGENT, headers=POST)
+    assert added.status_code == 200, added.text
+    roles = {row["role"]: row for row in added.json()["roster"]}
+    assert (roles["perf-reviewer"]["custom"], roles["perf-reviewer"]["step"]) == (
+        True,
+        "perf_review",
+    )
+    builtin = client.post("/api/agents", json=NEW_AGENT | {"role": "code-reviewer"}, headers=POST)
+    assert builtin.status_code == 400 and "exists" in builtin.json()["error"]
+
+
+def test_remove_agent_endpoint(client: TestClient) -> None:
+    signed_in(client)
+    client.post("/api/agents", json=NEW_AGENT, headers=POST)
+    removed = client.post(
+        "/api/agents/perf-reviewer/remove", json={"project": "payments-api"}, headers=POST
+    )
+    assert removed.status_code == 200
+    assert "perf-reviewer" not in {row["role"] for row in removed.json()["roster"]}
