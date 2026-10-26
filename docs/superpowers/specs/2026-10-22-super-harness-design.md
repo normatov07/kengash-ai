@@ -553,3 +553,4 @@ super-harness/
 | 4 Skills | five installed skills (`open-ui` ships with SP5), seven role skills, installer, plugin manifests, lint, eval | evals pass on claude, codex and agy |
 | 5 UI | FastAPI, SSE, seven screens; the `open-ui` skill | canvas parity checklist complete; live updates; every action goes through `ops` |
 | 6 Custom agents | custom steps in SETTINGS.md, `harness agent new\|remove`, the New agent dialog, CI on GitHub, canvas follow-ups (`2026-10-26-sp6-custom-agents-design.md`) | a custom step runs like the built-in step of its kind; CI green |
+| 7 Production readiness | speed on large stores, hardening, packaging, release and community docs (`2026-10-26-sp7-production-design.md`) | views under 1 s warm on 1,500 tickets; clean artifacts; CI, package and audit green |

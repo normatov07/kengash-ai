@@ -37,10 +37,10 @@ An audit on 2026-10-26 found the features complete but the product not yet fit t
 
 ## 4. Acceptance (SP7 exit)
 
-- [ ] On the 1,500-ticket store every view answers warm in under 1 s; a change to SETTINGS.md or a ticket shows on the next request (cache tests).
-- [ ] `uv build` artifacts pass `scripts/check_dist.py`; a clean venv install runs `harness --version` and imports the UI.
-- [ ] UI responses carry the §3.4 headers and every screen renders under the CSP in Chrome with no console violations.
-- [ ] `ruff` with `S` is clean; native Windows exits 4 with the WSL message; log retention prunes old files only.
-- [ ] CI green on ubuntu and macOS for 3.12, 3.13, 3.14, plus package and audit jobs; release workflow and Dependabot config reviewed.
-- [ ] README, CHANGELOG, CONTRIBUTING, SECURITY, code of conduct, templates and `docs/releasing.md` exist; `make check` green.
-- [ ] axe-core reports no serious or critical violations on the seven screens.
+- [x] On the 1,500-ticket store every view answers warm in under 1 s; a change to SETTINGS.md or a ticket shows on the next request (cache tests). (`scripts/bench_views.py`, 2026-10-26: overview 0.33 s, board 0.30 s, memory 0.23 s, ticket 0.08 s warm; first load 1.6 s; `tests/test_memo.py`.)
+- [x] `uv build` artifacts pass `scripts/check_dist.py`; a clean venv install runs `harness --version` and imports the UI (Python 3.12 venv, 2026-10-26; the CI `package` job repeats it).
+- [x] UI responses carry the §3.4 headers and every screen renders under the CSP in Chrome with no console violations (`test_every_response_carries_the_security_headers`; headless Chrome on the demo store).
+- [x] `ruff` with `S` is clean; native Windows exits 4 with the WSL message; log retention prunes old files only (`test_native_windows_stops_with_the_wsl_message`, `test_old_logs_are_pruned_and_new_ones_kept`, `test_doctor_fix_prunes_old_logs`).
+- [ ] CI green on ubuntu and macOS for 3.12, 3.13, 3.14, plus package and audit jobs; release workflow and Dependabot config reviewed. (Workflows pass actionlint; the GitHub run comes with the pull request.)
+- [x] README, CHANGELOG, CONTRIBUTING, SECURITY, code of conduct, templates and `docs/releasing.md` exist; `make check` green (605 passed, 2026-10-26).
+- [x] axe-core reports no serious or critical violations on the seven screens (axe-core 4.13.0, demo store, plus the New agent dialog).
