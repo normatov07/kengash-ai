@@ -5,6 +5,7 @@ import json
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -13,6 +14,7 @@ import typer
 from super_harness import __version__
 from super_harness.model import Folder, HarnessError, PlanMode, UserError
 from super_harness.ops import (
+    agent_config,
     changes,
     compaction,
     controls,
@@ -800,6 +802,77 @@ def ticket_attach(
         _emit_json(found)
         return
     typer.echo(found.command)
+
+
+agent_app = typer.Typer(help="Agents: add or remove your own roles.", no_args_is_help=True)
+app.add_typer(agent_app, name="agent")
+Scope = Annotated[
+    str | None,
+    typer.Option("--project", "-p", help="This project's SETTINGS.md; default: the defaults."),
+]
+
+
+class AgentKind(StrEnum):
+    read = "read"
+    edit = "edit"
+    review = "review"
+
+
+@agent_app.command("new")
+def agent_new(
+    role: Annotated[str, typer.Argument(help="Role name, e.g. perf-reviewer.")],
+    kind: Annotated[
+        AgentKind, typer.Option("--kind", help="read, edit or review: what its step does.")
+    ],
+    does: Annotated[str, typer.Option("--does", help="One line: what its step does.")],
+    cli: Annotated[str, typer.Option("--cli", help="PROVIDER[/MODEL] that runs it.")] = "claude",
+    step: Annotated[
+        str | None, typer.Option("--step", help="Step name; default: the role with _.")
+    ] = None,
+    workflow: Annotated[
+        list[str] | None, typer.Option("--workflow", help="Add the step to this workflow.")
+    ] = None,
+    after: Annotated[
+        str | None, typer.Option("--after", help="Insert after this step; default: last.")
+    ] = None,
+    send_back: Annotated[
+        str | None,
+        typer.Option("--send-back", help="Review steps: where a fail sends the ticket."),
+    ] = None,
+    project: Scope = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Add your own agent: its role, its step and the workflows that run it."""
+    with _errors():
+        change = agent_config.new_agent(
+            role,
+            kind=kind.value,
+            does=does,
+            cli=cli,
+            step=step,
+            workflows=workflow or [],
+            after=after,
+            send_back=send_back,
+            project=project,
+            by=by,
+        )
+    flows = ", ".join(workflow or []) or "no workflow yet"
+    skill = f"; skill roles/{role}/SKILL.md" if change.skill_file else ""
+    _emit(change, as_json, f"added {role}: step {change.step} in {flows}{skill}")
+
+
+@agent_app.command("remove")
+def agent_remove(
+    role: Annotated[str, typer.Argument(help="One of your roles.")],
+    project: Scope = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Remove one of your agents, its step and every workflow use of it; its skill stays."""
+    with _errors():
+        change = agent_config.remove_agent(role, project=project, by=by)
+    _emit(change, as_json, f"removed {role}")
 
 
 skills_app = typer.Typer(help="Skills: lint, install and eval.", no_args_is_help=True)

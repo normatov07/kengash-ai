@@ -30,7 +30,8 @@ BUILTIN_KINDS: dict[str, Kind | None] = {
     "approve": None,
 }
 STEP_NAME = re.compile(r"[a-z][a-z0-9_]{1,30}")
-ROLE_NAME = re.compile(r"[a-z][a-z0-9-]{1,30}")
+# a role names its skill folder too, so it follows the skill-name rule
+ROLE_NAME = re.compile(r"(?=.{2,31}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
 PROVIDERS = ("claude", "codex", "antigravity", "gemini")
 SHELL = "shell"
 
@@ -208,7 +209,10 @@ class Settings(_Section):
             if not STEP_NAME.fullmatch(name):
                 raise ValueError(f"steps.{name}: step name must match {STEP_NAME.pattern}")
             if not ROLE_NAME.fullmatch(step.role):
-                raise ValueError(f"steps.{name}: role name must match {ROLE_NAME.pattern}")
+                raise ValueError(
+                    f"steps.{name}: role name must be lowercase words joined by single "
+                    "hyphens, 2 to 31 characters"
+                )
             if step.role not in self.agents:
                 raise ValueError(f"steps.{name}: no agent {step.role!r} in agents")
         return self

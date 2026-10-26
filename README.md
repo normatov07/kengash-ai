@@ -27,6 +27,11 @@ Or add the skills another way:
 
 Then run `harness init` inside each project.
 
+Add your own agent to a workflow, for example a performance reviewer that sends failing work back:
+
+    harness agent new perf-reviewer --kind review --does "Flag N+1 queries and hot loops." \
+        --cli claude/sonnet --workflow critical --after review_code
+
 The web UI is an optional extra:
 
     uv tool install --force 'super-harness[ui] @ git+https://github.com/normatov07/super-harness'
