@@ -131,6 +131,10 @@ def test_a_custom_step_validates_and_resolves() -> None:
         ({"steps": {"perf_review": {**PERF_STEP, "does": "one\ntwo"}}}, "one line"),
         ({"steps": {"perf_review": {**PERF_STEP, "does": "x" * 201}}}, "one line"),
         ({"steps": {"perf_review": {**PERF_STEP, "kind": "check"}}}, "kind"),
+        (
+            {"agents": {**PERF_AGENTS, "perf-reviewer": {"cli": "shell", "skill": "x"}}},
+            "needs a model CLI",
+        ),
         ({"workflows": {"x": {"steps": ["plan", "perf_tune"]}}}, r"unknown steps \['perf_tune'\]"),
         (
             {"steps": {"perf_review": {**PERF_STEP, "kind": "edit"}}},

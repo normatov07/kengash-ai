@@ -215,6 +215,9 @@ class Settings(_Section):
                 )
             if step.role not in self.agents:
                 raise ValueError(f"steps.{name}: no agent {step.role!r} in agents")
+            if split_cli(self.agents[step.role].cli)[0] == SHELL:
+                # shell only runs project.test_cmd; it never reads a step's instruction
+                raise ValueError(f"steps.{name}: {step.role} needs a model CLI, not shell")
         return self
 
     @model_validator(mode="after")
