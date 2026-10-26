@@ -1,5 +1,7 @@
 # super-harness: System Design and Foundation Spec
 
+> Renamed **Kengash AI** on 2026-10-26 (SP7 spec decision 16): the distribution is `kengash-ai`, the package `kengash_ai`. "super-harness" in this document means Kengash AI; commands, the store and file formats are unchanged.
+
 - Date: 2026-10-22
 - Status: draft, awaiting user review
 - Scope: system-wide contracts for all five sub-projects, plus the full design of sub-project 1 (Foundation). Sub-projects 2–5 each get their own spec, which must conform to the contracts here.

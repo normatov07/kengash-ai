@@ -1,6 +1,6 @@
 # Architecture
 
-System map of super-harness. The contract is the spec, `docs/superpowers/specs/2026-10-22-super-harness-design.md`; this page records what exists now. Update the Status columns whenever a module or sub-project lands.
+System map of Kengash AI. The contract is the spec, `docs/superpowers/specs/2026-10-22-super-harness-design.md`; this page records what exists now. Update the Status columns whenever a module or sub-project lands.
 
 ## Flow
 
@@ -56,7 +56,7 @@ Each registered repo gets one directory symlink, `<repo>/.harness -> ~/.harness/
 
 ## Repository layout
 
-- `src/super_harness/`: the package; each module has `docs/modules/<module>/README.md`
+- `src/kengash_ai/`: the package; each module has `docs/modules/<module>/README.md`
 - `scripts/`: repository checks (`check_md_caps.py`, `check_docs_sync.py`), run by `make docs`, pre-commit and CI
 - `evals/`: skill eval scenarios (`make evals`, never in `make check`)
 - `tests/`: the pytest suite (`make test`); `tests/live/` runs the real CLIs (`make live`, never in `make check`)

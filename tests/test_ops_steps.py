@@ -1,16 +1,17 @@
 """The step loop: one ticket through its workflow with fake CLIs (SP3 spec §5)."""
 
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from conftest import Engine, Events, FakeClis, write_settings
 
-from super_harness.model import Running, TicketState
-from super_harness.ops import calls, steps
-from super_harness.ops.steps import JobEnd
-from super_harness.store import StorePaths, documents, runtime
-from super_harness.workflow import fingerprint
+from kengash_ai.model import Running, TicketState
+from kengash_ai.ops import calls, steps
+from kengash_ai.ops.steps import JobEnd
+from kengash_ai.store import StorePaths, documents, runtime
+from kengash_ai.workflow import fingerprint
 
 REVIEW_FAIL = {
     "verdict": "fail",
@@ -151,16 +152,32 @@ def test_rate_limits_fall_back_then_wait(
     assert engine.ticket().meta.sessions["implementer"].provider == "claude"
 
 
+QUOTA_RESET = datetime(2026, 10, 26, 8, 0, tzinfo=UTC)  # the reset claude/usage_limit.json names
+
+
+@pytest.mark.parametrize(
+    ("now", "expected"),
+    [
+        (QUOTA_RESET - timedelta(seconds=90), [60.0, 30.0]),  # sleeps until the reset, in naps
+        (QUOTA_RESET + timedelta(hours=1), []),  # a reset already past: retry at once
+    ],
+)
 def test_quota_waits_without_a_fallback(
-    engine: Engine, fake_clis: FakeClis, store_paths: StorePaths, monkeypatch: pytest.MonkeyPatch
+    engine: Engine,
+    fake_clis: FakeClis,
+    store_paths: StorePaths,
+    monkeypatch: pytest.MonkeyPatch,
+    now: datetime,
+    expected: list[float],
 ) -> None:
     naps: list[float] = []
     monkeypatch.setattr(steps, "sleep", naps.append)
+    monkeypatch.setattr(steps, "utc_now", lambda: now)  # the fixture's reset time is fixed
     write_settings(store_paths, "fallback_on_rate_limit: false\n")
     fake_clis.queue("claude", fixture="claude/usage_limit.json")
     fake_clis.queue("claude", fixture="claude/work_resume.json")
     steps.run_job("7b55e0c1", steps=1)
-    assert naps and engine.ticket().meta.step == "implement"
+    assert naps == expected and engine.ticket().meta.step == "implement"
 
 
 def test_auth_and_crash_fail_the_ticket(engine: Engine, fake_clis: FakeClis) -> None:

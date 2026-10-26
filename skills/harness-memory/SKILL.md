@@ -1,13 +1,13 @@
 ---
 name: harness-memory
 description: Use when the user states a lasting preference, working style or goal, turns an approach down for good, or a design decision is made that later sessions must respect, such as "from now on", "always", "never", "remember that" or "we decided".
-metadata: {source: super-harness}
+metadata: {source: kengash-ai}
 ---
 # Remember it through harness
 
 Memory lives in the harness store, shared by every agent and session. Record it only with `harness memory add`, run as its own shell call with nothing chained; never edit memory files, AGENTS.md or other instruction files yourself.
 
-0. Run `harness --version`. If it does not print `super-harness <version>`, say "Install super-harness first: uv tool install git+https://github.com/normatov07/super-harness" and stop.
+0. Run `harness --version`. If it does not print `kengash-ai <version>`, say "Install Kengash AI first: uv tool install git+https://github.com/normatov07/kengash-ai" and stop.
 1. Write the fact as one line of about 20 words, in the user's terms.
 2. A preference, working style, goal or turned-down approach:
 

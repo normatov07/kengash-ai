@@ -4,7 +4,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from super_harness.model import PROVIDERS, Event, ProviderOptions, Settings, split_cli
+from kengash_ai.model import PROVIDERS, Event, ProviderOptions, Settings, split_cli
 
 AGENTS: dict[str, Any] = {
     "planner": {"cli": "claude/opus", "skill": "plan"},

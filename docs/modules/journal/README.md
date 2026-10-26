@@ -18,6 +18,7 @@ The append-only event log behind monitoring, the UI's live view and the audit tr
 
 ## Changes
 
+- 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-23: `days`, `read_day` (SP5 M2: the UI parses each past day once).
 - 2026-10-23: journal positions: `read_after`, `end` (SP3 M3).
 - 2026-10-22: append and read (SP2 M2).

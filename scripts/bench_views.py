@@ -13,7 +13,7 @@ from pathlib import Path
 
 def main(store: Path) -> int:
     os.environ["HARNESS_HOME"] = str(store)
-    from super_harness.ops import views  # after HARNESS_HOME: the store is read at call time
+    from kengash_ai.ops import views  # after HARNESS_HOME: the store is read at call time
 
     checks: list[tuple[str, Callable[[], object]]] = [
         ("overview", lambda: views.overview(window="today")),

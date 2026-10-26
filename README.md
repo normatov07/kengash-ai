@@ -1,8 +1,8 @@
-# super-harness
+# Kengash AI
 
-[![ci](https://github.com/normatov07/super-harness/actions/workflows/ci.yml/badge.svg)](https://github.com/normatov07/super-harness/actions/workflows/ci.yml)
+[![ci](https://github.com/normatov07/kengash-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/normatov07/kengash-ai/actions/workflows/ci.yml)
 
-Run many projects at once with the coding-agent subscriptions you already pay for (Claude Code, Codex, Antigravity), through their official CLIs, never API keys.
+A council of coding agents (*kengash* is Uzbek for council) that works many projects at once with the subscriptions you already pay for (Claude Code, Codex, Antigravity), through their official CLIs, never API keys.
 
 You talk to your usual agent. Skills installed into it turn a prompt into a reviewed plan and small tickets, then run each ticket through an agent loop sized to its importance (plan, review, implement, review, security), in parallel across projects, each ticket in its own git worktree. A deterministic `harness` CLI does every mechanical step, a shared memory store keeps decisions across sessions, and a local web UI shows and steers it all.
 
@@ -23,13 +23,13 @@ You talk to your usual agent. Skills installed into it turn a prompt into a revi
 
 ## Install
 
-    uv tool install 'super-harness[ui] @ git+https://github.com/normatov07/super-harness'
+    uv tool install 'kengash-ai[ui] @ git+https://github.com/normatov07/kengash-ai'
     harness skills install --agent claude,codex,antigravity --global
     harness doctor
 
-Once a release is on PyPI: `uv tool install 'super-harness[ui]'` or `pipx install 'super-harness[ui]'`. Leave out `[ui]` for the CLI alone.
+Once a release is on PyPI: `uv tool install 'kengash-ai[ui]'` or `pipx install 'kengash-ai[ui]'`. Leave out `[ui]` for the CLI alone.
 
-The skills can also come from Claude Code's plugin marketplace (`/plugin install super-harness --marketplace normatov07/super-harness`) or `npx skills add normatov07/super-harness`.
+The skills can also come from Claude Code's plugin marketplace (`/plugin install kengash-ai --marketplace normatov07/kengash-ai`) or `npx skills add normatov07/kengash-ai`.
 
 ## Quick start
 
@@ -91,7 +91,7 @@ Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
 ## Uninstall
 
     harness ui stop
-    uv tool uninstall super-harness
+    uv tool uninstall kengash-ai
 
 Your store stays in `~/.harness`; remove it and each project's `.harness` link by hand if you want them gone.
 

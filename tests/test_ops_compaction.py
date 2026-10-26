@@ -4,8 +4,8 @@ from pathlib import Path
 
 from conftest import COMPACTED, PINNED, Events, FakeClis
 
-from super_harness.ops import compaction
-from super_harness.store import StorePaths, runtime
+from kengash_ai.ops import compaction
+from kengash_ai.store import StorePaths, runtime
 
 
 def test_run_compaction_accepts_a_shorter_file_that_keeps_pins(

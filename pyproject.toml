@@ -1,5 +1,5 @@
 [project]
-name = "super-harness"
+name = "kengash-ai"
 dynamic = ["version"]
 description = "Run many projects at once with subscription coding-agent CLIs (Claude Code, Codex, Antigravity)."
 readme = "README.md"
@@ -33,15 +33,16 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/normatov07/super-harness"
-Repository = "https://github.com/normatov07/super-harness"
-Issues = "https://github.com/normatov07/super-harness/issues"
-Changelog = "https://github.com/normatov07/super-harness/blob/main/CHANGELOG.md"
-Documentation = "https://github.com/normatov07/super-harness#readme"
+Homepage = "https://github.com/normatov07/kengash-ai"
+Repository = "https://github.com/normatov07/kengash-ai"
+Issues = "https://github.com/normatov07/kengash-ai/issues"
+Changelog = "https://github.com/normatov07/kengash-ai/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/normatov07/kengash-ai#readme"
 
 [project.scripts]
-harness = "super_harness.cli:app"
-hrn = "super_harness.cli:app"
+harness = "kengash_ai.cli:app"
+hrn = "kengash_ai.cli:app"
+kengash = "kengash_ai.cli:app"
 
 [project.optional-dependencies]
 ui = [
@@ -66,13 +67,13 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
-path = "src/super_harness/__init__.py"
+path = "src/kengash_ai/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/super_harness"]
+packages = ["src/kengash_ai"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"skills" = "super_harness/skills"
+"skills" = "kengash_ai/skills"
 
 # what a source release holds; local agent, tool and cache folders never ship
 [tool.hatch.build.targets.sdist]
@@ -125,56 +126,56 @@ testpaths = ["tests"]
 pythonpath = ["."]
 
 [tool.importlinter]
-root_package = "super_harness"
+root_package = "kengash_ai"
 
 [[tool.importlinter.contracts]]
 name = "Layers: cli | worker | ui > ops > memory > journal | settings > store > model"
 type = "layers"
 layers = [
-    "super_harness.cli | super_harness.worker | super_harness.ui",
-    "super_harness.ops",
-    "super_harness.memory",
-    "super_harness.journal | super_harness.settings",
-    "super_harness.store",
-    "super_harness.model",
+    "kengash_ai.cli | kengash_ai.worker | kengash_ai.ui",
+    "kengash_ai.ops",
+    "kengash_ai.memory",
+    "kengash_ai.journal | kengash_ai.settings",
+    "kengash_ai.store",
+    "kengash_ai.model",
 ]
 
 [[tool.importlinter.contracts]]
 name = "cli, worker and ui reach the store and its units only through ops"
 type = "forbidden"
-source_modules = ["super_harness.cli", "super_harness.worker", "super_harness.ui"]
+source_modules = ["kengash_ai.cli", "kengash_ai.worker", "kengash_ai.ui"]
 forbidden_modules = [
-    "super_harness.store",
-    "super_harness.settings",
-    "super_harness.memory",
-    "super_harness.journal",
+    "kengash_ai.store",
+    "kengash_ai.settings",
+    "kengash_ai.memory",
+    "kengash_ai.journal",
 ]
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 name = "Engine rules are pure: workflow and scheduler import only model"
 type = "forbidden"
-source_modules = ["super_harness.workflow", "super_harness.scheduler"]
+source_modules = ["kengash_ai.workflow", "kengash_ai.scheduler"]
 forbidden_modules = [
-    "super_harness.cli",
-    "super_harness.ops",
-    "super_harness.memory",
-    "super_harness.journal",
-    "super_harness.settings",
-    "super_harness.store",
+    "kengash_ai.cli",
+    "kengash_ai.ops",
+    "kengash_ai.memory",
+    "kengash_ai.journal",
+    "kengash_ai.settings",
+    "kengash_ai.store",
 ]
 
 [[tool.importlinter.contracts]]
 name = "Adapters and gitops never touch the store: they import only model"
 type = "forbidden"
-source_modules = ["super_harness.adapters", "super_harness.gitops"]
+source_modules = ["kengash_ai.adapters", "kengash_ai.gitops"]
 forbidden_modules = [
-    "super_harness.cli",
-    "super_harness.ops",
-    "super_harness.memory",
-    "super_harness.journal",
-    "super_harness.settings",
-    "super_harness.store",
-    "super_harness.workflow",
-    "super_harness.scheduler",
+    "kengash_ai.cli",
+    "kengash_ai.ops",
+    "kengash_ai.memory",
+    "kengash_ai.journal",
+    "kengash_ai.settings",
+    "kengash_ai.store",
+    "kengash_ai.workflow",
+    "kengash_ai.scheduler",
 ]

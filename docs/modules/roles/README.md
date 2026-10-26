@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Role skills, data only (system spec §8.2; SP4 spec decision 3): the instructions a worker session gets for its step. `plan`, `review-plan`, `implement`, `review-code`, `review-security`, `run-tests`, `sync-docs`, each `roles/<role>/SKILL.md` with Agent Skills frontmatter (`name`, `description`, `metadata: {source: super-harness}`).
+Role skills, data only (system spec §8.2; SP4 spec decision 3): the instructions a worker session gets for its step. `plan`, `review-plan`, `implement`, `review-code`, `review-security`, `run-tests`, `sync-docs`, each `roles/<role>/SKILL.md` with Agent Skills frontmatter (`name`, `description`, `metadata: {source: kengash-ai}`).
 
 ## Interface
 
@@ -18,4 +18,5 @@ Role skills, data only (system spec §8.2; SP4 spec decision 3): the instruction
 
 ## Changes
 
+- 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-23: the seven role skills (SP4 M1).

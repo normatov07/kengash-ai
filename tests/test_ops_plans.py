@@ -4,9 +4,9 @@ from typing import Any
 
 import pytest
 
-from super_harness.model import NeedsUser, PlanMode, PlanStatus, UserError
-from super_harness.ops import plans, records
-from super_harness.store import StorePaths, documents
+from kengash_ai.model import NeedsUser, PlanMode, PlanStatus, UserError
+from kengash_ai.ops import plans, records
+from kengash_ai.store import StorePaths, documents
 
 PROMPT = "Make webhook keys rotatable.\n## Goal\nas the user typed it\n"
 Events = Callable[[], list[dict[str, Any]]]

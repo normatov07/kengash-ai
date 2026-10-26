@@ -4,10 +4,10 @@ from pathlib import Path
 
 from conftest import write_settings
 
-from super_harness.model import SlotEntry
-from super_harness.ops import slots
-from super_harness.scheduler import Held
-from super_harness.store import StorePaths, runtime
+from kengash_ai.model import SlotEntry
+from kengash_ai.ops import slots
+from kengash_ai.scheduler import Held
+from kengash_ai.store import StorePaths, runtime
 
 
 def entry(ticket: str, provider: str = "claude") -> SlotEntry:

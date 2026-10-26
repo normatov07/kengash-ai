@@ -1,7 +1,7 @@
 import pytest
 
-from super_harness.model import PLAN_SECTIONS, TICKET_SECTIONS, UserError
-from super_harness.store.frontmatter import parse, read_sections, render
+from kengash_ai.model import PLAN_SECTIONS, TICKET_SECTIONS, UserError
+from kengash_ai.store.frontmatter import parse, read_sections, render
 
 NAMES = TICKET_SECTIONS
 EMPTY = dict.fromkeys(NAMES, "")

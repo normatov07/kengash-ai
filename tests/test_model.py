@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from super_harness.model import (
+from kengash_ai.model import (
     SUB_STATUSES,
     Folder,
     Gate,

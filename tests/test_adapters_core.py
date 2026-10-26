@@ -8,12 +8,12 @@ from typing import Any
 
 import pytest
 
-from super_harness.adapters import get
-from super_harness.adapters.base import classify, positional
-from super_harness.adapters.env import worker_env
-from super_harness.adapters.process import run_process
-from super_harness.adapters.shell import Shell
-from super_harness.model import ReviewOutput, StepRequest, UserError
+from kengash_ai.adapters import get
+from kengash_ai.adapters.base import classify, positional
+from kengash_ai.adapters.env import worker_env
+from kengash_ai.adapters.process import run_process
+from kengash_ai.adapters.shell import Shell
+from kengash_ai.model import ReviewOutput, StepRequest, UserError
 
 
 def _request(tmp_path: Path, **fields: Any) -> StepRequest:

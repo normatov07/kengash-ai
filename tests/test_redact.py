@@ -1,6 +1,6 @@
 import pytest
 
-from super_harness.store.redact import MARK, redact
+from kengash_ai.store.redact import MARK, redact
 
 
 @pytest.mark.parametrize(

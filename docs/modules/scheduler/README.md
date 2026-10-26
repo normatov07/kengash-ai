@@ -19,5 +19,6 @@ Pick which ready tickets may start now (SP3 spec §7): no `touches` overlap insi
 
 ## Changes
 
+- 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-23: `fits` is public; `ops.slots` uses it (SP3 M3).
 - 2026-10-22: overlap, slots, project turns (SP3 M1).

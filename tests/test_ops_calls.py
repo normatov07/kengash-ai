@@ -7,10 +7,10 @@ from typing import Any
 
 import pytest
 
-from super_harness import adapters
-from super_harness.model import StepRequest, StepResult, Usage, WorkOutput
-from super_harness.ops import calls
-from super_harness.store import StorePaths
+from kengash_ai import adapters
+from kengash_ai.model import StepRequest, StepResult, Usage, WorkOutput
+from kengash_ai.ops import calls
+from kengash_ai.store import StorePaths
 
 OK = StepResult(
     session_id="s1",

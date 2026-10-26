@@ -6,10 +6,10 @@ from typing import Any
 
 import pytest
 
-from super_harness import settings
-from super_harness.model import Doc, Ticket
-from super_harness.store import StorePaths, documents, memo, yamlio
-from super_harness.store.seed import ensure_store
+from kengash_ai import settings
+from kengash_ai.model import Doc, Ticket
+from kengash_ai.store import StorePaths, documents, memo, yamlio
+from kengash_ai.store.seed import ensure_store
 
 Make = Callable[..., Doc[Ticket]]
 

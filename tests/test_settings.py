@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from super_harness import settings
-from super_harness.model import UserError
-from super_harness.store import StorePaths
-from super_harness.store.seed import ensure_project, ensure_store
+from kengash_ai import settings
+from kengash_ai.model import UserError
+from kengash_ai.store import StorePaths
+from kengash_ai.store.seed import ensure_project, ensure_store
 
 
 @pytest.fixture

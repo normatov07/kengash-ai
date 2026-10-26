@@ -1,6 +1,6 @@
 # Writing skills
 
-Rules for installable skills (`skills/<name>/SKILL.md`) and role skills (`src/super_harness/roles/<role>/SKILL.md`). Both arrive in sub-project 4; these rules are the contract it implements.
+Rules for installable skills (`skills/<name>/SKILL.md`) and role skills (`src/kengash_ai/roles/<role>/SKILL.md`). Both arrive in sub-project 4; these rules are the contract it implements.
 
 ## Format
 
@@ -32,7 +32,7 @@ An installed skill's name and description load into every session of every agent
 - Flags and options live in `harness <command> --help`, not in the skill.
 - Give the shape of any output as a template.
 - References sit one level deep and are named by their trigger: "read `references/importance.md` when assigning importance".
-- Step 0 of every installed skill runs `harness --version`. If it does not print `super-harness <version>`, the skill prints the install line and stops.
+- Step 0 of every installed skill runs `harness --version`. If it does not print `kengash-ai <version>`, the skill prints the install line and stops.
 
 ## Invocation
 
@@ -57,12 +57,12 @@ Skills are built like code, test first (superpowers `writing-skills`):
 
 | Route | Where skills land |
 |---|---|
-| `npx skills add <owner>/super-harness [-g]` | Claude Code: `.claude/skills/`; Codex, Antigravity, Gemini CLI, Cursor, Copilot, OpenCode: `.agents/skills/` |
+| `npx skills add <owner>/Kengash AI [-g]` | Claude Code: `.claude/skills/`; Codex, Antigravity, Gemini CLI, Cursor, Copilot, OpenCode: `.agents/skills/` |
 | `harness skills install --agent claude,codex,antigravity [--global]` | the same paths, no Node needed |
 | Claude and Codex plugin marketplaces | managed by the agent, with auto-update |
 
 Role skills are never installed into agents: `harness` injects them into worker sessions.
 
-- Format: `src/super_harness/roles/<role>/SKILL.md` with `name` and `description`; workers get the body without the frontmatter.
+- Format: `src/kengash_ai/roles/<role>/SKILL.md` with `name` and `description`; workers get the body without the frontmatter.
 - Lookup: `projects/<slug>/roles/<role>/SKILL.md`, then `defaults/roles/` (seeded by `harness init`, never overwritten), then the package.
 - Install folders: claude `.claude/skills/`, codex and antigravity `.agents/skills/` in a repo; with `--global`, `~/.claude/skills/`, `~/.agents/skills/` and `~/.gemini/config/skills/`. Antigravity reads its plugin manifest from `.antigravity-plugin/plugin.json`.

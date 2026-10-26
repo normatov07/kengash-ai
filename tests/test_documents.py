@@ -3,9 +3,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from super_harness.model import Doc, Folder, Plan, PlanMode, PlanStatus, Ticket
-from super_harness.store import documents
-from super_harness.store.paths import ProjectPaths
+from kengash_ai.model import Doc, Folder, Plan, PlanMode, PlanStatus, Ticket
+from kengash_ai.store import documents
+from kengash_ai.store.paths import ProjectPaths
 
 MakeTicket = Callable[..., Doc[Ticket]]
 NOW = datetime(2026, 10, 22, 9, 41, tzinfo=UTC)

@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from super_harness import adapters
-from super_harness.model import EvalScenario
-from super_harness.ops import evals
+from kengash_ai import adapters
+from kengash_ai.model import EvalScenario
+from kengash_ai.ops import evals
 
 pytestmark = pytest.mark.live
 SKILL = """\

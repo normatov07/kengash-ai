@@ -4,8 +4,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from super_harness.ops import configure
-from super_harness.store import StorePaths
+from kengash_ai.ops import configure
+from kengash_ai.store import StorePaths
 
 Events = Callable[[], list[dict[str, Any]]]
 

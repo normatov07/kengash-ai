@@ -4,9 +4,9 @@ from typing import Any
 
 import pytest
 
-from super_harness.model import Doc, Folder, NeedsUser, PlanMode, Ticket, UserError
-from super_harness.ops import plans, tickets
-from super_harness.store import StorePaths, documents
+from kengash_ai.model import Doc, Folder, NeedsUser, PlanMode, Ticket, UserError
+from kengash_ai.ops import plans, tickets
+from kengash_ai.store import StorePaths, documents
 
 Events = Callable[[], list[dict[str, Any]]]
 BATCH = """\

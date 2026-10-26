@@ -2,9 +2,9 @@ import json
 import stat
 from datetime import UTC, date, datetime
 
-from super_harness import journal
-from super_harness.model import Event, JournalCursor
-from super_harness.store import StorePaths
+from kengash_ai import journal
+from kengash_ai.model import Event, JournalCursor
+from kengash_ai.store import StorePaths
 
 TS = datetime(2026, 10, 22, 12, 4, 11, tzinfo=UTC)
 

@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from conftest import Engine, Events
 
-from super_harness import journal
-from super_harness.model import (
+from kengash_ai import journal
+from kengash_ai.model import (
     Event,
     PlanMode,
     PlanStatus,
@@ -19,8 +19,8 @@ from super_harness.model import (
     WorkerRecord,
     utc_now,
 )
-from super_harness.ops import lifecycle, plans, records, steps, waiting
-from super_harness.store import StorePaths, documents, runtime
+from kengash_ai.ops import lifecycle, plans, records, steps, waiting
+from kengash_ai.store import StorePaths, documents, runtime
 
 
 def test_a_dead_worker_fails_its_ticket(engine: Engine, journal_events: Events) -> None:

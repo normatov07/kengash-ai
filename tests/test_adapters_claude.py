@@ -8,8 +8,8 @@ from typing import Any
 import pytest
 from conftest import FakeClis
 
-from super_harness.adapters.claude import READ_TOOLS, Claude
-from super_harness.model import OUTPUT_SCHEMAS, ReviewOutput, StepRequest, Usage, WorkOutput
+from kengash_ai.adapters.claude import READ_TOOLS, Claude
+from kengash_ai.model import OUTPUT_SCHEMAS, ReviewOutput, StepRequest, Usage, WorkOutput
 
 
 def _request(tmp_path: Path, **fields: Any) -> StepRequest:

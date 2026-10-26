@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from super_harness.gitops import (
+from kengash_ai.gitops import (
     CommitFailed,
     FileChange,
     GitError,

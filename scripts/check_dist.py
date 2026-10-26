@@ -7,14 +7,14 @@ import zipfile
 from pathlib import Path
 
 WHEEL_NEEDS = (
-    "super_harness/__init__.py",
-    "super_harness/ui/static/fonts/",
-    "super_harness/ui/static/index.html",
-    "super_harness/skills/",
-    "super_harness/roles/",
-    "super_harness/store/defaults/SETTINGS.md",
+    "kengash_ai/__init__.py",
+    "kengash_ai/ui/static/fonts/",
+    "kengash_ai/ui/static/index.html",
+    "kengash_ai/skills/",
+    "kengash_ai/roles/",
+    "kengash_ai/store/defaults/SETTINGS.md",
 )
-SDIST_NEEDS = ("src/super_harness/__init__.py", "skills/", "LICENSE", "pyproject.toml")
+SDIST_NEEDS = ("src/kengash_ai/__init__.py", "skills/", "LICENSE", "pyproject.toml")
 # local agent, tool and editor folders, and the original request: never part of a release
 FORBIDDEN = (
     ".claude/",
@@ -43,7 +43,7 @@ def main(argv: list[str]) -> int:
             problems += _check("wheel", archive.namelist(), WHEEL_NEEDS)
     for sdist in sdists:
         with tarfile.open(sdist) as archive:
-            # drop the archive's top folder, `super_harness-<version>/`
+            # drop the archive's top folder, `kengash_ai-<version>/`
             names = [name.partition("/")[2] for name in archive.getnames()]
             problems += _check("sdist", names, SDIST_NEEDS)
     for problem in problems:

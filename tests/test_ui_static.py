@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from super_harness.ui import app as ui_app
+from kengash_ai.ui import app as ui_app
 
 NODE = shutil.which("node")  # found before the fake-CLI fixture narrows PATH
 STATIC = Path(ui_app.__file__).parent / "static"
@@ -180,3 +180,8 @@ def test_faint_text_meets_wcag_aa_on_every_surface() -> None:
 def test_the_settings_file_view_scrolls_by_keyboard() -> None:
     settings = (STATIC / "views" / "settings.js").read_text()
     assert '<div class="yaml-box" tabindex="0" role="region" aria-label="SETTINGS.md">' in settings
+
+
+def test_the_ui_wears_the_apps_name() -> None:
+    assert "<title>Kengash AI</title>" in (STATIC / "index.html").read_text()
+    assert "<b>kengash</b>" in (STATIC / "app.js").read_text()
