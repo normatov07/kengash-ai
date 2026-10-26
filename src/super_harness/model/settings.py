@@ -42,9 +42,9 @@ def split_cli(cli: str) -> tuple[str, str | None]:
     return provider, model or None
 
 
-def _known(cli: str, *, shell: bool = False) -> str:
+def _known(cli: str, *, allow_shell: bool = False) -> str:
     provider, _ = split_cli(cli)
-    known = (*PROVIDERS, SHELL) if shell else PROVIDERS
+    known = (*PROVIDERS, SHELL) if allow_shell else PROVIDERS
     if provider not in known:
         raise ValueError(f"unknown provider {provider!r}; known: {', '.join(known)}")
     return cli
@@ -123,7 +123,7 @@ class Agent(_Section):
     @field_validator("cli")
     @classmethod
     def _cli_provider(cls, value: str) -> str:
-        return _known(value, shell=True)
+        return _known(value, allow_shell=True)
 
     @field_validator("fallback")
     @classmethod

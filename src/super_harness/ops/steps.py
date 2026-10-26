@@ -185,7 +185,8 @@ def _begin(job: _Job, *, budget_left: bool) -> _Ready | JobEnd:
 def _step(job: _Job, ready: _Ready) -> JobEnd | None:
     """Run one step's CLI call, commit its edits, then write and route its result."""
     role = ready.resolved.role_of(ready.step)
-    assert role is not None  # the approve step halts in _begin
+    if role is None:  # the approve step halts in _begin, so only a broken workflow lands here
+        return _fail(job, f"step {ready.step} has no role")
     try:
         pick = agents.pick(ready.resolved, role, job.detect)
     except NeedsSetup as exc:

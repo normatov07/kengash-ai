@@ -56,7 +56,14 @@ target-version = "py312"
 src = ["src", "."]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "S"]
+# harness runs the official CLIs and git by name from PATH by design (system spec hard
+# rule 6), always with argument lists and never a shell string
+ignore = ["S603", "S607"]
+
+[tool.ruff.lint.per-file-ignores]
+# tests assert, use fake tokens, pass `shell=` to the fake CLIs and open the local UI
+"tests/**" = ["S101", "S106", "S310", "S604"]
 
 [tool.mypy]
 strict = true

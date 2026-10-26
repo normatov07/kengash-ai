@@ -11,7 +11,7 @@ from conftest import git
 from super_harness import settings
 from super_harness.model import Doc, Ticket, UserError
 from super_harness.ops import agent_config, projects, skills
-from super_harness.store import StorePaths, documents
+from super_harness.store import StorePaths, documents, locks
 
 Events = Callable[[], list[dict[str, Any]]]
 DOES = "Flag N+1 queries and hot loops in the changed code."
@@ -184,7 +184,7 @@ def test_agent_edits_read_settings_under_the_lock(
     registered_repo: Path, store_paths: StorePaths, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     order: list[str] = []
-    real_locked, real_load = agent_config.locked, settings.load
+    real_locked, real_load = locks.locked, settings.load
 
     @contextlib.contextmanager
     def locked(path: Path) -> Iterator[None]:
@@ -198,7 +198,7 @@ def test_agent_edits_read_settings_under_the_lock(
         return real_load(paths, slug)
 
     monkeypatch.setattr(agent_config, "locked", locked)
-    monkeypatch.setattr(agent_config.settings, "load", load)
+    monkeypatch.setattr(settings, "load", load)
     new_perf()
     agent_config.remove_agent("perf-reviewer", project="payments-api", by="cli")
     assert order == ["lock", "load", "unlock", "lock", "load", "unlock"]

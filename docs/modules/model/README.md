@@ -28,6 +28,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Changes
 
+- 2026-10-26: the provider check's keyword is `allow_shell` (ruff's security rules read `shell=True` as a subprocess call) (SP7).
 - 2026-10-26: custom steps: `CustomStep`, `Settings.steps`, `role_of`, `kind_of`, `step_names`, `BUILTIN_KINDS` (SP6).
 - 2026-10-23: `UiRecord` (SP5 M1).
 - 2026-10-24: `Expect.ui` (SP5 M3).

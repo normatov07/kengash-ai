@@ -56,6 +56,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-26: a step without a role fails the ticket instead of asserting (SP7).
 - 2026-10-26: `agent_config` reads settings under `settings.lock`; custom board columns follow workflow order (SP7).
 - 2026-10-26: `views.overview` scans the store once; `scripts/bench_views.py` times every view (SP7).
 - 2026-10-26: `providers`, `agents` and the Agents cards give gemini's reason from `adapters.UNSUPPORTED` (SP6).
