@@ -1,6 +1,6 @@
 # AGENTS.md
 
-super-harness lets one developer run many projects at once with the coding-agent subscriptions they already have (Claude Code, Codex, Antigravity `agy`; Gemini CLI optional), driven through the official CLIs, never API keys. Skills installed into the user's agent conduct the work, the deterministic `harness` CLI does every mechanical step, and a local UI monitors it all.
+super-harness lets one developer run many projects at once with the coding-agent subscriptions they already have (Claude Code, Codex, Antigravity `agy`, which also serves Google's plans), driven through the official CLIs, never API keys. Skills installed into the user's agent conduct the work, the deterministic `harness` CLI does every mechanical step, and a local UI monitors it all.
 
 Status: all 7 sub-projects done (Foundation; Store + `harness` CLI; Engine; Skills; Web UI; Custom agents; Production readiness): `harness init|doctor|link|adopt|settings|memory|context|plan|ticket|status|next|run|wait|approve|park|stop|pause|resume|merge|skills|agent|ui` work, with detached workers, plan review, memory compaction, role skills, six installed skills (`skills/`, proven by `evals/`), the local web UI (`harness ui open`, seven screens matching the canvas), user-defined agents (`harness agent new` or the UI's New agent), and release tooling (`make dist`, `make audit`, `docs/releasing.md`). `docs/architecture.md` tracks what is built.
 

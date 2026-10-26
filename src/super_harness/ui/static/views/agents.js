@@ -38,22 +38,19 @@ export async function load(app, arg) {
 
 function badge(card) {
   if (!card.checked) return html`<span class="pstate plain"><span></span>checking…</span>`;
-  if (!card.supported) return html`<span class="pstate plain">not supported</span>`;
   if (!card.installed) return html`<span class="pstate plain">not installed</span>`;
   if (!card.signed_in) return html`<span class="pstate warn"><span></span>signed out</span>`;
   return html`<span class="pstate ok"><span></span>signed in</span>`;
 }
 
 function provider(card) {
-  const ready = card.checked && card.supported && card.installed && card.signed_in;
+  const ready = card.checked && card.installed && card.signed_in;
   const head = html`<div class="prov-head"><span class="mono prov-name ${ready || !card.checked ? "" : "muted"}">${card.name}</span>${badge(card)}</div>`;
   if (card.checked && !ready) {
-    const why = !card.supported
-      ? card.hint || "Not supported yet: pick another provider for its roles in SETTINGS.md."
-      : !card.installed
+    const why = !card.installed
         ? `The ${card.name} CLI is not on this machine's PATH.`
         : `The ${card.name} CLI${card.version ? ` ${card.version}` : ""} is installed but no session has been signed in.`;
-    return html`<div class="prov off">${head}<p class="prov-why">${why}</p>${card.supported && card.hint ? html`<button class="prov-btn strong" type="button" data-copy="${card.hint}" data-note="Copied: run it in a terminal, then check sign-in again.">${card.installed ? "Sign in" : "Install"}</button><div class="prov-hint mono" title="${card.hint}">${card.hint}</div>` : ""}</div>`;
+    return html`<div class="prov off">${head}<p class="prov-why">${why}</p>${card.hint ? html`<button class="prov-btn strong" type="button" data-copy="${card.hint}" data-note="Copied: run it in a terminal, then check sign-in again.">${card.installed ? "Sign in" : "Install"}</button><div class="prov-hint mono" title="${card.hint}">${card.hint}</div>` : ""}</div>`;
   }
   return html`<div class="prov">${head}<div class="prov-rows">
       <div><span>sessions</span><span class="end mono">${card.slots_used} / ${card.slots_total}</span></div>

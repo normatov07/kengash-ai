@@ -34,6 +34,7 @@ An audit on 2026-10-26 found the features complete but the product not yet fit t
 12. **Community and docs**: README (requirements, install, quickstart, commands, configuration, custom agents, security model, troubleshooting, uninstall), CHANGELOG (Keep a Changelog), CONTRIBUTING, SECURITY (private reporting through GitHub advisories, scope), a short code of conduct pointing to Contributor Covenant 2.1, issue and PR templates, `docs/releasing.md`.
 13. **SP6 deferred minors**: `agent_config` reads settings inside `settings.lock`; a custom step's board column sits where its first workflow runs it.
 14. **Accessibility**: an axe-core scan of the seven screens; serious and critical violations fixed.
+15. **Antigravity replaces Gemini** (the user's decision, 2026-10-26). Google serves its subscription plans through Antigravity CLI, which harness drives, so `gemini` leaves the providers: `PROVIDERS` is `claude`, `codex`, `antigravity`, and the defaults, the Agents provider cards and the CLI pool show those three. A `cli`, fallback, compactor or plan reviewer naming `gemini` fails validation with "gemini is replaced by antigravity …"; a `providers.gemini` block too. Every project copied `sessions.per_provider.gemini: 0` from the old defaults, so that one legacy key is dropped on load instead of failing. Antigravity keeps using the `~/.gemini/` folders, the `GEMINI_API_KEY` variable it strips and Gemini model names; `GEMINI.md` stays as the legacy context file Antigravity also reads. This supersedes SP6 decision 9 and SP5's gemini provider card.
 
 ## 4. Acceptance (SP7 exit)
 
@@ -43,4 +44,5 @@ An audit on 2026-10-26 found the features complete but the product not yet fit t
 - [x] `ruff` with `S` is clean; native Windows exits 4 with the WSL message; log retention prunes old files only (`test_native_windows_stops_with_the_wsl_message`, `test_old_logs_are_pruned_and_new_ones_kept`, `test_doctor_fix_prunes_old_logs`).
 - [ ] CI green on ubuntu and macOS for 3.12, 3.13, 3.14, plus package and audit jobs; release workflow and Dependabot config reviewed. (Workflows pass actionlint; the GitHub run comes with the pull request.)
 - [x] README, CHANGELOG, CONTRIBUTING, SECURITY, code of conduct, templates and `docs/releasing.md` exist; `make check` green (605 passed, 2026-10-26).
+- [x] `gemini` is gone from the providers, defaults and UI; old settings naming it get the replacement message; legacy `per_provider.gemini` loads (`test_gemini_is_replaced_by_antigravity`, `test_the_legacy_gemini_slot_is_dropped`, `test_gemini_points_to_antigravity`).
 - [x] axe-core reports no serious or critical violations on the seven screens (axe-core 4.13.0, demo store, plus the New agent dialog).

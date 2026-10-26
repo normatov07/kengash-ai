@@ -4,7 +4,7 @@ from pathlib import Path
 
 from conftest import FakeClis, write_settings
 
-from super_harness import adapters
+from super_harness import settings
 from super_harness.ops.providers import check_providers, trust_notice
 from super_harness.store import StorePaths
 
@@ -50,16 +50,14 @@ def test_disabled_agents_are_not_checked(
     assert check_providers(store_paths) == []
 
 
-def test_gemini_is_unsupported(registered_repo: Path, store_paths: StorePaths) -> None:
+def test_gemini_points_to_antigravity(registered_repo: Path, store_paths: StorePaths) -> None:
     write_settings(
         store_paths,
         "agents.doc-writer: {on: true, cli: gemini, skill: sync-docs}\n",
         slugs=("payments-api",),
     )
-    [check] = check_providers(store_paths)
-    assert check.blocking and check.message == (
-        f"gemini: not supported; used by doc-writer; {adapters.UNSUPPORTED['gemini']}"
-    )
+    [problem] = settings.problems(store_paths, "payments-api")
+    assert "gemini is replaced by antigravity" in problem
 
 
 def test_a_claude_login_without_subscription_warns(

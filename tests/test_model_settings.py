@@ -4,7 +4,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from super_harness.model import Event, ProviderOptions, Settings, split_cli
+from super_harness.model import PROVIDERS, Event, ProviderOptions, Settings, split_cli
 
 AGENTS: dict[str, Any] = {
     "planner": {"cli": "claude/opus", "skill": "plan"},
@@ -152,3 +152,31 @@ def test_a_custom_step_validates_and_resolves() -> None:
 def test_custom_step_problems(changes: dict[str, Any], message: str) -> None:
     with pytest.raises(ValidationError, match=message):
         Settings.model_validate(_custom(**changes))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"agents": {**AGENTS, "doc-writer": {"cli": "gemini", "skill": "sync-docs"}}},
+        {
+            "agents": {
+                **AGENTS,
+                "implementer": {"cli": "codex", "skill": "x", "fallback": ["gemini"]},
+            }
+        },
+        {"memory": {"compactor": "gemini/flash"}},
+        {"plan": {"reviewer": "gemini"}},
+        {"providers": {"gemini": {"allow_api_key": False}}},
+    ],
+)
+def test_gemini_is_replaced_by_antigravity(data: dict[str, Any]) -> None:
+    assert PROVIDERS == ("claude", "codex", "antigravity")
+    with pytest.raises(ValidationError, match="gemini is replaced by antigravity"):
+        Settings.model_validate(data)
+
+
+def test_the_legacy_gemini_slot_is_dropped() -> None:
+    legacy = {"claude": 3, "codex": 3, "antigravity": 2, "gemini": 0}  # every old project has it
+    settings = Settings.model_validate({"sessions": {"per_provider": legacy}})
+    assert settings.sessions.per_provider == {"claude": 3, "codex": 3, "antigravity": 2}
+    assert Settings().sessions.per_provider == {"claude": 3, "codex": 3, "antigravity": 2}

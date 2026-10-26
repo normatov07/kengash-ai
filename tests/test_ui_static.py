@@ -152,10 +152,6 @@ def test_routing_names_the_critical_loop_cap() -> None:
     assert "${data.loop_max[name]} loops" in agents
 
 
-def test_an_unsupported_provider_card_explains_itself() -> None:
-    assert "card.hint ||" in (STATIC / "views" / "agents.js").read_text()
-
-
 def test_the_page_names_its_icon() -> None:
     index = (STATIC / "index.html").read_text()
     assert '<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">' in index

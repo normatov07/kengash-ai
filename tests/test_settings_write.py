@@ -183,7 +183,7 @@ def test_a_rewritten_entry_keeps_the_space_after_its_key(
         {"loop_grant": 3},
         {"agents.implementer.cli": "claude/sonnet"},
         {"workflows.standard": {"steps": ["plan", "implement"], "on_fail": {}}},
-        {"providers.gemini": {"allow_api_key": False}},
+        {"providers.antigravity": {"allow_api_key": False}},
         {"loop_max.critical": None},
         {"agents.implementer.fallback": None},
     ],

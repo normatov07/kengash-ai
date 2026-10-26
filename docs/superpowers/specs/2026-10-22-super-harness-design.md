@@ -8,7 +8,7 @@
 
 ## 1. Goal and success criteria
 
-One developer runs many projects at once with only subscription coding-agent CLIs (Claude Code, Codex, Antigravity `agy`; Gemini CLI optional), never API keys. A prompt becomes an approved plan, the plan becomes tickets, tickets run through importance-based agent loops, and a local UI monitors and controls everything. Open source, installable into any agent that supports Agent Skills.
+One developer runs many projects at once with only subscription coding-agent CLIs (Claude Code, Codex, Antigravity `agy`), never API keys. A prompt becomes an approved plan, the plan becomes tickets, tickets run through importance-based agent loops, and a local UI monitors and controls everything. Open source, installable into any agent that supports Agent Skills.
 
 | # | Success criterion | Verified by |
 |---|---|---|
@@ -36,7 +36,7 @@ Non-goals for v1: API-key billing; remote or cloud execution; a multi-user serve
 | D7 | Worker sessions are reused by resuming the CLI session id at every step | long-lived `stream-json` processes (later optimisation behind the same adapter interface); tmux-driven interactive TUIs (brittle output scraping) |
 | D8 | One detached worker process per job; the conductor waits with `harness wait` | conductor driving every step (context growth); one blocking call per ticket (agent tool timeouts of about 10 minutes) |
 | D9 | One git worktree and branch per ticket; harness commits after each implement step with `Harness-*` trailers | agents committing (trailers unreliable); one shared working tree (collisions) |
-| D10 | Providers claude, codex and antigravity are first-class; gemini is optional | gemini first-class (consumer login shut down on 2026-06-18) |
+| D10 | Providers claude, codex and antigravity; Antigravity serves Google's subscription plans (SP7 spec decision 15) | a Gemini CLI provider (consumer plans moved to Antigravity CLI on 2026-06-18) |
 
 ## 3. Architecture
 
@@ -410,7 +410,7 @@ class Provider(Protocol):
 | claude | `claude -p … --output-format json --json-schema … --session-id <uuid>` | `--resume <id>` | permission profile → `--permission-mode` plus `--allowedTools`; workers skip the user's settings, plugins and MCP (`--setting-sources project,local --strict-mcp-config`); never `--bare` |
 | codex | `codex exec --json --output-schema <file> -s <sandbox> …` | `codex exec resume --json --output-schema <file> -c sandbox_mode=… <id> "…"` | never `--ephemeral`; workers run with `--ignore-user-config`; full mapping in the SP3 spec §8 |
 | antigravity | `agy -p … --output-format json --json-schema … --mode <mode>` | `--conversation <id>` | empty stdout with exit 0 is an `empty` error: recover from the transcript, otherwise fail |
-| gemini | `gemini -p … --output-format json` | — | not built: consumer plans moved to Antigravity CLI on 2026-06-18 (SP6 spec decision 9) |
+| gemini | — | — | removed: Antigravity replaces it (SP7 spec decision 15) |
 | shell | `project.test_cmd` | — | `run_tests` steps; exit 0 = pass |
 
 Errors: `auth` stops the ticket with "sign in to <cli> interactively"; `rate_limit` switches to the role's `fallback` when `fallback_on_rate_limit` is on, otherwise waits as `waiting_quota` until `retry_after`; `timeout` retries once; `schema` retries once with a "return valid JSON" repair prompt; anything else → `failed` with the log path.

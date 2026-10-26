@@ -8,8 +8,6 @@ from super_harness import adapters
 from super_harness.model import NeedsSetup, ProviderStatus, Settings, split_cli
 from super_harness.store.paths import StorePaths
 
-UNSUPPORTED = adapters.UNSUPPORTED
-
 
 @dataclass(frozen=True)
 class Pick:
@@ -47,8 +45,6 @@ def detector(paths: StorePaths) -> Callable[[str], ProviderStatus]:
 
     @cache
     def detect(name: str) -> ProviderStatus:
-        if name in UNSUPPORTED:
-            return ProviderStatus(name=name, installed=False)
         return adapters.get(name, runtime=paths.runtime).detect()
 
     return detect
@@ -56,8 +52,6 @@ def detector(paths: StorePaths) -> Callable[[str], ProviderStatus]:
 
 def problem(provider: str, status: Callable[[str], ProviderStatus]) -> str | None:
     """Why `provider` cannot run now, or None when it can."""
-    if provider in UNSUPPORTED:
-        return f"{provider} is not supported: {UNSUPPORTED[provider]}"
     found = status(provider)
     if not found.installed:
         return f"{provider} not installed; {found.hint}"
