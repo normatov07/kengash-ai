@@ -235,15 +235,23 @@ def test_a_clean_expectation_names_changed_files(
     assert (result.passed, result.failure) == (False, "the repo has changes: notes.md")
 
 
-# a detached stand-in server in its own session, as `harness ui open` starts one; Python's
-# setsid because macOS has no setsid command
-START_UI = (
-    'mkdir -p "$HARNESS_HOME/runtime" && '
-    f"'{sys.executable}' -c 'import os, time; os.setsid(); time.sleep(60)' >/dev/null 2>&1 & "
-    'echo "{\\"pid\\": $!, \\"port\\": 1, \\"token\\": \\"t\\"}" '
-    '> "$HARNESS_HOME/runtime/ui.json"; '
-    'echo $! > "$HARNESS_HOME/../ui.pid"'
+# A stand-in server started as `harness ui open` starts one: in a session of its own from
+# the moment it runs, so the conductor's process group ending cannot take it down (a
+# backgrounded process that calls setsid itself loses that race on slow starts, as on macOS),
+# and recorded only once it is detached. Its streams go to /dev/null so the conductor's
+# output closes when the conductor ends.
+UI_STANDIN = (
+    "import json, os, subprocess; "
+    "quiet = subprocess.DEVNULL; "
+    'home = os.environ["HARNESS_HOME"]; '
+    'server = subprocess.Popen(["sleep", "60"], start_new_session=True, '
+    "stdin=quiet, stdout=quiet, stderr=quiet); "
+    'os.makedirs(home + "/runtime", exist_ok=True); '
+    'record = {"pid": server.pid, "port": 1, "token": "t"}; '
+    'json.dump(record, open(home + "/runtime/ui.json", "w")); '
+    'open(home + "/../ui.pid", "w").write(str(server.pid))'
 )
+START_UI = f"'{sys.executable}' -c '{UI_STANDIN}'"
 
 
 def test_a_ui_expectation_needs_a_running_server(
