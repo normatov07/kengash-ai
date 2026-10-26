@@ -429,3 +429,50 @@ def test_agents_render_before_detection_runs(seeded: StorePaths, detected: list[
     again = views.agents_view(seeded, project=None, window="today", detect=False)
     assert all(card.checked for card in again.providers)
     assert {card.name: card.signed_in for card in again.providers}["claude"] is True
+
+
+PERF_CHANGES: dict[str, Any] = {
+    "agents.perf-reviewer": {"cli": "claude/sonnet", "skill": "perf-reviewer"},
+    "steps.perf_review": {"role": "perf-reviewer", "kind": "review", "does": "Check hot paths."},
+    "workflows.critical": {
+        "steps": ["plan", "review_plan", "implement", "review_code", "perf_review", "security"],
+        "on_fail": {
+            "review_plan": "plan",
+            "review_code": "implement",
+            "perf_review": "implement",
+            "security": "implement",
+        },
+    },
+}
+
+
+def test_custom_steps_reach_the_workflow_view(
+    registered_repo: Path, store_paths: StorePaths
+) -> None:
+    configure.save_settings(PERF_CHANGES, project="payments-api", by="ui")
+    found = views.workflows_view(store_paths, project="payments-api")
+    assert found.library[-1] == "perf_review" and found.library[0] == "plan"
+    assert (found.kinds["perf_review"], found.kinds["implement"]) == ("review", "edit")
+    assert found.roles["perf_review"] == "perf-reviewer"
+    assert found.does == {"perf_review": "Check hot paths."}
+
+
+def test_the_roster_marks_custom_agents(seeded: StorePaths, detected: list[str]) -> None:
+    configure.save_settings(PERF_CHANGES, project="payments-api", by="ui")
+    roles = {r.role: r for r in views.agents_view(seeded, project="payments-api").roster}
+    perf = roles["perf-reviewer"]
+    assert (perf.custom, perf.step, perf.used_in) == (True, "perf_review", ["critical"])
+    assert (roles["planner"].custom, roles["planner"].step) == (False, None)
+
+
+def test_the_board_has_a_column_for_a_custom_step(seeded: StorePaths, make_ticket: Make) -> None:
+    configure.save_settings(PERF_CHANGES, project="payments-api", by="ui")
+    doc = make_ticket(
+        "aaaaaaa6", status="in_process/perf_review", step="perf_review", workflow="critical"
+    )
+    documents.save_ticket(seeded.project("payments-api"), doc)
+    columns = views.board(seeded, project="payments-api").columns
+    keys = [column.key for column in columns]
+    assert keys.index("perf_review") == keys.index("security") + 1 and keys[-1] == "done"
+    perf = columns[keys.index("perf_review")]
+    assert (perf.title, [card.id for card in perf.cards]) == ("Perf review", ["aaaaaaa6"])
