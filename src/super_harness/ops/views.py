@@ -539,7 +539,8 @@ def board(paths: StorePaths | None = None, *, project: str | None = None) -> Boa
     used = {s for flow in resolved.workflows.values() for s in flow.steps} if resolved else set()
     custom = [s for s in (resolved.steps if resolved else {}) if s in used]
     custom += sorted(key for key in placed if key not in titles and key not in custom)
-    order[order.index("approve") : order.index("approve")] = custom
+    for key in custom:  # after the step its first workflow runs before it
+        order.insert(_column_slot(order, key, resolved), key)
     titles |= {key: key.replace("_", " ").capitalize() for key in custom}
     shown = [
         key
@@ -556,6 +557,17 @@ def board(paths: StorePaths | None = None, *, project: str | None = None) -> Boa
             name: len(workflow.steps_for(resolved, name, hitl=False)) for name in resolved.workflows
         }
     return Board(columns, steps)
+
+
+def _column_slot(order: list[str], step: str, resolved: Settings | None) -> int:
+    """Where a custom step's column goes: right after the nearest column for a step its
+    first workflow runs before it, else before the approval column."""
+    flows = [flow.steps for flow in (resolved.workflows.values() if resolved else [])]
+    steps = next((steps for steps in flows if step in steps), [])
+    for earlier in reversed(steps[: steps.index(step)] if step in steps else []):
+        if earlier in order:
+            return order.index(earlier) + 1
+    return order.index("approve")
 
 
 def _place(paths: StorePaths, ticket: Ticket, resolved: Settings | None) -> tuple[str, str]:

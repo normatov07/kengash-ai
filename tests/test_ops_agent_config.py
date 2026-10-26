@@ -1,6 +1,7 @@
 """Custom agents through ops: one validated save, a starter skill, journaled (SP6 spec §3)."""
 
-from collections.abc import Callable
+import contextlib
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -177,3 +178,27 @@ def test_remove_names_where_an_inherited_agent_is_set(
         "agents.qa-helper",
         "steps.qa_helper",
     ]
+
+
+def test_agent_edits_read_settings_under_the_lock(
+    registered_repo: Path, store_paths: StorePaths, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    order: list[str] = []
+    real_locked, real_load = agent_config.locked, settings.load
+
+    @contextlib.contextmanager
+    def locked(path: Path) -> Iterator[None]:
+        order.append("lock")
+        with real_locked(path):
+            yield
+        order.append("unlock")
+
+    def load(paths: StorePaths, slug: str | None = None) -> Any:
+        order.append("load")
+        return real_load(paths, slug)
+
+    monkeypatch.setattr(agent_config, "locked", locked)
+    monkeypatch.setattr(agent_config.settings, "load", load)
+    new_perf()
+    agent_config.remove_agent("perf-reviewer", project="payments-api", by="cli")
+    assert order == ["lock", "load", "unlock", "lock", "load", "unlock"]
