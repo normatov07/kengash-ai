@@ -254,6 +254,7 @@ class Role:
     tokens: int
     custom: bool = False  # a user's role (SP6), not one of the built-in steps' roles
     step: str | None = None  # the custom step it runs
+    does: str = ""  # that step's instruction
 
 
 @dataclass
@@ -750,6 +751,7 @@ def agents_view(
                 tokens.get(role, 0),
                 role not in BUILTIN_ROLES,
                 own[0] if own else None,
+                resolved.steps[own[0]].does if own else "",
             )
         )
     found.sessions_max = resolved.sessions.max

@@ -60,7 +60,7 @@ function flowChips(values, setHere) {
   const set = setHere.some((k) => k.startsWith("status.names"));
   return html`<div class="flow-chips">${Object.entries(names).map(
     ([step, name], i) => html`${i ? html`<span class="faint">→</span>` : ""}<span class="flow-chip ${set && setHere.includes(`status.names.${step}`) ? "set" : ""}" title="while ${step} runs">${name}</span>`,
-  )}</div>`;
+  )}<a class="flow-chip add" href="#/agents/new" title="A new step comes with its agent">+ add</a></div>`;
 }
 
 const FILE_NOTES = {

@@ -42,6 +42,17 @@ const PASS = { review_plan: "pass", review_code: "pass", security: "signed off",
 const BACK = { review_plan: "revise", review_code: "findings", security: "blocked", run_tests: "failing", approve: "rejected" };
 
 // Rows from the trigger to done, one pass edge between neighbours, one back edge per on_fail.
+// Custom steps (SP6) borrow the label style, colours and icon of their kind's built-in step.
+const KIND_STEP = { review: "review_code", edit: "implement", read: "plan" };
+export function learnSteps(kinds = {}) {
+  for (const [step, kind] of Object.entries(kinds)) {
+    if (step in LABELS || !KIND_STEP[kind]) continue;
+    LABELS[step] = step.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+    TONES[step] = TONES[KIND_STEP[kind]];
+    STEP_ICONS[step] = STEP_ICONS[KIND_STEP[kind]];
+  }
+}
+
 export function layout(steps, onFail) {
   const ids = ["trigger", ...steps, "done"];
   const nodes = ids.map((id, col) => ({ id, col, x: X, y: TOP + col * PITCH }));

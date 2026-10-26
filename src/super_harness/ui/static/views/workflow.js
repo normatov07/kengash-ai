@@ -2,7 +2,7 @@
 // top-to-bottom graph, edited structurally (add, move, remove a step, retarget its send-back
 // edge, pick its agent's CLI and skill), with the loop caps beside it; a save writes each
 // edited workflows.<name> whole to SETTINGS.md.
-import { LABELS, TONES, canvas, layout } from "../graph.js";
+import { LABELS, TONES, canvas, layout, learnSteps } from "../graph.js";
 import { html, mount } from "../html.js";
 import { STEP_ICONS, icon } from "../icons.js";
 import { bindScope, configBar, loadScoped, scopeOf } from "../scope.js";
@@ -14,7 +14,9 @@ const COMMON_CLIS = ["claude", "claude/opus", "claude/sonnet", "claude/haiku", "
 
 export async function load(app) {
   if (state.scope !== scopeOf(app)) Object.assign(state, { scope: scopeOf(app), tab: "", selected: "", drafts: {}, cli: {}, skill: {}, loops: {}, flags: {}, dry: false, library: false });
-  return loadScoped(app, "/api/workflows");
+  const data = await loadScoped(app, "/api/workflows");
+  learnSteps(data.kinds);
+  return data;
 }
 
 const clone = (flow) => ({ steps: [...flow.steps], on_fail: { ...flow.on_fail } });
@@ -80,7 +82,7 @@ function library(data, draft) {
     <div class="lib">${data.library.map((step) => {
       const used = draft.steps.includes(step);
       const [tile, stroke] = TONES[step] ?? TONES.trigger;
-      return html`<button class="lib-item" type="button" data-add="${step}" ${used ? "disabled" : ""} title="${used ? "Already in this workflow" : `Add ${LABELS[step]}`}"><span class="wf-icon tiny" style="background: ${tile}">${icon(STEP_ICONS[step] ?? "plan", { size: 12, stroke, width: 1.7 })}</span>${LABELS[step] ?? step}<span class="end mono faint">${used ? "in use" : OUTS[step] ?? ""}</span></button>`;
+      return html`<button class="lib-item" type="button" data-add="${step}" ${used ? "disabled" : ""} title="${used ? "Already in this workflow" : `Add ${LABELS[step]}`}"><span class="wf-icon tiny" style="background: ${tile}">${icon(STEP_ICONS[step] ?? "plan", { size: 12, stroke, width: 1.7 })}</span>${LABELS[step] ?? step}<span class="end mono faint">${used ? "in use" : OUTS[step] ?? (data.kinds?.[step] === "review" ? "2 out" : "1 out")}</span></button>`;
     })}</div>
   </div></section>`;
 }

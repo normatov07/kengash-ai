@@ -100,3 +100,20 @@ def test_seven_board_columns_fit_a_1440_px_screen() -> None:
     assert 7 * width + 6 * gap <= board
     assert "--n: ${cols.length}" in (STATIC / "views" / "board.js").read_text()
     assert css_rule(".card-top")["flex-wrap"] == "wrap"  # a narrow card wraps its loop dots
+
+
+def test_agents_screen_offers_new_agent() -> None:
+    agents = (STATIC / "views" / "agents.js").read_text()
+    for text in ("New agent", "Reviewer", "Worker", "Advisor", '"/api/agents"', "Remove agent"):
+        assert text in agents
+    assert "showModal()" in agents  # a native dialog: focus stays inside, Escape closes it
+
+
+def test_settings_status_flow_links_to_new_agent() -> None:
+    assert "#/agents/new" in (STATIC / "views" / "settings.js").read_text()
+
+
+def test_custom_steps_borrow_their_kinds_look() -> None:
+    graph = (STATIC / "graph.js").read_text()
+    assert "export function learnSteps" in graph
+    assert "learnSteps(data.kinds)" in (STATIC / "views" / "workflow.js").read_text()
