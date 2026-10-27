@@ -85,7 +85,7 @@ def provider(request: pytest.FixtureRequest, tmp_path: Path) -> str:
 
 
 def cli_of(provider: str) -> str:
-    model = os.environ.get(f"HARNESS_LIVE_{provider.upper()}_MODEL", CHEAPEST[provider])
+    model = os.environ.get(f"KENGASH_LIVE_{provider.upper()}_MODEL", CHEAPEST[provider])
     return f"{provider}/{model}" if model else provider
 
 
@@ -98,6 +98,7 @@ def scratch(
     config.write_text("[user]\n\tname = Live\n\temail = live@example.com\n", encoding="utf-8")
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(config))
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    monkeypatch.delenv("KENGASH_AGENT", raising=False)
     monkeypatch.delenv("HARNESS_AGENT", raising=False)
     repo = tmp_path / "calc"
     repo.mkdir()
@@ -178,7 +179,7 @@ def test_a_ticket_runs_end_to_end(scratch: Path, store_paths: StorePaths, provid
         text=True,
     )
     assert check.stdout == "5\n", check.stderr
-    found = git(scratch, "log", "--format=%H", f"--grep=Harness-Ticket: {doc.meta.uuid}", "main")
+    found = git(scratch, "log", "--format=%H", f"--grep=Kengash-Ticket: {doc.meta.uuid}", "main")
     assert found.strip()
     assert {"planner", "implementer", "code-reviewer"} <= set(doc.meta.sessions)
     ends = [e for e in journal(store_paths) if e["type"] == "step.end"]
