@@ -45,6 +45,8 @@ Then, in your agent:
 1. `/to-plan` (or `/to-plan-with-grill` to be interviewed first): a plan, reviewed by an agent on another provider.
 2. `/to-ticket`: the plan becomes tickets with importance, dependencies and touched paths.
 3. `/to-loop`: tickets run in their loops; the agent waits, reports gates and asks before granting loops or merging.
+
+Each of these takes an optional project name or folder at the end, such as `/to-loop payments-api` or `/to-ticket "<prompt>" ~/code/payments`; without one, planning uses the project you are in and `/to-loop` works every project. Every `--project/-p` option of `kengash` takes a name or a folder too.
 4. `/open-ui` (or `kengash ui open`): the web UI on 127.0.0.1 behind a private link.
 
 ## Commands

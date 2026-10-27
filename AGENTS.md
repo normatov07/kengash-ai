@@ -2,7 +2,7 @@
 
 Kengash AI lets one developer run many projects at once with the coding-agent subscriptions they already have (Claude Code, Codex, Antigravity `agy`, which also serves Google's plans), driven through the official CLIs, never API keys. Skills installed into the user's agent conduct the work, the deterministic `kengash` CLI does every mechanical step, and a local UI monitors it all.
 
-Status: all 8 sub-projects done (Foundation; Store + `kengash` CLI; Engine; Skills; Web UI; Custom agents; Production readiness; Kengash naming): `kengash init|doctor|link|adopt|settings|memory|context|plan|ticket|status|next|run|wait|approve|park|stop|pause|resume|merge|skills|agent|ui` work, with detached workers, plan review, memory compaction, role skills, six installed skills (`skills/`, proven by `evals/`), the local web UI (`kengash ui open`, seven screens matching the canvas), user-defined agents (`kengash agent new` or the UI's New agent), and release tooling (`make dist`, `make audit`, `docs/releasing.md`). `docs/architecture.md` tracks what is built.
+Status: all 9 sub-projects done (Foundation; Store + `kengash` CLI; Engine; Skills; Web UI; Custom agents; Production readiness; Kengash naming; Completion audit): `kengash init|doctor|link|adopt|settings|memory|context|plan|ticket|status|next|run|wait|approve|park|stop|pause|resume|merge|skills|agent|ui` work, with detached workers, plan review, memory compaction, role skills, six installed skills (`skills/`, proven by `evals/`), the local web UI (`kengash ui open`, seven screens matching the canvas), user-defined agents (`kengash agent new` or the UI's New agent), and release tooling (`make dist`, `make audit`, `docs/releasing.md`). `docs/architecture.md` tracks what is built.
 
 ## Commands
 
