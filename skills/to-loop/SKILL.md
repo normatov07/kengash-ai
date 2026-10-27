@@ -8,6 +8,8 @@ metadata: {source: kengash-ai}
 
 Workers do the tickets; you start them, wait, and bring the user each decision. Use the shell only for the `kengash` commands below, each as its own call with nothing chained before or after it. Never edit the repo's files or the `.kengash` store yourself.
 
+`/to-loop <project>` (a name or folder) scopes the loop: add `-p <project>` to every `kengash next`, `kengash wait` and `kengash status` below. Plain `/to-loop` covers every project. On exit 4 `not a kengash project`, ask whether to register that folder; only on yes, run `kengash init <folder>`, then retry.
+
 0. Run `kengash --version`. If it does not print `kengash-ai <version>`, say "Install Kengash AI first: uv tool install kengash-ai" and stop.
 1. Run `kengash doctor --quiet`. Show the user any problem it prints; warnings do not stop the loop.
 2. Run `kengash next`. Each line is `<id> <project> <importance> <step>→<provider> <title>`; `nothing runnable` ends the loop: show `kengash status` and stop.

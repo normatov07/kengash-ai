@@ -430,6 +430,8 @@ Errors: `auth` stops the ticket with "sign in to <cli> interactively"; `rate_lim
 | `open-ui` | user | `harness ui open`; on exit 4, ask to install the UI extra, install it, open |
 | `harness-memory` | model | triggered when the user states a lasting preference or goal, rejects an approach, or a design decision is made → `harness memory add` |
 
+The planning skills, `to-ticket` and `to-loop` take an optional project name or folder after their argument and pass it on as `-p`; a folder no project holds is registered only on the user's yes (SP9 spec decision 2).
+
 Importance rubric (`to-ticket/references/importance.md`): critical when the slice touches auth, secrets, payments, data migrations, infrastructure or anything irreversible; standard when it spans modules or changes a public interface; simple otherwise.
 
 Every skill's step 0 runs `harness --version`. If the command is missing or is not super-harness, the skill prints the install line and stops.

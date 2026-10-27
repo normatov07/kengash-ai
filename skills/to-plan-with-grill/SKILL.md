@@ -6,22 +6,24 @@ metadata: {source: kengash-ai}
 ---
 # Grill, then plan
 
-You question the user until nothing is left to assume, then write the plan; kengash stores it and has another agent review it. Read with your file tools; use the shell only for the `kengash` commands below, each as its own call with nothing chained before or after it. Never edit the repo's files or the `.kengash` store yourself.
+You question the user until nothing is left to assume, then write the plan; kengash stores it and has another agent review it. Read with your file tools; use the shell only for the `kengash` commands below, each as its own call with nothing chained. Never edit the repo's files or the `.kengash` store yourself.
+
+`<scope>` below is `-p <project>` when the request names its project or folder (a path kept as typed), else empty. On exit 4 `not a kengash project`, ask whether to register that folder; only on yes, run `kengash init <folder>`, then retry.
 
 0. Run `kengash --version`. If it does not print `kengash-ai <version>`, say "Install Kengash AI first: uv tool install kengash-ai" and stop.
-1. Run `kengash context`, and `kengash settings get grill.round_size` (questions per round).
+1. Run `kengash context <scope>`, and `kengash settings get grill.round_size <scope>` (questions per round).
 2. Start the plan with the user's request, word for word:
 
    ```
-   kengash plan new --mode grill --title "<short title>" <<'EOF'
+   kengash plan new --mode grill --title "<short title>" <scope> <<'EOF'
    <the user's request, verbatim>
    EOF
    ```
 
    It prints `plan <id> grilling`; keep the id.
-3. Look facts up yourself (code, docs, memory; a subagent if you have one). Ask only what the user alone can decide.
-4. Ask a round of at most `grill.round_size` questions, each with your recommended answer; use your multiple-choice tool if you have one. Wait for the answers. Repeat until nothing is left to ask.
-5. Restate the shared understanding in a few lines and wait for the user to confirm it.
+3. Look facts up yourself (code, docs, memory; a subagent if you have one). Ask only what the user alone decides.
+4. Ask a round of at most `grill.round_size` questions, each with your recommended answer; use your multiple-choice tool if you have one. Wait for answers. Repeat until nothing is left to ask.
+5. Restate the shared understanding in a few lines; wait for the user to confirm it.
 6. Save the plan; Decisions holds one `question → answer` line per answer:
 
    ```

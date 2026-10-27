@@ -8,12 +8,14 @@ metadata: {source: kengash-ai}
 
 You write the plan; kengash stores it and has another agent review it. Read with your file tools (read, search, list); use the shell only for the `kengash` commands below, each as its own call with nothing chained before or after it. Never edit the repo's files or the `.kengash` store yourself.
 
+`<scope>` below is `-p <project>` when the request names its project or folder (a path kept as typed), else empty. On exit 4 `not a kengash project`, ask whether to register that folder; only on yes, run `kengash init <folder>`, then retry.
+
 0. Run `kengash --version`. If it does not print `kengash-ai <version>`, say "Install Kengash AI first: uv tool install kengash-ai" and stop.
-1. Run `kengash context` and keep what it says about the user and the project.
+1. Run `kengash context <scope>` and keep what it says about the user and the project.
 2. Start the plan with the user's request, word for word:
 
    ```
-   kengash plan new --mode direct --title "<short title>" <<'EOF'
+   kengash plan new --mode direct --title "<short title>" <scope> <<'EOF'
    <the user's request, verbatim>
    EOF
    ```
