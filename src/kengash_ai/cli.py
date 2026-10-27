@@ -100,6 +100,14 @@ def _errors() -> Iterator[None]:
         raise typer.Exit(error.exit_code) from None
 
 
+def _project(value: str | None) -> str | None:
+    """`--project` takes a project name or a folder; commands only ever see the slug."""
+    if value is None:
+        return None
+    with _errors():
+        return workspace.project_slug(value, Path.cwd())
+
+
 def _emit_json(result: Any) -> None:
     typer.echo(json.dumps(dataclasses.asdict(result), default=str, indent=2))
 
@@ -198,10 +206,18 @@ app.add_typer(memory_app, name="memory")
 Project = Annotated[
     str | None,
     typer.Option(
-        "--project", "-p", help="Project slug; default: the project containing this folder."
+        "--project",
+        "-p",
+        callback=_project,
+        help="Project name or folder; default: the project containing this folder.",
     ),
 ]
-Only = Annotated[str | None, typer.Option("--project", "-p", help="Look only in this project.")]
+Only = Annotated[
+    str | None,
+    typer.Option(
+        "--project", "-p", callback=_project, help="Look only in this project (name or folder)."
+    ),
+]
 By = Annotated[
     str,
     typer.Option(
@@ -469,13 +485,21 @@ TicketId = Annotated[str, typer.Argument(help="Ticket id, 8 hex digits.")]
 Here = Annotated[
     str | None,
     typer.Option(
-        "--project", "-p", help="Project slug; default: the project here, else every project."
+        "--project",
+        "-p",
+        callback=_project,
+        help="Project name or folder; default: the project here, else every project.",
     ),
 ]
 MAX_LINES = 5
 Every = Annotated[
     str | None,
-    typer.Option("--project", "-p", help="Only this project; default: every project."),
+    typer.Option(
+        "--project",
+        "-p",
+        callback=_project,
+        help="Only this project (name or folder); default: every project.",
+    ),
 ]
 
 
@@ -838,7 +862,12 @@ agent_app = typer.Typer(help="Agents: add or remove your own roles.", no_args_is
 app.add_typer(agent_app, name="agent")
 Scope = Annotated[
     str | None,
-    typer.Option("--project", "-p", help="This project's SETTINGS.md; default: the defaults."),
+    typer.Option(
+        "--project",
+        "-p",
+        callback=_project,
+        help="This project's SETTINGS.md (name or folder); default: the defaults.",
+    ),
 ]
 
 

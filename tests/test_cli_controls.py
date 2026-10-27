@@ -1,6 +1,7 @@
 """CLI formatting of the controls (SP3 spec §10)."""
 
 import os
+from pathlib import Path
 
 import pytest
 from conftest import Engine
@@ -73,3 +74,11 @@ def test_ticket_changes_and_attach_print_lines(engine: Engine) -> None:
     documents.save_ticket(engine.paths.project(engine.slug), doc)
     attached = runner.invoke(app, ["ticket", "attach", "7b55e0c1", "--role", "implementer"])
     assert attached.stdout.strip().endswith("codex resume t-1")
+
+
+def test_pause_takes_a_project_folder(registered_repo: Path, store_paths: StorePaths) -> None:
+    result = runner.invoke(app, ["pause", "-p", str(registered_repo)])
+    assert result.exit_code == 0, result.output
+    pause = runtime.pause_state(store_paths)
+    assert pause.covers("payments-api") and not pause.everything
+    assert pause.projects == frozenset({"payments-api"})

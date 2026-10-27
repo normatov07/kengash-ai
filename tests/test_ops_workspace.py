@@ -2,6 +2,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from conftest import git
 
 from kengash_ai.model import Doc, NeedsSetup, Ticket, UserError
 from kengash_ai.ops import projects, workspace
@@ -15,6 +16,53 @@ def test_resolve_slug_from_option_or_folder(store_paths: StorePaths, repo: Path)
     assert workspace.resolve_slug(None, repo.parent) is None
     with pytest.raises(UserError, match="unknown project: nope"):
         workspace.resolve_slug("nope", repo)
+
+
+def test_project_slug_takes_a_name_or_a_folder(
+    store_paths: StorePaths, repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    projects.init_project(repo)
+    (repo / "src" / "api").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(repo.parent))
+    for value, cwd in [
+        ("payments-api", repo.parent),
+        (str(repo), repo.parent),
+        ("src/api", repo),
+        (".", repo / "src"),
+        (f"~/{repo.name}/", Path("/")),
+    ]:
+        assert workspace.project_slug(value, cwd) == "payments-api", value
+
+
+def test_project_slug_prefers_the_deepest_repo(store_paths: StorePaths, repo: Path) -> None:
+    inner = repo / "tools"
+    inner.mkdir()
+    git(inner, "init", "-q", "-b", "main")
+    git(inner, "commit", "-q", "--allow-empty", "-m", "init")
+    projects.init_project(repo)
+    projects.init_project(inner)
+    (inner / "lib").mkdir()
+    assert workspace.project_slug("tools/lib", repo) == "tools"
+    assert workspace.project_slug(".", repo) == "payments-api"
+
+
+def test_project_slug_prefers_a_slug_over_a_folder(store_paths: StorePaths, repo: Path) -> None:
+    projects.init_project(repo)
+    (repo.parent / "elsewhere" / "payments-api").mkdir(parents=True)
+    assert workspace.project_slug("payments-api", repo.parent / "elsewhere") == "payments-api"
+
+
+def test_project_slug_refuses_unknown_names_and_strangers(
+    store_paths: StorePaths, repo: Path
+) -> None:
+    projects.init_project(repo)
+    with pytest.raises(UserError, match=r"^unknown project: nope$"):
+        workspace.project_slug("nope", repo)
+    stranger = repo.parent / "stranger"
+    stranger.mkdir()
+    with pytest.raises(NeedsSetup) as caught:
+        workspace.project_slug(str(stranger), repo)
+    assert str(caught.value) == f"not a kengash project: {stranger}; run: kengash init {stranger}"
 
 
 def test_settings_follow_the_current_project(store_paths: StorePaths, repo: Path) -> None:

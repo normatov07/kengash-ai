@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warn and run it until 0.3.0): parses arguments and formats output. From sub-project 2 on, every action is delegated to `ops`.
+Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warn and run it until 0.3.0): parses arguments and formats output. From sub-project 2 on, every action is delegated to `ops`. Every `--project/-p` takes a project name or a folder inside a registered repo; one option callback (`workspace.project_slug`) turns it into the slug before a command runs, and a folder no project holds exits 4 naming `kengash init` (SP9).
 
 ## Interface
 
@@ -12,8 +12,8 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warn and run it
 - `kengash init [PATH]`, `doctor [--fix] [--quiet] [--scan DIR]`, `link SLUG NEW_PATH`, `adopt PATH`, each with `--json` (SP2 spec §3). `doctor` prints warnings as `[<slug>: ]warning: <message>`; it exits 1 only for problems that are neither fixed nor warnings.
 - `kengash settings show|get KEY|check`, `memory add TEXT --why WHY [--section S|--decision [--rejected R]] [--by NAME]`, `memory show [--decisions]`, `memory compact [--timeout 540]` (`MEMORY.md N → M lines`; exit 1 with the reason when the result is kept out, 3 on timeout), `context`; all take `--project/-p` (default: the project containing the current folder) and `--json`. `settings get` prints strings plain and other values as JSON; `settings check` prints problems only.
 - `kengash plan new --title T --mode grill|direct|quick` (prompt on stdin), `plan save ID` (`## Section` Markdown on stdin), `plan show ID`, `plan review ID [--timeout 540]` (`plan <id> round r: pass|fail, N findings`, a `warning:` line when the review ran on the conductor's provider, then the findings; exit 3 on timeout, 5 once the rounds are used up), `plan approve ID [--skip-review]`, `plan reject ID --why W`; id commands take `--project/-p` to narrow the search.
-- `kengash ticket add --plan ID [--file F]` (YAML or JSON list, else stdin), `ticket show ID`, `ticket list [--folder F]`, `ticket find TEXT`, `ticket set ID KEY=VALUE…`, `ticket move ID FOLDER[/SUB] --why W`, `status [--project SLUG]`; `list` and `find` cover the project here, else every project; `status` covers every project and prints at most 5 lines.
-- `kengash next [--project SLUG]`: tickets that can start now, one `<id> <project> <importance> <step>→<provider> <title>` line each, at most 5; otherwise why nothing can run (`--json`: everything, reasons included).
+- `kengash ticket add --plan ID [--file F]` (YAML or JSON list, else stdin), `ticket show ID`, `ticket list [--folder F]`, `ticket find TEXT`, `ticket set ID KEY=VALUE…`, `ticket move ID FOLDER[/SUB] --why W`, `status [--project P]`; `list` and `find` cover the project here, else every project; `status` covers every project and prints at most 5 lines.
+- `kengash next [--project P]`: tickets that can start now, one `<id> <project> <importance> <step>→<provider> <title>` line each, at most 5; otherwise why nothing can run (`--json`: everything, reasons included).
 - `kengash agent new ROLE --kind read|edit|review --does TEXT [--cli P[/M]] [--step S] [--workflow W]… [--after STEP] [--send-back STEP] [-p SLUG] [--by] [--json]`: `added <role>: step <step> in <workflows>[; skill roles/<role>/SKILL.md]`; `kengash agent remove ROLE [-p SLUG]`: `removed <role>`; without `-p` both act on the defaults (SP6).
 - `kengash skills lint [PATH…]`: one `<path>: <problem>` line per problem, exit 1 when any; default targets are the packaged installed and role skills; the command tree comes from the Typer app (SP4 spec decision 7). `make lint` runs it. `kengash skills install --agent A,… [--global] [--path DIR] [--cli-name N] [--yes]`: `<agent> <name>: installed|updated|unchanged|differs → <folder>` per skill (capped), then the diffs of skills that differ; exit 5 until `--yes`. `kengash skills eval [SKILL] [--all] [--agent A,…] [--model M] [--baseline] [--dir D] [--keep D]`: `<skill>/<scenario> <agent>: pass|fail: <reason>` per run, then `transcripts: <folder>`; exit 1 on a failure, 4 when a named agent is missing or signed out. `make evals` runs every scenario.
 - `kengash ui open [--no-browser]` prints `http://127.0.0.1:<port>/?token=<token>` (exit 4 with the install line without the `[ui]` extra); `kengash ui stop` prints `stopped` or `not running`.
@@ -27,6 +27,7 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warn and run it
 
 ## Changes
 
+- 2026-10-27: `--project/-p` takes a project name or folder on every command (SP9).
 - 2026-10-26: `skills install --cli-name` defaults to `kengash` and prints `removed` for an obsolete skill of ours (SP8).
 - 2026-10-26: the command is `kengash` (0.2.0); `harness` and `hrn` run `cli.legacy`, which prints `harness is now kengash; the harness and hrn names stop working in 0.3.0` on stderr and runs the same app; `--by` reads `KENGASH_AGENT`, then `HARNESS_AGENT` (SP8).
 - 2026-10-26: `init` and `link` print the `.kengash` link (SP8).
