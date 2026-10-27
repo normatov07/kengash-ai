@@ -23,6 +23,7 @@ TICKETS: list[dict[str, Any]] = [
     {
         "p": 0,
         "id": "4f2a1b7c",
+        "tags": ["webhooks"],
         "title": "Retry webhook delivery with backoff",
         "imp": "standard",
         "status": "in_process/under_implementation",
@@ -35,6 +36,7 @@ TICKETS: list[dict[str, Any]] = [
     {
         "p": 1,
         "id": "91c7a0d3",
+        "tags": ["ui", "sse", "realtime", "board"],
         "title": "Stream loop events to the board over SSE",
         "imp": "standard",
         "status": "in_process/under_review",
@@ -258,6 +260,7 @@ def main(root: Path) -> int:
                 "loop": item["loop"],
                 "loop_max": item["max"],
                 "touches": item["touches"],
+                "tags": item.get("tags", []),
                 "branch": f"hrn/{item['id']}",
                 "tokens": (9000 + 3400 * item["loop"]) * item["loop"],
                 "created": now - timedelta(hours=3),

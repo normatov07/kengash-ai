@@ -25,6 +25,7 @@ const IMPORTANCE = {
   standard: { color: "#D8B24C", soft: "#2A2320" },
   simple: { color: "#68A4E0", soft: "#1B2733" },
 };
+const MAX_TAGS = 3;
 const RED_CHIPS = new Set(["loop cap hit", "token cap hit", "needs approval", "failed"]);
 const WARN_CHIPS = new Set(["stalled", "blocked", "parked"]);
 const OK_CHIPS = new Set(["ready to merge"]);
@@ -71,6 +72,9 @@ function card(item, key) {
   if (item.chip) chips.push(html`<span class="cchip ${chipTone(item.chip)}">${RED_CHIPS.has(item.chip) ? icon("bang", { size: 9, width: 2 }) : ""}${item.chip}</span>`);
   if (item.findings) chips.push(html`<span class="cchip red">${item.findings} ${item.findings === 1 ? "finding" : "findings"}</span>`);
   if (item.rejected) chips.push(html`<span class="cchip warn">plan rejected ${item.rejected}x</span>`);
+  // tags (request step 6): the first three, then how many more; untagged cards add nothing
+  for (const tag of item.tags.slice(0, MAX_TAGS)) chips.push(html`<span class="cchip plain">#${tag}</span>`);
+  if (item.tags.length > MAX_TAGS) chips.push(html`<span class="cchip plain" title="${item.tags.slice(MAX_TAGS).join(", ")}">+${item.tags.length - MAX_TAGS}</span>`);
   const diff = item.added || item.removed ? html`<span class="end cdiff">+${item.added} −${item.removed}</span>` : "";
   return html`<a class="card" href="#/ticket/${item.id}" style="border-color: ${border}; border-left-color: ${done ? "#5FC08B" : imp.color}; background: ${bg}" title="${item.title}">
     <div class="card-top">${head}</div>
