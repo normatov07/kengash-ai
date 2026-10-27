@@ -29,10 +29,10 @@ Audit on 2026-10-27, against `full prompt of app.md`, the system spec and SP2–
 
 ## 4. Acceptance (SP9 exit)
 
-- [ ] `-p <slug>`, `-p <repo folder>`, `-p <subfolder>` and `-p .` inside a repo give the same `next`; an unregistered folder exits 4 with the init line; an unknown name exits 1 (`tests/test_ops_workspace.py`, `tests/test_cli_queue.py`).
-- [ ] `pause -p <folder>` pauses the slug, not the path (`tests/test_cli_controls.py`).
-- [ ] `kengash skills lint` is clean; the four skills name the optional project and the exit-4 question.
-- [ ] A card with tags shows them and one without has no tag chips (headless Chrome on the demo store).
-- [ ] `make check` prints no deprecation line; the demo script prints kengash names; the live end-to-end smoke passes on claude and agy.
-- [ ] `wait` reports a gate a worker journals right after `wait` read the journal (`test_wait_is_never_idle_over_a_gate_its_worker_is_journaling`); the lifecycle test passes 20 runs in a row.
-- [ ] `make check` green; module docs, architecture, the system spec and CHANGELOG updated.
+- [x] `-p <slug>`, `-p <repo folder>`, `-p <subfolder>` and `-p .` inside a repo give the same `next`; an unregistered folder exits 4 with the init line; an unknown name exits 1 (`tests/test_ops_workspace.py`, `tests/test_cli_queue.py`; by hand on the demo store, 2026-10-27).
+- [x] `pause -p <folder>` pauses the slug, not the path (`tests/test_cli_controls.py`).
+- [x] `kengash skills lint` is clean; the four skills name the optional project and the exit-4 question. Wording micro-tested on claude haiku, one fresh sample per call with the skill as system prompt: before, 0 of 21 samples scoped their commands to a named project; after, 45 of 45 scoped a named project or folder and left a bare command unscoped (a `-p` sentence apart from the commands scoped `plan new` only 2 of 3 times, so the planning skills carry a `<scope>` slot in each command). The four skills' eval scenarios pass on claude and agy (8 of 8, 2026-10-27).
+- [x] A card with tags shows them and one without has no tag chips (headless Chrome on the demo store, 2026-10-27: `#webhooks`; `#ui #sse #realtime +1`).
+- [x] `make check` prints no deprecation line; the demo script prints kengash names; the live end-to-end smoke passes on claude and agy (claude 2.1.311 haiku, agy 1.4.8 gemini-3.8-flash-low, 2026-10-27).
+- [x] `wait` reports a gate a worker journals right after `wait` read the journal (`test_wait_is_never_idle_over_a_gate_its_worker_is_journaling`); the lifecycle test passes 20 runs in a row.
+- [x] `make check` green (644 passed, 2026-10-27) and `make dist` clean; module docs, architecture, the system spec and CHANGELOG updated.
