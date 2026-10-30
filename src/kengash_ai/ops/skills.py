@@ -274,10 +274,11 @@ def install_skills(
     return install(agents, root=root, home=global_, cli_name=cli_name, yes=yes)
 
 
-def plugin_manifest() -> dict[str, str]:
+def plugin_manifest() -> dict[str, object]:
     """The `kengash` plugin's manifest, for Claude Code and Antigravity alike."""
     return {
         "name": PLUGIN,
+        "author": {"name": "normatov13"},
         "version": kengash_ai.__version__,
         "description": "Plan, ticket and run many projects at once with the coding-agent "
         "subscriptions you already have, through the kengash CLI.",

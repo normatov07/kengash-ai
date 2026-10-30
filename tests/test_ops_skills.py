@@ -188,6 +188,7 @@ def test_claude_gets_a_skills_dir_plugin(tmp_path: Path, source: Path) -> None:
     plugin = tmp_path / ".claude/skills/kengash"
     manifest = json.loads((plugin / ".claude-plugin/plugin.json").read_text())
     assert (manifest["name"], manifest["version"]) == ("kengash", kengash_ai.__version__)
+    assert manifest["author"] == {"name": "normatov13"}  # `claude plugin validate` wants one
     assert (plugin / "skills/alpha/SKILL.md").read_text() == ALPHA
     assert (plugin / "skills/beta/references/notes.md").read_text() == "notes\n"
     assert [(e.agent, e.name, e.state) for e in result.entries] == [
