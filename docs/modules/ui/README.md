@@ -30,6 +30,7 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 
 ## Changes
 
+- 2026-10-30: `static/controls.js`: `select`, `segmented` (radio cards), `toggle`, `modelPicker` (CLI then that CLI's models, "Other…" for a typed one) with `modelValue`, `chipList` (ordered fallbacks: ✕, add, drag and Alt+arrows), `instructions` (counts against the caps), `agentPicker`, and the pure `splitCli`, `cliValue`, `cliChoices`, `modelChoices`, `moveItem`, `counts`; breakpoints at 1280, 900 and 600 px; below 900 px the sidebar folds into a menu button (`data-nav-toggle`, Escape and outside clicks close it); icons `menu`, `back`, `lock`, `grip`, `search`, `copy` (SP10 M3).
 - 2026-10-30: `GET /api/agents` returns `agents` (`AgentDetail`), `skills`, `instruction_caps` and each provider's `models`; `POST /api/agents/{role}` edits an agent (`{project, patch}`), `POST /api/agents/{role}/copy` copies one (`{project, new}`); new agents take `fallback`, `skill`, `instructions` (SP10 M3).
 - 2026-10-27: board cards show up to three `#tag` chips, then `+N`; untagged cards are unchanged (SP9).
 - 2026-10-26: screens name `kengash`, `~/.kengash` and `.kengash` (SP8).

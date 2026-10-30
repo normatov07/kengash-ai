@@ -185,3 +185,77 @@ def test_the_settings_file_view_scrolls_by_keyboard() -> None:
 def test_the_ui_wears_the_apps_name() -> None:
     assert "<title>Kengash AI</title>" in (STATIC / "index.html").read_text()
     assert "<b>kengash</b>" in (STATIC / "app.js").read_text()
+
+
+def _node(script: str) -> str:
+    assert NODE is not None
+    done = subprocess.run(
+        [str(NODE), "--input-type=module", "-e", script], capture_output=True, text=True, check=True
+    )
+    return done.stdout.strip()
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_controls_helpers() -> None:
+    controls = (STATIC / "controls.js").as_uri()
+    found = json.loads(
+        _node(
+            f"import * as c from '{controls}';"
+            "const cards = [{name: 'claude', installed: true, signed_in: true,"
+            " models: ['opus', 'sonnet']},"
+            " {name: 'codex', installed: false, signed_in: false, models: []}];"
+            "console.log(JSON.stringify({"
+            " move: c.moveItem(['a', 'b', 'c'], 2, 0), stay: c.moveItem(['a', 'b'], 0, -1),"
+            " counts: c.counts('one two\\nthree\\n'), empty: c.counts(''),"
+            " split: [c.splitCli('claude/opus[1m]'), c.splitCli('codex')],"
+            " joined: [c.cliValue('claude', 'opus'), c.cliValue('codex', 'default'),"
+            " c.cliValue('codex', '')],"
+            " models: c.modelChoices(cards, 'claude', 'haiku'),"
+            " none: c.modelChoices(cards, 'codex', 'default'),"
+            " clis: c.cliChoices(cards, 'codex', true)}));"
+        )
+    )
+    assert found["move"] == ["c", "a", "b"] and found["stay"] == ["a", "b"]
+    assert found["counts"] == {"lines": 2, "words": 3} and found["empty"] == {
+        "lines": 0,
+        "words": 0,
+    }
+    assert found["split"] == [["claude", "opus[1m]"], ["codex", "default"]]
+    assert found["joined"] == ["claude/opus", "codex", "codex"]
+    assert found["models"] == [
+        ["default", "default"],
+        ["opus", "opus"],
+        ["sonnet", "sonnet"],
+        ["haiku", "haiku"],
+        ["__other", "Other…"],
+    ]
+    assert found["none"] == [["default", "default"], ["__other", "Other…"]]
+    assert found["clis"] == [
+        ["claude", "claude", False],
+        ["codex", "codex · not installed", False],
+        ["antigravity", "antigravity · not detected", True],
+        ["shell", "shell · runs project.test_cmd", False],
+    ]
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_controls_escape_what_they_render() -> None:
+    controls = (STATIC / "controls.js").as_uri()
+    html = (STATIC / "html.js").as_uri()
+    out = _node(
+        f"import * as c from '{controls}'; import {{ render }} from '{html}';"
+        "console.log(render(c.select({id: 's', value: '<b>', options: [['<b>', '<b> \"x\"']]})));"
+    )
+    assert "<b>" not in out and "&lt;b&gt;" in out and "selected" in out
+
+
+def test_breakpoints_exist() -> None:
+    css = (STATIC / "app.css").read_text()
+    for width in (1280, 900, 600):
+        assert f"@media (max-width: {width}px)" in css, width
+
+
+def test_nav_folds_into_a_menu() -> None:
+    shell = (STATIC / "app.js").read_text()
+    assert "data-nav-toggle" in shell and "aria-expanded" in shell and 'key === "Escape"' in shell
+    assert css_rule(".nav-toggle")["display"] == "none"  # shown only on narrow screens
