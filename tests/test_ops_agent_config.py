@@ -1,6 +1,7 @@
 """Custom agents through ops: one validated save, a starter skill, journaled (SP6 spec §3)."""
 
 import contextlib
+import re
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,7 @@ from kengash_ai import settings
 from kengash_ai.model import Doc, Ticket, UserError
 from kengash_ai.ops import agent_config, projects, skills
 from kengash_ai.store import StorePaths, documents, locks
+from kengash_ai.store.frontmatter import split_frontmatter
 
 Events = Callable[[], list[dict[str, Any]]]
 DOES = "Flag N+1 queries and hot loops in the changed code."
@@ -202,3 +204,213 @@ def test_agent_edits_read_settings_under_the_lock(
     new_perf()
     agent_config.remove_agent("perf-reviewer", project="payments-api", by="cli")
     assert order == ["lock", "load", "unlock", "lock", "load", "unlock"]
+
+
+Patch = agent_config.AgentPatch
+OWN = "roles/perf-reviewer/SKILL.md"
+
+
+def edit(project: str | None = "payments-api", **fields: Any) -> agent_config.AgentChange:
+    return agent_config.edit_agent("perf-reviewer", Patch(**fields), project=project, by="cli")
+
+
+def package_body(skill: str) -> str:
+    return split_frontmatter((skills.roles_dir() / skill / "SKILL.md").read_text())[1]
+
+
+def test_edit_changes_only_given_fields(registered_repo: Path, store_paths: StorePaths) -> None:
+    new_perf()
+    change = edit(cli="codex", on=False)
+    assert change.keys == ["agents.perf-reviewer.cli", "agents.perf-reviewer.on"]
+    agent = settings.load(store_paths, "payments-api").agents["perf-reviewer"]
+    assert (agent.cli, agent.on, agent.skill, agent.blocking) == (
+        "codex",
+        False,
+        "perf-reviewer",
+        False,
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"), [("kind", "read"), ("does", "x"), ("skill", "plan"), ("instructions", "x")]
+)
+def test_builtin_refuses_kind_does_skill_instructions(
+    registered_repo: Path, store_paths: StorePaths, field: str, value: str
+) -> None:
+    before = scope_files(store_paths)
+    message = f"planner is a built-in agent; its {field} is fixed; copy it to change what it does"
+    with pytest.raises(UserError, match=re.escape(message)):
+        fields: dict[str, Any] = {field: value}
+        patch = Patch(**fields)
+        agent_config.edit_agent("planner", patch, project=None, by="cli")
+    assert scope_files(store_paths) == before
+
+
+def test_builtin_takes_its_model_and_switches(
+    registered_repo: Path, store_paths: StorePaths
+) -> None:
+    patch = Patch(cli="claude/haiku", fallback=["antigravity"], on=False, blocking=True)
+    agent_config.edit_agent("planner", patch, project=None, by="cli")
+    agent_config.edit_agent("planner", Patch(bypass_permissions=True), project=None, by="cli")
+    a = settings.load(store_paths).agents["planner"]
+    found = (a.cli, a.fallback, a.on, a.blocking, a.bypass_permissions)
+    assert found == ("claude/haiku", ["antigravity"], False, True, True)
+
+
+def test_own_instructions_are_written_and_capped(
+    registered_repo: Path, store_paths: StorePaths
+) -> None:
+    new_perf()
+    text = "You review for speed only.\n1. Read the diff.\n"
+    change = edit(instructions=text)
+    assert change.skill_file == str(store_paths.project("payments-api").root / OWN)
+    assert skills.role_text(store_paths, "payments-api", "perf-reviewer") == text
+    with pytest.raises(UserError, match=r"^instructions have \d+ lines; the cap is \d+$"):
+        edit(instructions="word\n" * 200)
+    with pytest.raises(UserError, match=r"^instructions have \d+ words; the cap is \d+$"):
+        edit(instructions=" ".join(["word"] * 500))
+    with pytest.raises(UserError, match=r"^instructions are empty$"):
+        edit(instructions="  \n")
+    assert skills.role_text(store_paths, "payments-api", "perf-reviewer") == text
+
+
+def test_instructions_that_look_like_frontmatter_stay_body(
+    registered_repo: Path, store_paths: StorePaths
+) -> None:
+    new_perf()
+    text = "---\nname: other\ndescription: x\n---\nBody.\n"
+    edit(instructions=text)
+    assert skills.role_text(store_paths, "payments-api", "perf-reviewer") == text
+    written = (store_paths.project("payments-api").root / OWN).read_text()
+    assert split_frontmatter(written)[0]["name"] == "perf-reviewer"
+
+
+def test_use_a_skill_points_at_any_role_skill(
+    registered_repo: Path, store_paths: StorePaths
+) -> None:
+    new_perf()
+    edit(skill="review-code")
+    assert settings.load(store_paths, "payments-api").agents["perf-reviewer"].skill == "review-code"
+    with pytest.raises(UserError, match=r"^no role skill nope$"):
+        edit(skill="nope")
+
+
+def test_kind_change_drops_review_edges(registered_repo: Path, store_paths: StorePaths) -> None:
+    new_perf()
+    change = edit(kind="read")
+    assert set(change.keys) == {"steps.perf_review.kind", "workflows.critical"}
+    resolved = settings.load(store_paths, "payments-api")
+    assert "perf_review" not in resolved.workflows["critical"].on_fail
+    assert resolved.workflows["critical"].steps[4] == "perf_review"
+    assert resolved.steps["perf_review"].kind == "read"
+
+
+def test_kind_change_refused_while_a_project_sends_back_from_it(
+    registered_repo: Path, store_paths: StorePaths
+) -> None:
+    agent_config.new_agent(
+        "perf-reviewer", kind="review", does=DOES, step="perf_review", project=None, by="cli"
+    )
+    flow = settings.load(store_paths, "payments-api").workflows["critical"]
+    whole = {
+        "steps": [*flow.steps, "perf_review"],
+        "on_fail": {**flow.on_fail, "perf_review": "implement"},
+    }
+    settings.set_values(store_paths, "payments-api", {"workflows.critical": whole})
+    before = scope_files(store_paths)
+    with pytest.raises(UserError, match="project payments-api"):
+        edit(project=None, kind="read")
+    assert scope_files(store_paths) == before
+
+
+def test_editing_a_defaults_agent_from_a_project_overrides_there(
+    registered_repo: Path, store_paths: StorePaths
+) -> None:
+    agent_config.new_agent("perf-reviewer", kind="review", does=DOES, project=None, by="cli")
+    before = scope_files(store_paths)
+    edit(cli="codex", instructions="Mine.\n")
+    assert scope_files(store_paths)["defaults"] == before["defaults"]
+    assert settings.load(store_paths, "payments-api").agents["perf-reviewer"].cli == "codex"
+    assert settings.load(store_paths).agents["perf-reviewer"].cli == "claude"
+    assert (store_paths.project("payments-api").root / OWN).read_text().endswith("Mine.\n")
+    assert "Mine." not in (store_paths.defaults / OWN).read_text()
+
+
+def test_new_agent_takes_fallbacks_a_skill_or_instructions(
+    registered_repo: Path, store_paths: StorePaths
+) -> None:
+    new_perf(fallback=["antigravity"], instructions="Speed only.\n")
+    resolved = settings.load(store_paths, "payments-api")
+    assert resolved.agents["perf-reviewer"].fallback == ["antigravity"]
+    assert skills.role_text(store_paths, "payments-api", "perf-reviewer") == "Speed only.\n"
+    agent_config.new_agent(
+        "deep-reviewer",
+        kind="review",
+        does=DOES,
+        skill="review-code",
+        project="payments-api",
+        by="x",
+    )
+    assert settings.load(store_paths, "payments-api").agents["deep-reviewer"].skill == "review-code"
+    assert not (store_paths.project("payments-api").root / "roles/deep-reviewer").exists()
+    with pytest.raises(UserError, match=r"^pass a skill or instructions, not both$"):
+        agent_config.new_agent(
+            "x-reviewer",
+            kind="read",
+            does=DOES,
+            skill="plan",
+            instructions="x",
+            project=None,
+            by="x",
+        )
+
+
+def test_copy_builtin_makes_an_own_agent(registered_repo: Path, store_paths: StorePaths) -> None:
+    change = agent_config.copy_agent("code-reviewer", "strict-reviewer", project=None, by="cli")
+    assert (change.role, change.step) == ("strict-reviewer", "strict_reviewer")
+    resolved = settings.load(store_paths)
+    agent, source = resolved.agents["strict-reviewer"], resolved.agents["code-reviewer"]
+    assert (agent.cli, agent.fallback, agent.skill) == (
+        source.cli,
+        source.fallback,
+        "strict-reviewer",
+    )
+    step = resolved.steps["strict_reviewer"]
+    assert (step.kind, step.does) == ("review", agent_config.BUILTIN_DOES["code-reviewer"])
+    body = skills.role_text(store_paths, "payments-api", "strict-reviewer")
+    assert body == package_body("review-code")
+    assert (
+        resolved.workflows["critical"].steps
+        == settings.load(store_paths).workflows["critical"].steps
+    )
+
+
+def test_copy_refuses_test_runner_and_taken_names(
+    registered_repo: Path, store_paths: StorePaths
+) -> None:
+    with pytest.raises(
+        UserError, match=r"^test-runner cannot be copied: it runs a shell check, not a model$"
+    ):
+        agent_config.copy_agent("test-runner", "my-tests", project=None, by="cli")
+    with pytest.raises(UserError, match=r"^agent planner exists; pick another name$"):
+        agent_config.copy_agent("code-reviewer", "planner", project=None, by="cli")
+
+
+def test_describe_lists_where_used(registered_repo: Path, store_paths: StorePaths) -> None:
+    new_perf()
+    resolved = settings.load(store_paths, "payments-api")
+    perf = agent_config.describe(store_paths, resolved, "payments-api", "perf-reviewer")
+    found = (perf.builtin, perf.kind, perf.step, perf.provider, perf.model, perf.does)
+    assert found == (False, "review", "perf_review", "claude", "sonnet", DOES)
+    assert perf.used_in == [agent_config.UsedIn("critical", 5)]
+    assert perf.instructions_own and perf.instructions.startswith("# Perf reviewer")
+    planner = agent_config.describe(store_paths, resolved, "payments-api", "planner")
+    assert (planner.builtin, planner.instructions_own, planner.kind, planner.step) == (
+        True,
+        False,
+        "read",
+        "plan",
+    )
+    assert planner.instructions == package_body("plan") and planner.model == "opus"
+    assert [use.workflow for use in planner.used_in] == ["simple", "standard", "critical"]
+    assert planner.does == agent_config.BUILTIN_DOES["planner"]
