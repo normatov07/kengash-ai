@@ -2,10 +2,11 @@
 
 All notable changes to this project are written here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.3.0] - 2026-10-30
 
 ### Breaking
 
+- The `harness` and `hrn` commands, deprecated since 0.2.0, are gone; use `kengash`. `HARNESS_HOME` and `HARNESS_AGENT` are still read.
 - Skills are the `kengash` plugin: `/kengash:plan`, `/kengash:grill`, `/kengash:ticket`, `/kengash:loop`, `/kengash:ui`, and `memory` loads itself; Codex, which has no plugin namespace, gets `$kengash-plan` and so on. Run `kengash skills install --agent … [--global]` again: Claude Code gets the plugin folder `.claude/skills/kengash/`, Antigravity `agy plugin install`, Codex `kengash-<name>` copies, and 0.2.0's `to-plan`, `to-plan-with-grill`, `to-ticket`, `to-loop`, `open-ui` and `kengash-memory` skills of ours are removed. `kengash doctor` points out any left behind.
 - Built-in agents keep their skill: a SETTINGS.md that points one at another skill fails validation and says how to fix it, and the copies of built-in role skills `kengash init` seeded into the store are no longer read (`kengash doctor` names them). Copy the agent to change what it does.
 - A send-back (`on_fail`) edge only points to an earlier step; workflow names are lowercase letters, digits, `-` and `_`; a model after `/` is one word.
@@ -29,6 +30,7 @@ All notable changes to this project are written here. The format follows [Keep a
 - The Workflow screen's send-back select shared its id with the graph's arrow marker.
 - `kengash wait` could answer `idle` while a finishing worker journaled its gate, so the loop ended without asking for the merge; it now checks running work, live workers included, before reading the journal.
 - `make lint` and `make evals` ran the deprecated `harness` command; the demo store, the view benchmark and the live smoke still used 0.1.0 names.
+- CI: a hung test could sit silent until the 20-minute job limit; each test now stops after 300 s with every thread's stack, `make check`'s stages run as separate CI steps, and a test no longer leaves its SIGALRM handler behind.
 
 ## [0.2.0] - 2026-10-26
 
@@ -64,5 +66,6 @@ The first release.
 
 - The UI checks Host, Origin, a per-run token and an `X-Harness` header on changes, and sends a strict Content Security Policy with framing, sniffing and referrer protections.
 
+[0.3.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.3.0
 [0.2.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.2.0
 [0.1.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.1.0

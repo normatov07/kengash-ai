@@ -1,7 +1,7 @@
-import json
 import re
 import shutil
 import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -26,33 +26,22 @@ def test_help_lists_the_version_option() -> None:
     assert "--version" in re.sub(r"\x1b\[[0-9;]*m", "", result.output)
 
 
-DEPRECATED = "harness is now kengash; the harness and hrn names stop working in 0.3.0\n"
-
-
-@pytest.mark.parametrize("command", ["kengash", "harness", "hrn"])
-def test_console_scripts_print_version(command: str) -> None:
-    executable = shutil.which(command)
-    assert executable, f"{command} is not on PATH; run `make setup`"
+def test_console_scripts_print_version() -> None:
+    executable = shutil.which("kengash")
+    assert executable, "kengash is not on PATH; run `make setup`"
     done = subprocess.run([executable, "--version"], check=True, capture_output=True, text=True)
-    assert done.stdout == f"kengash-ai {__version__}\n"
-    assert done.stderr == ("" if command == "kengash" else DEPRECATED)
+    assert (done.stdout, done.stderr) == (f"kengash-ai {__version__}\n", "")
 
 
-def test_the_old_names_keep_json_clean(registered_repo: Path) -> None:
-    hrn = shutil.which("hrn")
-    assert hrn
-    done = subprocess.run(
-        [hrn, "settings", "get", "loop_max", "--json"],
-        cwd=registered_repo,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    assert json.loads(done.stdout)["critical"] == 6 and done.stderr == DEPRECATED
+def test_only_kengash_is_installed() -> None:
+    """0.1.0's `harness` and `hrn` warned through 0.2.x and stop in 0.3.0 (SP8 spec decision 1)."""
+    root = Path(__file__).resolve().parents[1]
+    scripts = tomllib.loads((root / "pyproject.toml").read_text())["project"]["scripts"]
+    assert scripts == {"kengash": "kengash_ai.cli:app"}
 
 
-def test_the_version_is_0_2_0() -> None:
-    assert __version__ == "0.2.0"
+def test_the_version_is_0_3_0() -> None:
+    assert __version__ == "0.3.0"
 
 
 def test_native_windows_stops_with_the_wsl_message(monkeypatch: pytest.MonkeyPatch) -> None:

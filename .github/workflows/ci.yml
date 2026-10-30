@@ -74,7 +74,7 @@ jobs:
         run: |
           uv venv "$RUNNER_TEMP/clean" --python 3.12
           VIRTUAL_ENV="$RUNNER_TEMP/clean" uv pip install "$(ls dist/*.whl)[ui]"
-          "$RUNNER_TEMP/clean/bin/harness" --version
+          "$RUNNER_TEMP/clean/bin/kengash" --version
           "$RUNNER_TEMP/clean/bin/python" -I -c "import kengash_ai.ui.app, kengash_ai.worker"
 
   audit:

@@ -2,11 +2,11 @@
 
 ## Purpose
 
-Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warn and run it until 0.3.0): parses arguments and formats output. From sub-project 2 on, every action is delegated to `ops`. Every `--project/-p` takes a project name or a folder inside a registered repo; one option callback (`workspace.project_slug`) turns it into the slug before a command runs, and a folder no project holds exits 4 naming `kengash init` (SP9).
+Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 0.2.x and are gone in 0.3.0): parses arguments and formats output. From sub-project 2 on, every action is delegated to `ops`. Every `--project/-p` takes a project name or a folder inside a registered repo; one option callback (`workspace.project_slug`) turns it into the slug before a command runs, and a folder no project holds exits 4 naming `kengash init` (SP9).
 
 ## Interface
 
-- `kengash --version` (also the deprecated `harness` and `hrn`) prints `kengash-ai <version>` and exits 0. Skills use this line to confirm the right binary is on PATH; `doctor` also accepts an older install's `super-harness <version>`.
+- `kengash --version` prints `kengash-ai <version>` and exits 0. Skills use this line to confirm the right binary is on PATH; `doctor` also accepts an older install's `super-harness <version>`.
 - `kengash --help` lists commands and options.
 - `run ID... [--steps N]` (`started <id> <step>→<provider>` / `skipped <id>: <reason>`; exit 1 when none started, 4 when a provider needs setup), `approve ID [--loops N] [--tokens N]`, `park ID --why W`, `stop ID`, `pause` and `resume` (`--project`), `ticket changes ID [--diff]` (`<path> +a -r  loop n <step> <provider>/<model>`), `ticket attach ID [--role R]` (the resume command), `wait [--timeout 540]` (`<id> <status> loop n/max: <detail>`, `plan <id> round r/max: <verdict>, <summary>` for plan reviews, `idle`, exit 3 on timeout), `merge ID` (`merged <id>: N commits into <base>`; exit 1 when the main tree is dirty or off base, or on a conflict), each with `--json` (SP3 spec §10).
 - `kengash init [PATH]`, `doctor [--fix] [--quiet] [--scan DIR]`, `link SLUG NEW_PATH`, `adopt PATH`, each with `--json` (SP2 spec §3). `doctor` prints warnings as `[<slug>: ]warning: <message>`; it exits 1 only for problems that are neither fixed nor warnings.
@@ -29,6 +29,7 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warn and run it
 
 ## Changes
 
+- 2026-10-30: 0.3.0 drops the `harness` and `hrn` console scripts and `cli.legacy`, as 0.2.0 announced.
 - 2026-10-30 (final review): `skills install` prints `note: …` lines (Claude Code's trust dialog for a project install); an `--instructions-file` that cannot be read exits 1 naming it.
 - 2026-10-30: `agent edit|copy|show`, `agent new --fallback --skill --instructions-file`, the `workflow` group; help texts say `PROVIDER or PROVIDER/MODEL`, since Rich read `[/MODEL]` as markup and `agent new --help` crashed (SP10 M2).
 - 2026-10-30: `skills install` prints a note after an entry, such as the agy plugin fallback (SP10 M1).

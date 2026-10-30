@@ -50,16 +50,6 @@ def _require_posix() -> None:
         raise typer.Exit(4)
 
 
-DEPRECATED = "harness is now kengash; the harness and hrn names stop working in 0.3.0"
-
-
-def legacy() -> None:
-    """The 0.1.0 entry points, `harness` and `hrn`: one stderr line, then the same app, so
-    `--json` output stays clean (SP8 spec decision 1)."""
-    print(DEPRECATED, file=sys.stderr)
-    app()
-
-
 def _prepare() -> None:
     """Every run starts here: a supported platform, then a 0.1.0 store moved once."""
     _require_posix()
