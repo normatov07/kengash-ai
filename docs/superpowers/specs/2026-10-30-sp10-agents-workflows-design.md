@@ -72,7 +72,7 @@ The Agents and Workflow screens follow this spec, not the canvas boards, by the 
 
 ## 7. Risks
 
-- `agy plugin install <local folder>` is unproven headless; milestone 1 starts with a spike, and the copy fallback (§3.2) keeps agy usable either way.
+- `agy plugin install <local folder>`: proven by a spike on 2026-10-30 (agy 1.4.11). agy reads `.antigravity-plugin/plugin.json`, copies the folder to `~/.gemini/config/plugins/kengash/` (a second install replaces it), and `agy -p "/kengash:loop"` ran the plugin's `loop` skill. It has no per-session plugin flag, so evals use the copy fallback (`/kengash-<name>`) to leave the user's agy plugins alone (*call*); the copy fallback (§3.2) also covers a failed install.
 - A project-scope Claude plugin needs the trust dialog; `kengash skills install` says so, and `--global` avoids it.
 - Built-in skills stop reading store copies: a user who hand-edited one loses that edit's effect. `kengash doctor` names each ignored copy and the CHANGELOG says to copy the agent instead.
 
