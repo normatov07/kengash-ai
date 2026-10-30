@@ -316,6 +316,10 @@ def create_app(*, token: str, port: int) -> FastAPI:
         agent_config.remove_agent(role, project=body.project or None, by=BY)
         return views.agents_view(project=body.project or None, detect=False)
 
+    @app.get("/api/skills/{name}")
+    def skill_text(name: str, project: str = "") -> views.SkillText:
+        return views.skill_text(project=project or None, name=name)
+
     @app.get("/api/workflows")
     def workflows_view(project: str = "") -> views.WorkflowsView:
         return views.workflows_view(project=project or None)

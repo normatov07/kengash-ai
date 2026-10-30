@@ -262,7 +262,7 @@ def describe(paths: StorePaths, resolved: Settings, project: str | None, role: s
     does = BUILTIN_DOES.get(role, "") if builtin else (custom.does if custom else "")
     provider, model = split_cli(agent.cli)
     path = skills.role_file(paths, project, agent.skill)
-    instructions = _body(path) if path is not None else ""
+    instructions = body(path) if path is not None else ""
     own = not builtin and agent.skill == role and path is not None
     used_in = [
         UsedIn(name, flow.steps.index(step) + 1)
@@ -411,7 +411,8 @@ def _write_instructions(paths: StorePaths, project: str | None, role: str, text:
     return path
 
 
-def _body(path: Path) -> str:
+def body(path: Path) -> str:
+    """A role skill file's body: what follows its frontmatter, or all of a file without one."""
     try:
         return split_frontmatter(path.read_text(encoding="utf-8"))[1]
     except UserError:

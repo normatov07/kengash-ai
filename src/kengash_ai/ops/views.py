@@ -23,6 +23,7 @@ from kengash_ai.model import (
     ProviderStatus,
     Settings,
     Ticket,
+    UserError,
     Workflow,
     split_cli,
     utc_now,
@@ -245,6 +246,13 @@ class SkillRef:
 
     name: str
     source: skill_ops.SkillSource
+
+
+@dataclass
+class SkillText(SkillRef):
+    """A role skill's body, for the Agents screen's preview."""
+
+    text: str = ""
 
 
 @dataclass
@@ -745,6 +753,18 @@ def agents_view(
     found.fallback_on_rate_limit = resolved.fallback_on_rate_limit
     found.per_provider = dict(resolved.sessions.per_provider)
     return found
+
+
+def skill_text(paths: StorePaths | None = None, *, project: str | None, name: str) -> SkillText:
+    """One role skill an agent of this scope can run, with its body."""
+    paths = paths or StorePaths.default()
+    if project is not None:
+        records.scope(paths, project)
+    sources = dict(skill_ops.role_skills(paths, project))
+    path = skill_ops.role_file(paths, project, name)
+    if name not in sources or path is None:
+        raise UserError(f"no role skill {name}")
+    return SkillText(name, sources[name], agent_config.body(path))
 
 
 def workflows_view(paths: StorePaths | None = None, *, project: str | None) -> WorkflowsView:

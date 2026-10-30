@@ -58,6 +58,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-30: `views.skill_text(project=, name=)` → `SkillText(name, source, text)`; `agent_config.body(path)` is public (SP10 M3).
 - 2026-10-30: `views.agents_view` returns full agent details, role skills and instruction caps, and providers' models; `routing` and `loop_max` leave it for the Workflow screen; `skills.role_skills` (SP10 M3).
 - 2026-10-30: `workflows`: create, copy, rename, remove, route and set workflows (SP10 M2).
 - 2026-10-30: `agent_config.edit_agent`, `copy_agent`, `describe`, `instruction_caps`; `new_agent` takes `fallback`, `skill` or `instructions` (SP10 M2).

@@ -348,3 +348,13 @@ def test_the_0_1_change_header_is_refused(client: TestClient) -> None:
     signed_in(client)
     assert client.post("/api/pause", headers={"X-Harness": "1"}).status_code == 403
     assert client.post("/api/resume", headers=POST).status_code == 200
+
+
+def test_a_role_skill_is_served_for_its_preview(
+    client: TestClient, store_paths: StorePaths
+) -> None:
+    signed_in(client)
+    shown = client.get("/api/skills/review-code?project=payments-api").json()
+    assert (shown["name"], shown["source"]) == ("review-code", "package")
+    assert shown["text"].startswith("# Code reviewer")
+    assert client.get("/api/skills/nope").status_code == 400

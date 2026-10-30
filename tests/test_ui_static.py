@@ -106,7 +106,22 @@ def test_agents_screen_offers_new_agent() -> None:
     agents = (STATIC / "views" / "agents.js").read_text()
     for text in ("New agent", "Reviewer", "Worker", "Advisor", '"/api/agents"', "Remove agent"):
         assert text in agents
-    assert "showModal()" in agents  # a native dialog: focus stays inside, Escape closes it
+    for text in (
+        "Copy as my agent",
+        "Use a skill",
+        "Write my own",
+        "data-save-bar",
+        "/api/skills/",
+    ):
+        assert text in agents
+
+
+def test_builtin_editor_locks_role_and_instructions() -> None:
+    agents = (STATIC / "views" / "agents.js").read_text()
+    assert agents.count("locked: agent.builtin") == 1 and "{ locked: true }" in agents
+    assert (
+        'section("Instructions", html`<p class="ag-note">Built-in instructions are fixed' in agents
+    )
 
 
 def test_settings_status_flow_links_to_new_agent() -> None:
@@ -145,11 +160,6 @@ def test_done_node_is_numbered() -> None:
         [str(NODE), "--input-type=module", "-e", script], capture_output=True, text=True, check=True
     )
     assert "<b>4 · Done</b>" in done.stdout and "<b>Trigger</b>" in done.stdout
-
-
-def test_routing_names_the_critical_loop_cap() -> None:
-    agents = (STATIC / "views" / "agents.js").read_text()
-    assert "${data.loop_max[name]} loops" in agents
 
 
 def test_the_page_names_its_icon() -> None:
