@@ -93,11 +93,11 @@ $HARNESS_HOME (default ~/.harness, mode 0700, a git repo)
 ├── defaults/
 │   ├── SETTINGS.md                  seed for new projects; the UI's "Defaults" scope
 │   ├── PROCESS.md                   seed
-│   └── roles/<role>/SKILL.md        user-editable role skills, seeded from the package
+│   └── roles/<role>/SKILL.md        the user's own role skills (SP10: built-ins stay in the package)
 ├── projects/<slug>/
 │   ├── SETTINGS.md                  copied from defaults once, never overwritten
 │   ├── PROCESS.md
-│   ├── roles/<role>/SKILL.md        optional per-project role override
+│   ├── roles/<role>/SKILL.md        the user's role skills for this project
 │   ├── memory -> ../../memory       directory symlink
 │   ├── plans/<id8>.md
 │   └── tasks/{in_queue,in_process,done}/<id8>.md
@@ -306,6 +306,10 @@ workflows:
 # review_code; `harness agent new` writes the agent, the step and the workflow entries
 # steps.perf_review: {role: perf-reviewer, kind: review, does: Flag N+1 queries.}
 
+# routing (SP10): the workflow a new ticket of each importance runs; an importance left out
+# runs the workflow of its own name; any other workflow is picked per ticket
+# routing: {simple: simple, standard: standard, critical: hotfix}
+
 # sub-status shown while a step runs
 status.names: {plan: under_planning, review_plan: under_plan_review, implement: under_implementation,
                review_code: under_review, security: under_security_review, run_tests: under_test,
@@ -316,6 +320,8 @@ merge.mode: ask
 ```
 
 ## 5. Loop semantics
+
+Workflow names match `[a-z][a-z0-9_-]{0,30}`; a workflow holds each step once, and an `on_fail` edge sends a review step back to an earlier step. A built-in role's skill is fixed (`planner: plan`, `plan-reviewer: review-plan`, `implementer: implement`, `code-reviewer: review-code`, `security-reviewer: review-security`, `test-runner: run-tests`, `doc-writer: sync-docs`); copying the agent is how its behaviour changes (SP10 spec §4).
 
 Steps map to roles: `plan` → planner, `review_plan` → plan-reviewer, `implement` → implementer, `review_code` → code-reviewer, `security` → security-reviewer, `run_tests` → test-runner (shell, no model), `docs` → doc-writer, `approve` → the user. A step whose role is switched off is skipped; if that role is `blocking`, the ticket fails with a message instead.
 
@@ -346,7 +352,7 @@ Status and action commands print at most 5 lines; `context` and `show` print the
 | `harness skills install\|lint\|eval` | Packaging (§8) |
 | `harness ui [open\|stop]` | Local UI (§9) |
 
-`harness next` orders round-robin across projects, then by importance (critical first), then by age. A ticket is runnable when every `depends_on` ticket is merged or closed, its `touches` do not overlap any `in_process` ticket of the same project (two paths overlap when one is a prefix of the other, compared segment by segment, so `services/web` and `services/webhooks` do not; empty `touches` overlaps everything), and its next step's provider has a free slot within `sessions.max` and `sessions.per_provider`. Workers take slots per step, not per ticket.
+Every `--project`/`-p` takes a project name or a folder inside a registered repo (SP9 spec decision 1). `harness next` orders round-robin across projects, then by importance (critical first), then by age. A ticket is runnable when every `depends_on` ticket is merged or closed, its `touches` do not overlap any `in_process` ticket of the same project (two paths overlap when one is a prefix of the other, compared segment by segment, so `services/web` and `services/webhooks` do not; empty `touches` overlaps everything), and its next step's provider has a free slot within `sessions.max` and `sessions.per_provider`. Workers take slots per step, not per ticket.
 
 `next` and `wait` record a conductor ping in `runtime/conductors/` (process id, agent if detectable, project filter); the UI shows these as live conductors.
 
@@ -423,20 +429,24 @@ Errors: `auth` stops the ticket with "sign in to <cli> interactively"; `rate_lim
 
 | Skill | Invoked by | Steps |
 |---|---|---|
-| `to-plan-with-grill` | user | `harness context` → `harness plan new` → look up facts yourself (code, docs, memory; a subagent if the host has one) → grill rounds of at most `grill.round_size` questions, each with a recommended answer, using the host's multiple-choice tool if it has one, until nothing is left to ask and nothing is silently assumed → restate the shared understanding; the user confirms → `harness plan save` → `harness plan review` → show open findings → the user approves, edits or rejects → `harness plan approve` |
-| `to-plan` | user | the same without grilling; every unasked decision becomes an `## Assumptions` line |
-| `to-ticket` | user | an approved plan id, or a short prompt (creates a `quick` plan) → vertical slices: end to end, verifiable alone, one fresh context window each; wide refactors split expand → migrate → contract → importance by rubric → numbered list (title · importance · blockers · touches) → the user adjusts → `harness ticket add --plan <id>` |
-| `to-loop` | user | `harness doctor --quiet` → loop: `harness next` → `harness run` → `harness wait` → act on each event (ask the user to grant loops, re-plan stalled tickets, approve merges) until nothing is runnable or the user stops |
-| `open-ui` | user | `harness ui open`; on exit 4, ask to install the UI extra, install it, open |
-| `harness-memory` | model | triggered when the user states a lasting preference or goal, rejects an approach, or a design decision is made → `harness memory add` |
+| `grill` | user | `harness context` → `harness plan new` → look up facts yourself (code, docs, memory; a subagent if the host has one) → grill rounds of at most `grill.round_size` questions, each with a recommended answer, using the host's multiple-choice tool if it has one, until nothing is left to ask and nothing is silently assumed → restate the shared understanding; the user confirms → `harness plan save` → `harness plan review` → show open findings → the user approves, edits or rejects → `harness plan approve` |
+| `plan` | user | the same without grilling; every unasked decision becomes an `## Assumptions` line |
+| `ticket` | user | an approved plan id, or a short prompt (creates a `quick` plan) → vertical slices: end to end, verifiable alone, one fresh context window each; wide refactors split expand → migrate → contract → importance by rubric → numbered list (title · importance · blockers · touches) → the user adjusts → `harness ticket add --plan <id>` |
+| `loop` | user | `harness doctor --quiet` → loop: `harness next` → `harness run` → `harness wait` → act on each event (ask the user to grant loops, re-plan stalled tickets, approve merges) until nothing is runnable or the user stops |
+| `ui` | user | `harness ui open`; on exit 4, ask to install the UI extra, install it, open |
+| `memory` | model | triggered when the user states a lasting preference or goal, rejects an approach, or a design decision is made → `harness memory add` |
 
-Importance rubric (`to-ticket/references/importance.md`): critical when the slice touches auth, secrets, payments, data migrations, infrastructure or anything irreversible; standard when it spans modules or changes a public interface; simple otherwise.
+Users type them as `/kengash:<name>` (Claude Code and Antigravity load them as the `kengash` plugin) or `$kengash-<name>` (Codex, which gets prefixed copies); before SP10 they were `to-plan-with-grill`, `to-plan`, `to-ticket`, `to-loop`, `open-ui` and `kengash-memory` (SP10 spec §3).
+
+The planning skills, `ticket` and `loop` take an optional project name or folder after their argument and pass it on as `-p`; a folder no project holds is registered only on the user's yes (SP9 spec decision 2).
+
+Importance rubric (`ticket/references/importance.md`): critical when the slice touches auth, secrets, payments, data migrations, infrastructure or anything irreversible; standard when it spans modules or changes a public interface; simple otherwise.
 
 Every skill's step 0 runs `harness --version`. If the command is missing or is not super-harness, the skill prints the install line and stops.
 
 ### 8.2 Role skills
 
-`plan`, `review-plan`, `implement`, `review-code`, `review-security`, `run-tests`, `sync-docs`. They ship in `super_harness/roles/`, are seeded to `defaults/roles/`, may be overridden per project, and are injected by the worker, never installed into agents. An agent created in the UI points at a role skill file.
+`plan`, `review-plan`, `implement`, `review-code`, `review-security`, `run-tests`, `sync-docs`. They ship in `kengash_ai/roles/` and always load from there: a built-in agent's behaviour is fixed, and copying the agent (`kengash agent copy`) gives an agent of the user's own whose skill lives in the store's `roles/` (defaults, or per project). Workers get the body injected; role skills are never installed into agents (SP10 spec §4.1–4.2).
 
 ### 8.3 Writing standard
 
@@ -460,9 +470,8 @@ super-harness/
 └── src/super_harness/              harness CLI and role skills
 ```
 
-- `npx skills add <owner>/super-harness [-g]`. Claude Code gets `.claude/skills/`; Codex, Antigravity, Gemini CLI, Cursor, Copilot and OpenCode get `.agents/skills/`.
 - `uv tool install super-harness && harness skills install --agent claude,codex,antigravity [--global]`, with no Node needed.
-- Claude and Codex plugin marketplaces, for auto-update.
+- Claude Code's plugin marketplace (`/plugin install kengash@kengash-ai`), for auto-update. `kengash skills install` writes the plugin into `.claude/skills/kengash/` for Claude Code, runs `agy plugin install` for Antigravity and copies `kengash-<name>` skills for Codex (SP10 spec §3.2).
 
 ## 9. UI
 
@@ -557,3 +566,4 @@ super-harness/
 | 6 Custom agents | custom steps in SETTINGS.md, `harness agent new\|remove`, the New agent dialog, CI on GitHub, canvas follow-ups (`2026-10-26-sp6-custom-agents-design.md`) | a custom step runs like the built-in step of its kind; CI green |
 | 7 Production readiness | speed on large stores, hardening, packaging, release and community docs (`2026-10-26-sp7-production-design.md`) | views under 1 s warm on 1,500 tickets; clean artifacts; CI, package and audit green |
 | 8 Kengash naming | every user-facing name follows Kengash AI, with a compatible upgrade from 0.1.0 (`2026-10-26-sp8-kengash-naming-design.md`) | a 0.1.0 store upgrades untouched; old names warn until 0.3.0 |
+| 9 Completion audit | what the 2026-10-27 audit found open against the original request: a project name or folder for `--project` and the skills, tags on board cards, names SP8 missed (`2026-10-27-sp9-completion-audit-design.md`) | `make check` and the live end-to-end smoke green on claude and agy |

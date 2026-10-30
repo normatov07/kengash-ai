@@ -7,7 +7,7 @@ Everything under `~/.kengash`: paths, atomic writes, frontmatter documents, ids,
 ## Interface
 
 - `StorePaths.default()` and `ProjectPaths`: the layout of system spec §4.1, plus `StorePaths.slots`, `claims`, `trust`, `flags`, `workers`, `ticket_states`, `conductors` and `logs` under `runtime/`, and `worktrees` with `worktree(slug, id)` (`worktrees/<slug>/kg-<id>`, or a ticket's existing 0.1.0 `hrn-<id>`); `KENGASH_HOME` (then 0.1.0's `HARNESS_HOME`) overrides `~/.kengash`.
-- `seed.ensure_store`, `seed.ensure_project`: create folders and copy default files only when missing; `ensure_store` also seeds each package role skill missing from `defaults/roles/`; `seed.link_memory(paths, project)` points a project's `memory` at `../../memory`, replacing a missing or stale link but never a real file or folder.
+- `seed.ensure_store`, `seed.ensure_project`: create folders and copy default files only when missing; role skills are not seeded since SP10 (built-in ones always load from the package); `seed.link_memory(paths, project)` points a project's `memory` at `../../memory`, replacing a missing or stale link but never a real file or folder.
 - `documents`: `load_plan`, `load_ticket` (each parsed once per file content and returned as a copy, SP7), `load_any`, `save_plan`, `save_ticket` (a ticket lands in the folder its status names), `save_any`, `find_ticket`, `iter_documents`, `check_document`.
 - `frontmatter.parse`, `frontmatter.split_frontmatter` (mapping and the text after it), `frontmatter.render`, `files.atomic_write`, `ids.new_id`, `locks.locked`, `yamlio.load_yaml` (a per-thread YAML 1.2 safe loader, C-accelerated by `ruamel.yaml.clib`), `yamlio.dump_yaml`. `memo.Memo` (thread-safe LRU, `get_or_make`) and `memo.digest` key parse caches by file content, never by stat: an in-place rewrite within one timestamp tick keeps size and inode.
 - `yamledit.set_key(text, key, value, source=)`: one dotted key set (None removes it) with every other line byte-identical; the longest dotted prefix present wins at each mapping; a one-line scalar is swapped in place, anything else rewrites the nearest block-mapping entry on one line in flow style (the spacing after its key and its trailing comment kept); a removal that empties a block drops the block. Every line it writes ends as the text's first line does, so a CRLF file stays CRLF (an unterminated last line stays unterminated). `yamledit.flow(value)`: one-line flow YAML, quoting strings that would not read back as themselves.
@@ -29,6 +29,8 @@ Everything under `~/.kengash`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
+- 2026-10-30: `ensure_store` no longer seeds `defaults/roles/` (SP10 M2).
+- 2026-10-30: `defaults/SETTINGS.md` explains `routing` in a comment (SP10 M2).
 - 2026-10-26: the seeded MEMORY.md, DECISIONS.md and SETTINGS.md name `kengash` (SP8).
 - 2026-10-26: `StorePaths.worktree` is `worktrees/<slug>/kg-<id>`, or the ticket's existing 0.1.0 `hrn-<id>` folder (SP8).
 - 2026-10-26: the repo link is `.kengash` (`links.LINK`, exclude `/.kengash`); `links.real_folder` finds a real `.kengash/` or 0.1.0 `.harness/`; `links.legacy_link` names a 0.1.0 `.harness` symlink to the same project (SP8).

@@ -1,11 +1,14 @@
 """Skills (SP4 spec decisions 2 to 7): role skills for worker prompts; lint and install of
-the installed skills."""
+the installed skills, as the `kengash` plugin or `kengash-<name>` copies (SP10 spec §3)."""
 
 import difflib
+import json
 import os
 import re
 import shutil
-from collections.abc import Collection, Iterator, Sequence
+import subprocess
+import tempfile
+from collections.abc import Callable, Collection, Iterator, Sequence
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
@@ -39,8 +42,11 @@ def roles_dir() -> Path:
 
 
 def role_file(paths: StorePaths, slug: str | None, skill: str) -> Path | None:
-    """A role skill's file: the project's, else the defaults', else the package's."""
-    folders = [paths.defaults / "roles", roles_dir()]
+    """A role skill's file: a built-in skill always the package's, so it cannot be changed or
+    go stale (SP10 spec §4.1); a user's skill the project's, else the defaults'."""
+    if skill in ROLES:
+        return roles_dir() / skill / "SKILL.md"
+    folders = [paths.defaults / "roles"]
     if slug is not None:
         folders.insert(0, paths.project(slug).root / "roles")
     for folder in folders:
@@ -50,8 +56,36 @@ def role_file(paths: StorePaths, slug: str | None, skill: str) -> Path | None:
     return None
 
 
+type SkillSource = Literal["package", "defaults", "project"]
+
+
+def role_skills(paths: StorePaths, slug: str | None) -> list[tuple[str, SkillSource]]:
+    """Every role skill an agent of this scope can run, with where it lives: the package's
+    built-in ones, then the user's in the defaults and the project."""
+    found: dict[str, SkillSource] = dict.fromkeys(sorted(ROLES), "package")
+    folders: list[tuple[Path, SkillSource]] = [(paths.defaults / "roles", "defaults")]
+    if slug is not None:
+        folders.append((paths.project(slug).root / "roles", "project"))
+    for folder, source in folders:
+        for child in sorted(folder.iterdir()) if folder.is_dir() else []:
+            if child.name not in ROLES and (child / "SKILL.md").is_file():
+                found[child.name] = source
+    return list(found.items())
+
+
+def ignored_copies(paths: StorePaths) -> list[Path]:
+    """Store copies of built-in skills, which `role_file` never reads: the ones `kengash
+    init` seeded before SP10, and any the user wrote by hand."""
+    folders = [paths.defaults / "roles"]
+    if paths.projects.is_dir():
+        folders += [project / "roles" for project in sorted(paths.projects.iterdir())]
+    return [
+        folder / skill for folder in folders for skill in sorted(ROLES) if (folder / skill).is_dir()
+    ]
+
+
 def role_text(paths: StorePaths, slug: str, skill: str) -> str | None:
-    """The body of a role skill: the project's, else the defaults', else the package's."""
+    """The body of a role skill, found by `role_file`."""
     path = role_file(paths, slug, skill)
     if path is None:
         return None
@@ -209,6 +243,44 @@ State = Literal["installed", "updated", "unchanged", "differs", "removed"]
 CLI = "kengash"  # the command skills run; `--cli-name` swaps it at install time
 # frontmatter `metadata.source` of the skills this package installs, now and before 0.2.0
 OURS = frozenset({"kengash-ai", "super-harness"})
+PLUGIN = "kengash"
+AGY_PLUGINS = ".gemini/config/plugins"  # where `agy plugin install` copies a plugin
+AGY_FAILED = "agy plugin install failed; copies instead"
+TRUST_NOTE = (
+    "Claude Code loads this project's plugin once you trust the folder; "
+    "--global loads it everywhere"
+)
+# how a copy names a command: Codex mentions skills with `$`, Antigravity types `/`
+SPELLING = {"codex": f"${PLUGIN}-", "antigravity": f"/{PLUGIN}-"}
+# the names our skills had before SP10 (and 0.1.0's harness-memory), and who reads each folder
+OLD_NAMES = frozenset(
+    {"to-plan", "to-plan-with-grill", "to-ticket", "to-loop", "open-ui"}
+    | {"kengash-memory", "harness-memory"}
+)
+READERS = {
+    ".claude/skills": "claude",
+    ".agents/skills": "codex,antigravity",
+    ".gemini/config/skills": "antigravity",
+}
+
+
+def home_folder() -> Path:
+    """The user's home folder: where global skills and agy's plugins live."""
+    return Path.home()
+
+
+def old_installs(roots: Sequence[Path]) -> list[tuple[Path, str]]:
+    """Skill folders under `roots` that still hold our skills by their old names, each with
+    the agents that read it."""
+    found: list[tuple[Path, str]] = []
+    for root in roots:
+        for folder, agents in READERS.items():
+            path = root / folder
+            # kengash-memory is also the name of Codex's (and agy's fallback) current copy
+            old = OLD_NAMES if folder == AGENT_DIRS["claude"] else OLD_NAMES - {"kengash-memory"}
+            if any(stale.name in old for stale in _obsolete(path, ())):
+                found.append((path, agents))
+    return found
 
 
 @dataclass
@@ -217,12 +289,14 @@ class Installed:
     name: str
     state: State
     folder: Path
+    note: str = ""
 
 
 @dataclass
 class InstallResult:
     entries: list[Installed] = field(default_factory=list)
     diffs: dict[str, str] = field(default_factory=dict)
+    notes: list[str] = field(default_factory=list)
 
     @property
     def needs_yes(self) -> bool:
@@ -238,6 +312,19 @@ def install_skills(
     return install(agents, root=root, home=global_, cli_name=cli_name, yes=yes)
 
 
+def plugin_manifest() -> dict[str, object]:
+    """The `kengash` plugin's manifest, for Claude Code and Antigravity alike."""
+    return {
+        "name": PLUGIN,
+        "author": {"name": "normatov13"},
+        "version": kengash_ai.__version__,
+        "description": "Plan, ticket and run many projects at once with the coding-agent "
+        "subscriptions you already have, through the kengash CLI.",
+        "homepage": "https://github.com/normatov07/kengash-ai",
+        "license": "MIT",
+    }
+
+
 def install(
     agents: Sequence[str],
     *,
@@ -246,38 +333,149 @@ def install(
     cli_name: str = CLI,
     yes: bool = False,
     source: Path | None = None,
+    agy_plugin: bool = True,
+    user_home: Path | None = None,
+    run: Callable[[list[str]], int] | None = None,
 ) -> InstallResult:
-    """Copy every installed skill into each agent's skills folder under `root` (SP4 spec
-    decisions 4 to 6); a skill that differs is replaced only with `yes`."""
+    """Install the skills for each agent under `root` (SP10 spec §3.2): Claude Code gets the
+    plugin folder in its skills folder, Antigravity `agy plugin install` of the plugin (or
+    copies when that fails or `agy_plugin` is off), Codex `kengash-<name>` copies. Old
+    skills of ours go; a skill the user edited is replaced only with `yes`."""
     source = source or packaged()
     dirs = GLOBAL_DIRS if home else AGENT_DIRS
-    folders: dict[Path, list[str]] = {}
+    names = sorted(child.name for child in source.iterdir() if (child / "SKILL.md").is_file())
+    keep = {*names, *(f"{PLUGIN}-{name}" for name in names)}
+    chosen: list[str] = []
     for agent in agents:
         name = ALIASES.get(agent.strip(), agent.strip())
         if name not in dirs:
             raise UserError(f"unknown agent {name}; use claude, codex or antigravity")
-        owners = folders.setdefault(root / dirs[name], [])
-        if name not in owners:
-            owners.append(name)
+        if name not in chosen:
+            chosen.append(name)
     result = InstallResult()
-    packaged_names = {child.name for child in source.iterdir() if (child / "SKILL.md").is_file()}
-    for folder, owners in folders.items():
-        for stale in _obsolete(folder, packaged_names):
-            shutil.rmtree(stale)
-            result.entries.append(Installed(",".join(owners), stale.name, "removed", stale))
-        for skill in sorted(child for child in source.iterdir() if (child / "SKILL.md").is_file()):
-            files = _render(skill, cli_name)
-            target = folder / skill.name
-            installed = _files(target)
-            state: State = "installed" if installed is None else "unchanged"
-            if installed is not None and installed != files:
-                state = "updated" if yes else "differs"
-                if not yes:
-                    result.diffs[str(target)] = _diff(target, installed, files)
-            if state in ("installed", "updated"):
-                _swap(target, files)
-            result.entries.append(Installed(",".join(owners), skill.name, state, target))
+    copies: dict[Path, list[str]] = {}  # copy folder → its agents; Codex and agy may share one
+    notes: dict[Path, str] = {}
+    for agent in chosen:
+        folder = root / dirs[agent]
+        if agent == "claude":
+            _clean(result, agent, folder, ())  # our skills live in the plugin folder now
+            if not home:
+                result.notes.append(TRUST_NOTE)
+            plugin = folder / PLUGIN
+            _write_manifest(plugin / ".claude-plugin" / "plugin.json")
+            _clean(result, agent, plugin / "skills", names)
+            for skill in names:
+                files = _render(source / skill, cli_name)
+                _place(result, agent, skill, plugin / "skills" / skill, files, yes)
+            continue
+        if agent == "antigravity" and agy_plugin:
+            # a folder Codex shares keeps Codex's copies; agy's own loses every copy of ours
+            _clean(result, agent, folder, keep if folder == root / dirs["codex"] else ())
+            installed = (user_home or home_folder()) / AGY_PLUGINS / PLUGIN
+            entry = _agy_plugin(source, names, cli_name, installed, run or _run)
+            if entry is not None:
+                result.entries.append(entry)
+                continue
+            notes[folder] = AGY_FAILED
+        copies.setdefault(folder, []).append(agent)
+    for folder, owners in copies.items():
+        note = notes.get(folder, "")
+        _copy_all(result, owners, folder, source, names, keep, cli_name, yes, note)
     return result
+
+
+def _copy_all(
+    result: InstallResult,
+    owners: list[str],
+    folder: Path,
+    source: Path,
+    names: list[str],
+    keep: Collection[str],
+    cli_name: str,
+    yes: bool,
+    note: str,
+) -> None:
+    """`kengash-<name>` copies of every skill in `folder`, spelled for an agent without a
+    plugin namespace (Codex's `$` wins when Codex shares the folder)."""
+    agent = ",".join(owners)
+    spelling = SPELLING["codex" if "codex" in owners else "antigravity"]
+    _clean(result, agent, folder, keep)
+    for skill in names:
+        files = _render(source / skill, cli_name, spelling)
+        entry = _place(result, agent, skill, folder / f"{PLUGIN}-{skill}", files, yes)
+        entry.note = note
+
+
+def _agy_plugin(
+    source: Path,
+    names: list[str],
+    cli_name: str,
+    installed: Path,
+    run: Callable[[list[str]], int],
+) -> Installed | None:
+    """Build the plugin in a temporary folder and `agy plugin install` it, unless agy
+    already holds exactly these files; None when agy failed."""
+    files = {
+        f"skills/{skill}/{rel}": data
+        for skill in names
+        for rel, data in _render(source / skill, cli_name).items()
+    }
+    files[".antigravity-plugin/plugin.json"] = _manifest_bytes()
+    name = f"{PLUGIN} (plugin)"
+    if _files(installed) == files:
+        return Installed("antigravity", name, "unchanged", installed)
+    with tempfile.TemporaryDirectory(prefix="kengash-plugin-") as scratch:
+        build = Path(scratch) / PLUGIN
+        for rel, data in files.items():
+            path = build / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        code = run(["agy", "plugin", "install", str(build)])
+    return Installed("antigravity", name, "installed", installed) if code == 0 else None
+
+
+def _place(
+    result: InstallResult, agent: str, name: str, target: Path, files: dict[str, bytes], yes: bool
+) -> Installed:
+    installed = _files(target)
+    state: State = "installed" if installed is None else "unchanged"
+    if installed is not None and installed != files:
+        state = "updated" if yes else "differs"
+        if not yes:
+            result.diffs[str(target)] = _diff(target, installed, files)
+    if state in ("installed", "updated"):
+        _swap(target, files)
+    entry = Installed(agent, name, state, target)
+    result.entries.append(entry)
+    return entry
+
+
+def _clean(result: InstallResult, agent: str, folder: Path, keep: Collection[str]) -> None:
+    for stale in _obsolete(folder, keep):
+        shutil.rmtree(stale)
+        result.entries.append(Installed(agent, stale.name, "removed", stale))
+
+
+def _manifest_bytes() -> bytes:
+    return (json.dumps(plugin_manifest(), indent=2) + "\n").encode("utf-8")
+
+
+def _write_manifest(path: Path) -> None:
+    data = _manifest_bytes()
+    if path.is_file() and path.read_bytes() == data:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+
+
+def _run(argv: list[str]) -> int:
+    try:
+        done = subprocess.run(argv, capture_output=True, text=True, timeout=120, check=False)
+    except FileNotFoundError:
+        return 127
+    except subprocess.TimeoutExpired:
+        return 124
+    return done.returncode
 
 
 def rename_cli(text: str, name: str) -> str:
@@ -298,24 +496,34 @@ def rename_cli(text: str, name: str) -> str:
     return "".join(lines)
 
 
-def _render(skill: Path, cli_name: str) -> dict[str, bytes]:
+def _render(skill: Path, cli_name: str, spelling: str | None = None) -> dict[str, bytes]:
+    """A skill's files with `kengash` swapped for `cli_name`; with `spelling`, a copy named
+    `kengash-<name>` whose `/kengash:` commands read `<spelling><name>`."""
     files: dict[str, bytes] = {}
     for path in sorted(skill.rglob("*")):
         if path.is_file():
             data = path.read_bytes()
             if path.suffix == ".md":
-                data = rename_cli(data.decode("utf-8"), cli_name).encode("utf-8")
+                text = rename_cli(data.decode("utf-8"), cli_name)
+                if spelling is not None:
+                    text = text.replace(f"/{PLUGIN}:", spelling)
+                    if path.name == "SKILL.md":
+                        text = re.sub(
+                            r"^name: (\S+)$", rf"name: {PLUGIN}-\1", text, count=1, flags=re.M
+                        )
+                data = text.encode("utf-8")
             files[path.relative_to(skill).as_posix()] = data
     return files
 
 
-def _obsolete(folder: Path, packaged: Collection[str]) -> list[Path]:
-    """Skill folders this package installed once but ships no more (0.1.0's harness-memory):
-    only those whose frontmatter names us as `metadata.source`; anything else stays."""
+def _obsolete(folder: Path, keep: Collection[str]) -> list[Path]:
+    """Skill folders this package installed once but ships no more (0.1.0's harness-memory,
+    0.2.0's to-loop and the rest): only those whose frontmatter names us as
+    `metadata.source`; anything else stays."""
     found: list[Path] = []
     for child in sorted(folder.iterdir()) if folder.is_dir() else []:
         path = child / "SKILL.md"
-        if child.name in packaged or not path.is_file():
+        if child.name in keep or not path.is_file():
             continue
         try:
             meta = SkillMeta.model_validate(split_frontmatter(path.read_text(encoding="utf-8"))[0])

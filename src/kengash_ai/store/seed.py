@@ -8,7 +8,6 @@ from kengash_ai.store import links, storegit
 from kengash_ai.store.paths import ProjectPaths, StorePaths
 
 _PACKAGE_DEFAULTS = resources.files("kengash_ai.store") / "defaults"
-_PACKAGE_ROLES = resources.files("kengash_ai") / "roles"
 
 
 def package_default(name: str) -> str:
@@ -31,7 +30,6 @@ def ensure_store(paths: StorePaths) -> None:
     _seed("DECISIONS.md", paths.memory / "DECISIONS.md")
     _seed("SETTINGS.md", paths.defaults / "SETTINGS.md")
     _seed("PROCESS.md", paths.defaults / "PROCESS.md")
-    _seed_roles(paths.defaults / "roles")
     storegit.ensure_repo(paths.home)
 
 
@@ -61,15 +59,3 @@ def link_memory(paths: StorePaths, project: ProjectPaths) -> bool:
         link.unlink()
     link.symlink_to(Path("..") / ".." / "memory", target_is_directory=True)
     return True
-
-
-def _seed_roles(target: Path) -> None:
-    """Copy each package role skill whose folder is missing; edited ones stay as they are."""
-    for role in _PACKAGE_ROLES.iterdir():
-        if not role.is_dir() or (target / role.name).exists():
-            continue
-        folder = target / role.name
-        folder.mkdir(parents=True)
-        for item in role.iterdir():
-            if item.is_file():
-                (folder / item.name).write_bytes(item.read_bytes())

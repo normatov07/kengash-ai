@@ -13,7 +13,7 @@ from kengash_ai.model import EvalScenario, UserError
 from kengash_ai.ops import evals, lifecycle
 
 SCENARIO = """\
-skill: to-plan
+skill: plan
 description: a direct plan from a short prompt
 files:
   calc.py: "def sub(a, b):\\n    return a - b\\n"
@@ -23,7 +23,7 @@ setup:
     stdin: "Seed prompt."
     save: seed
 turns:
-  - "/to-plan Add add(a, b) to calc.py"
+  - "/plan Add add(a, b) to calc.py"
 expect:
   journal: [plan.created]
   absent: [plan.approved]
@@ -39,31 +39,31 @@ def write(folder: Path, name: str, text: str) -> Path:
 
 
 def test_load_reads_a_scenario(tmp_path: Path) -> None:
-    scenario = evals.load(write(tmp_path, "to-plan/direct.yaml", SCENARIO))
+    scenario = evals.load(write(tmp_path, "plan/direct.yaml", SCENARIO))
     assert isinstance(scenario, EvalScenario)
-    assert (scenario.skill, scenario.setup[0].save, scenario.timeout_s) == ("to-plan", "seed", 900)
+    assert (scenario.skill, scenario.setup[0].save, scenario.timeout_s) == ("plan", "seed", 900)
     assert scenario.expect.plans is not None and scenario.expect.plans.fields == {"mode": "direct"}
 
 
 def test_load_names_the_file_and_the_bad_key(tmp_path: Path) -> None:
-    path = write(tmp_path, "to-plan/typo.yaml", SCENARIO.replace("absent:", "absnet:"))
+    path = write(tmp_path, "plan/typo.yaml", SCENARIO.replace("absent:", "absnet:"))
     with pytest.raises(UserError, match=r"typo\.yaml: .*absnet"):
         evals.load(path)
 
 
 def test_scenarios_lists_one_skill_or_all(tmp_path: Path) -> None:
-    write(tmp_path, "to-plan/b.yaml", SCENARIO)
-    write(tmp_path, "to-plan/a.yaml", SCENARIO)
-    write(tmp_path, "to-ticket/one.yaml", SCENARIO.replace("to-plan", "to-ticket"))
-    assert [name for name, _ in evals.scenarios(tmp_path, "to-plan")] == ["to-plan/a", "to-plan/b"]
+    write(tmp_path, "plan/b.yaml", SCENARIO)
+    write(tmp_path, "plan/a.yaml", SCENARIO)
+    write(tmp_path, "ticket/one.yaml", SCENARIO.replace("plan", "ticket"))
+    assert [name for name, _ in evals.scenarios(tmp_path, "plan")] == ["plan/a", "plan/b"]
     assert len(evals.scenarios(tmp_path, None)) == 3
-    with pytest.raises(UserError, match="no eval scenarios for to-loop"):
-        evals.scenarios(tmp_path, "to-loop")
+    with pytest.raises(UserError, match="no eval scenarios for loop"):
+        evals.scenarios(tmp_path, "loop")
 
 
 def test_fill_replaces_known_names_only() -> None:
-    assert evals.fill("/to-ticket {plan} {other}", {"plan": "a1b2c3d4"}) == (
-        "/to-ticket a1b2c3d4 {other}"
+    assert evals.fill("/ticket {plan} {other}", {"plan": "a1b2c3d4"}) == (
+        "/ticket a1b2c3d4 {other}"
     )
 
 
@@ -78,8 +78,8 @@ def claude_reply(session: str = "s-1", result: str = "Planned it.") -> str:
 
 def scenario(**fields: Any) -> EvalScenario:
     data: dict[str, Any] = {
-        "skill": "to-plan",
-        "turns": ["/to-plan Add add(a, b)"],
+        "skill": "plan",
+        "turns": ["/plan Add add(a, b)"],
         "expect": {
             "journal": ["plan.created"],
             "plans": {"count": 1, "fields": {"mode": "direct"}},
@@ -91,7 +91,7 @@ def scenario(**fields: Any) -> EvalScenario:
 @pytest.fixture
 def source(tmp_path: Path) -> Path:
     folder = tmp_path / "skills"
-    write(folder, "to-plan/SKILL.md", "---\nname: to-plan\ndescription: Use when.\n---\nPlan.\n")
+    write(folder, "plan/SKILL.md", "---\nname: plan\ndescription: Use when.\n---\nPlan.\n")
     return folder
 
 
@@ -103,7 +103,7 @@ def work(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def run(work: Path, source: Path, case: EvalScenario, agent: str = "claude", **kw: Any) -> Any:
     return evals.run_scenario(
-        "to-plan/probe", case, agent, work=work, model="haiku", source=source, **kw
+        "plan/probe", case, agent, work=work, model="haiku", source=source, **kw
     )
 
 
@@ -115,17 +115,17 @@ def test_a_scenario_passes_when_the_conductor_does_the_work(
     assert (result.passed, result.failure) == (True, "")
     (call,) = fake_clis.calls("claude")
     argv = call["argv"]
-    assert argv[:2] == ["-p", "/to-plan Add add(a, b)"] and call["cwd"] == str(work / "repo")
+    assert argv[:2] == ["-p", "/plan Add add(a, b)"] and call["cwd"] == str(work / "repo")
     assert argv[argv.index("--model") + 1] == "haiku" and "dontAsk" in argv
     assert argv[-4:] == ["Read", "Grep", "Glob", "Bash(kengash:*)"]
     assert call["env"]["KENGASH_AGENT"] == "claude" and "CLAUDECODE" not in call["env"]
-    assert (work / "repo" / ".claude" / "skills" / "to-plan" / "SKILL.md").is_file()
+    assert (work / "repo/.claude/skills/kengash/skills/plan/SKILL.md").is_file()
 
 
 def test_later_turns_resume_the_session(work: Path, source: Path, fake_clis: FakeClis) -> None:
     fake_clis.queue("claude", stdout=claude_reply(result="Which title?"))
     fake_clis.queue("claude", stdout=claude_reply(), shell=PLAN_NEW)
-    case = scenario(turns=["/to-plan Add add(a, b)", "Call it Probe."])
+    case = scenario(turns=["/plan Add add(a, b)", "Call it Probe."])
     assert run(work, source, case).passed
     second = fake_clis.calls("claude")[1]["argv"]
     assert second[:2] == ["-p", "Call it Probe."] and second[second.index("--resume") + 1] == "s-1"
@@ -167,13 +167,13 @@ def test_setup_saves_ids_for_later_steps(work: Path, source: Path, fake_clis: Fa
     fake_clis.queue("claude", stdout=claude_reply())
     case = scenario(
         setup=setup,
-        turns=["/to-plan {plan}"],
+        turns=["/plan {plan}"],
         expect={"journal": ["plan.saved"], "plans": {"count": 1, "fields": {"id": "{plan}"}}},
     )
     result = run(work, source, case)
     assert result.passed, result.failure
     turn = fake_clis.calls("claude")[0]["argv"][1]
-    assert re.fullmatch(r"/to-plan [0-9a-f]{8}", turn)
+    assert re.fullmatch(r"/plan [0-9a-f]{8}", turn)
 
 
 def test_baseline_runs_install_no_skills(work: Path, source: Path, fake_clis: FakeClis) -> None:
@@ -191,7 +191,7 @@ def test_agy_conductors_run_sandboxed_without_prompts(
     assert result.passed, result.failure
     argv = fake_clis.calls("agy")[0]["argv"]
     assert argv[-2:] == ["--dangerously-skip-permissions", "--sandbox"]
-    assert (work / "repo" / ".agents" / "skills" / "to-plan" / "SKILL.md").is_file()
+    assert (work / "repo/.agents/skills/kengash-plan/SKILL.md").is_file()
 
 
 def test_a_hanging_turn_times_out(work: Path, source: Path, fake_clis: FakeClis) -> None:
@@ -219,12 +219,17 @@ def test_settings_and_turns_get_the_agent_placeholders(
     work: Path, source: Path, fake_clis: FakeClis
 ) -> None:
     fake_clis.queue("claude", stdout=claude_reply(), shell=PLAN_NEW)
-    case = scenario(settings="plan.reviewer: {cli}\n", turns=["/to-plan on {agent} {model}"])
+    case = scenario(settings="plan.reviewer: {cli}\n", turns=["/plan on {agent} {model}"])
     assert run(work, source, case).passed
     settings = (work / "home" / ".kengash" / "defaults" / "SETTINGS.md").read_text()
     assert settings == "plan.reviewer: claude/haiku\n"
-    assert fake_clis.calls("claude")[0]["argv"][1] == "/to-plan on claude haiku"
-    assert evals.agent_values("codex", None) == {"agent": "codex", "model": "", "cli": "codex"}
+    assert fake_clis.calls("claude")[0]["argv"][1] == "/plan on claude haiku"
+    assert evals.agent_values("codex", None) == {
+        "agent": "codex",
+        "model": "",
+        "cli": "codex",
+        "kg": "$kengash-",
+    }
 
 
 def test_a_clean_expectation_names_changed_files(
@@ -273,3 +278,20 @@ def test_a_ui_the_conductor_starts_is_stopped_after_the_run(
     assert not record.exists() and not lifecycle.pid_alive(pid)
     (call,) = fake_clis.calls("claude")
     assert call["env"]["BROWSER"] == "true"  # `kengash ui open` opens no window in an eval
+
+
+def test_agent_values_spell_each_cli() -> None:
+    spelled = {
+        agent: evals.agent_values(agent, None)["kg"] for agent in ("claude", "codex", "antigravity")
+    }
+    assert spelled == {"claude": "/kengash:", "codex": "$kengash-", "antigravity": "/kengash-"}
+
+
+def test_claude_conductor_loads_the_plugin_dir(
+    work: Path, source: Path, fake_clis: FakeClis
+) -> None:
+    fake_clis.queue("claude", stdout=claude_reply(), shell=PLAN_NEW)
+    assert run(work, source, scenario(turns=["{kg}plan Add add(a, b)"])).passed
+    argv = fake_clis.calls("claude")[0]["argv"]
+    assert argv[1] == "/kengash:plan Add add(a, b)"
+    assert argv[argv.index("--plugin-dir") + 1] == str(work / "repo/.claude/skills/kengash")

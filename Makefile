@@ -15,7 +15,7 @@ lint:
 	uv run ruff format --check --quiet .
 	uv run ruff check --quiet .
 	out=$$(uv run lint-imports 2>&1) || { echo "$$out"; exit 1; }
-	uv run harness skills lint
+	uv run kengash skills lint
 
 type:
 	uv run mypy --no-error-summary
@@ -29,7 +29,7 @@ live:
 
 # every skill scenario on every installed agent (SP4 spec §2.17); spends subscription quota
 evals:
-	uv run harness skills eval --all
+	uv run kengash skills eval --all
 
 docs:
 	uv run python scripts/check_md_caps.py

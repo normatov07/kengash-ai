@@ -2,7 +2,7 @@
 
 Kengash AI lets one developer run many projects at once with the coding-agent subscriptions they already have (Claude Code, Codex, Antigravity `agy`, which also serves Google's plans), driven through the official CLIs, never API keys. Skills installed into the user's agent conduct the work, the deterministic `kengash` CLI does every mechanical step, and a local UI monitors it all.
 
-Status: all 8 sub-projects done (Foundation; Store + `kengash` CLI; Engine; Skills; Web UI; Custom agents; Production readiness; Kengash naming): `kengash init|doctor|link|adopt|settings|memory|context|plan|ticket|status|next|run|wait|approve|park|stop|pause|resume|merge|skills|agent|ui` work, with detached workers, plan review, memory compaction, role skills, six installed skills (`skills/`, proven by `evals/`), the local web UI (`kengash ui open`, seven screens matching the canvas), user-defined agents (`kengash agent new` or the UI's New agent), and release tooling (`make dist`, `make audit`, `docs/releasing.md`). `docs/architecture.md` tracks what is built.
+Status: all 10 sub-projects done (Foundation; Store + `kengash` CLI; Engine; Skills; Web UI; Custom agents; Production readiness; Kengash naming; Completion audit; Agents and workflows): `kengash init|doctor|link|adopt|settings|memory|context|plan|ticket|status|next|run|wait|approve|park|stop|pause|resume|merge|skills|agent|workflow|ui` work, with detached workers, plan review, memory compaction, role skills, six installed skills as the `kengash` plugin (`/kengash:<name>`; `skills/`, proven by `evals/`), the local web UI (`kengash ui open`, seven screens), agents and workflows fully editable in the UI and the CLI, and release tooling (`make dist`, `make audit`, `docs/releasing.md`). `docs/architecture.md` tracks what is built.
 
 ## Commands
 
@@ -38,4 +38,4 @@ Status: all 8 sub-projects done (Foundation; Store + `kengash` CLI; Engine; Skil
 
 ## UI design source
 
-The UI implements the Claude Design canvas https://claude.ai/artifact/JiMGMkbaw8qhafeaNbqU7d. In Claude Code, read it with the Artifact tool (`list_files`, then `read_file` on `project/canvas.json` and `project/*.dc.html`), not WebFetch.
+The UI implements the Claude Design canvas https://claude.ai/artifact/JiMGMkbaw8qhafeaNbqU7d. In Claude Code, read it with the Artifact tool (`list_files`, then `read_file` on `project/canvas.json` and `project/*.dc.html`), not WebFetch. The Agents and Workflow screens follow `docs/superpowers/specs/2026-10-30-sp10-agents-workflows-design.md` §5 instead.

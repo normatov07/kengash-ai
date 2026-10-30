@@ -25,6 +25,7 @@ const IMPORTANCE = {
   standard: { color: "#D8B24C", soft: "#2A2320" },
   simple: { color: "#68A4E0", soft: "#1B2733" },
 };
+const MAX_TAGS = 3;
 const RED_CHIPS = new Set(["loop cap hit", "token cap hit", "needs approval", "failed"]);
 const WARN_CHIPS = new Set(["stalled", "blocked", "parked"]);
 const OK_CHIPS = new Set(["ready to merge"]);
@@ -71,6 +72,9 @@ function card(item, key) {
   if (item.chip) chips.push(html`<span class="cchip ${chipTone(item.chip)}">${RED_CHIPS.has(item.chip) ? icon("bang", { size: 9, width: 2 }) : ""}${item.chip}</span>`);
   if (item.findings) chips.push(html`<span class="cchip red">${item.findings} ${item.findings === 1 ? "finding" : "findings"}</span>`);
   if (item.rejected) chips.push(html`<span class="cchip warn">plan rejected ${item.rejected}x</span>`);
+  // tags (request step 6): the first three, then how many more; untagged cards add nothing
+  for (const tag of item.tags.slice(0, MAX_TAGS)) chips.push(html`<span class="cchip plain">#${tag}</span>`);
+  if (item.tags.length > MAX_TAGS) chips.push(html`<span class="cchip plain" title="${item.tags.slice(MAX_TAGS).join(", ")}">+${item.tags.length - MAX_TAGS}</span>`);
   const diff = item.added || item.removed ? html`<span class="end cdiff">+${item.added} −${item.removed}</span>` : "";
   return html`<a class="card" href="#/ticket/${item.id}" style="border-color: ${border}; border-left-color: ${done ? "#5FC08B" : imp.color}; background: ${bg}" title="${item.title}">
     <div class="card-top">${head}</div>
@@ -82,7 +86,7 @@ function card(item, key) {
 
 function columnFoot(column) {
   const tint = TINTS[column.key] ?? TINTS.in_queue;
-  if (column.key === "in_queue") return html`<button class="col-add" type="button" data-copy="/to-ticket" data-note="Copied: run /to-ticket in your agent to cut tickets from a plan.">${icon("plus", { size: 12, width: 1.9 })}<span class="long">Add with</span> /to-ticket</button>`;
+  if (column.key === "in_queue") return html`<button class="col-add" type="button" data-copy="/kengash:ticket" data-note="Copied: run /kengash:ticket in your agent to cut tickets from a plan.">${icon("plus", { size: 12, width: 1.9 })}<span class="long">Add with</span> /kengash:ticket</button>`;
   if (column.key === "done") return html`<button class="col-open" type="button" data-only="done">Open tasks/done</button>`;
   return html`<div class="col-note" style="color: ${tint.foot[1]}">${column.footer}</div>`;
 }
@@ -164,7 +168,7 @@ export function top(data, app) {
     <label class="sr-only" for="bq">Filter tickets</label>
     <input id="bq" class="search" type="search" placeholder="Filter by title, tag or id…" value="${state.text}">
     <div class="segmented" role="group" aria-label="View">${[["board", "Board"], ["list", "List"]].map(([key, label]) => html`<button type="button" data-view="${key}" aria-pressed="${state.view === key ? "true" : "false"}">${label}</button>`)}</div>
-    <button class="btn mono accent" type="button" data-copy="/to-loop">${icon("play", { size: 13, width: 1.8 })}/to-loop</button>`;
+    <button class="btn mono accent" type="button" data-copy="/kengash:loop">${icon("play", { size: 13, width: 1.8 })}/kengash:loop</button>`;
 }
 
 export function view(data, app) {

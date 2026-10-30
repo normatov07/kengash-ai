@@ -1,5 +1,5 @@
 {
-  "name": "kengash-ai",
+  "name": "kengash",
   "version": "0.2.0",
   "description": "Plan, ticket and run many projects at once with the coding-agent subscriptions you already have, through the kengash CLI.",
   "author": { "name": "normatov13" },

@@ -1,7 +1,10 @@
-// Project settings (canvas board Settings): loop limits, token discipline, project commands
-// and the status flow of one scope, its SETTINGS.md with this scope's overrides in amber, and
-// the memory behind it: the files, the shared store and what the project sees of it.
+// Project settings (canvas board Settings): loop limits, token discipline, planning and
+// merging (SP10: real controls for the plan reviewer, grill rounds, merge mode and memory
+// compactor), project commands and the status flow of one scope, its SETTINGS.md with this
+// scope's overrides in amber, and the memory behind it: the files, the shared store and what
+// the project sees of it.
 import { get } from "../api.js";
+import { bindModelPicker, modelPicker, modelValue, segmented } from "../controls.js";
 import { clock } from "../format.js";
 import { html } from "../html.js";
 import { icon } from "../icons.js";
@@ -11,8 +14,40 @@ const state = { relink: false };
 
 export async function load(app) {
   const scope = scopeOf(app);
-  const [data, memory] = await Promise.all([loadScoped(app, "/api/settings"), get(`/api/memory?project=${encodeURIComponent(scope)}`)]);
-  return { ...data, memory };
+  const query = `?project=${encodeURIComponent(scope)}`;
+  const [data, memory, agents] = await Promise.all([loadScoped(app, "/api/settings"), get(`/api/memory${query}`), get(`/api/agents${query}&detect=0`)]);
+  return { ...data, memory, providers: agents.providers ?? [] };
+}
+
+const MERGE = [
+  ["ask", "Ask me", "Stop at awaiting merge until you say so"],
+  ["auto", "Merge", "Merge once every step passed and the main tree is clean"],
+  ["branch", "Leave the branch", "Keep the branch for you to merge"],
+];
+
+// A choice drawn with controls.js and saved through a hidden input the scope's Save reads.
+function hidden(key, value) {
+  return html`<input type="hidden" data-key="${key}" data-kind="text" data-initial="${value}" value="${value}">`;
+}
+
+function planning(data, on) {
+  const v = data.values;
+  const reviewer = pick(v, "plan.reviewer") ?? "different-provider";
+  const other = reviewer === "different-provider";
+  const merge = pick(v, "merge.mode") ?? "ask";
+  const round = pick(v, "grill.round_size") ?? 3;
+  return html`<section class="panel"><div class="panel-body planning">
+    <h2 class="section-title">Planning and merging</h2><p class="section-note">Who reviews a plan, how many questions a grill round asks, and what happens once every step passes</p>
+    <div class="setting ${on("plan.reviewer") ? "set" : ""}" data-choice="plan.reviewer"><div class="setting-label">Plan reviewer</div>
+      ${segmented({ name: "plan-reviewer-mode", value: other ? "other" : "cli", label: "Plan reviewer", options: [["other", "Another provider", "A signed-in CLI other than the planner's"], ["cli", "This CLI", "Always the CLI and model you pick"]] })}
+      <div data-reviewer-picker ${other ? "hidden" : ""}>${modelPicker({ id: "set-reviewer", cards: data.providers, value: other ? "claude" : reviewer, label: "Plan reviewer CLI and model" })}</div>
+      ${hidden("plan.reviewer", reviewer)}</div>
+    <div class="fields">
+      <div class="field ${on("plan.review_max") ? "set" : ""}"><label for="f-plan-review_max">PLAN REVIEW ROUNDS</label><input id="f-plan-review_max" class="mono" type="number" min="0" data-key="plan.review_max" data-kind="number" data-initial="${pick(v, "plan.review_max")}" value="${pick(v, "plan.review_max")}"></div>
+      <div class="field ${on("grill.round_size") ? "set" : ""}"><label for="f-grill-round_size">QUESTIONS PER GRILL ROUND</label><select id="f-grill-round_size" class="select full" data-key="grill.round_size" data-kind="number" data-initial="${round}">${[1, 2, 3, 4].map((n) => html`<option value="${n}" ${n === round ? "selected" : ""}>${n}</option>`)}</select></div>
+    </div>
+    <div class="setting ${on("merge.mode") ? "set" : ""}" data-choice="merge.mode"><div class="setting-label">When every step passes</div>${segmented({ name: "merge-mode", value: merge, label: "Merge mode", options: MERGE })}${hidden("merge.mode", merge)}</div>
+  </div></section>`;
 }
 
 // The dotted key each line of SETTINGS.md sets, from indentation; continuation lines of a
@@ -171,8 +206,10 @@ export function view(data, app) {
         <section class="panel"><div class="panel-body">
           <h2 class="section-title">Token discipline</h2><p class="section-note">Caps checked when a skill or memory file is written, so reads stay cheap</p>
           <div class="fields">${num("skill.max_lines", "SKILL LINES", { min: 1 })}${num("skill.max_words", "SKILL WORDS", { min: 1 })}${num("memory.compact_at_lines", "COMPACT AT", { min: 10 })}</div>
+          <div class="setting ${on("memory.compactor") ? "set" : ""}" data-choice="memory.compactor"><div class="setting-label">Memory compactor</div>${modelPicker({ id: "set-compactor", cards: data.providers, value: pick(v, "memory.compactor") ?? "claude/haiku", label: "Memory compactor CLI and model" })}${hidden("memory.compactor", pick(v, "memory.compactor") ?? "claude/haiku")}</div>
           <div class="checks">${box("review.diff_only", "Reviewers read the diff only")}${box("sessions.reuse", "Reuse each ticket's CLI session per role across loops")}</div>
         </div></section>
+        ${data.problem ? "" : planning(data, on)}
         <section class="panel"><div class="panel-body">
           <h2 class="section-title">Project commands</h2><p class="section-note">What test steps and reviewers run; empty means the project has none</p>
           <div class="fields">${text({ key: "project.test_cmd", label: "TEST COMMAND", value: pick(v, "project.test_cmd"), setHere: on("project.test_cmd"), placeholder: "uv run pytest -q" })}${text({ key: "project.lint_cmd", label: "LINT COMMAND", value: pick(v, "project.lint_cmd"), setHere: on("project.lint_cmd"), placeholder: "uv run ruff check" })}</div>
@@ -195,6 +232,23 @@ export function view(data, app) {
 
 export function bind(root, app, data, bar) {
   bindScope(root, app, { setHere: data.set_here, bar });
+  const store = (key, value) => {
+    const input = root.querySelector(`[data-choice="${key}"] input[type=hidden]`);
+    input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const reviewer = root.querySelector("#set-reviewer");
+  if (reviewer) bindModelPicker(reviewer, data.providers, (value) => store("plan.reviewer", value));
+  const compactor = root.querySelector("#set-compactor");
+  if (compactor) bindModelPicker(compactor, data.providers, (value) => store("memory.compactor", value));
+  root.addEventListener("change", (event) => {
+    if (event.target.name === "plan-reviewer-mode") {
+      const other = event.target.value === "other";
+      root.querySelector("[data-reviewer-picker]").hidden = other;
+      store("plan.reviewer", other ? "different-provider" : modelValue(reviewer));
+    }
+    if (event.target.name === "merge-mode") store("merge.mode", event.target.value);
+  });
   root.addEventListener("click", async (event) => {
     if (event.target.closest("[data-relink-open]")) {
       state.relink = true;

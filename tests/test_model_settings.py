@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
@@ -5,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from kengash_ai.model import PROVIDERS, Event, ProviderOptions, Settings, split_cli
+from kengash_ai.model.settings import BUILTIN_SKILLS
 
 AGENTS: dict[str, Any] = {
     "planner": {"cli": "claude/opus", "skill": "plan"},
@@ -180,3 +182,77 @@ def test_the_legacy_gemini_slot_is_dropped() -> None:
     settings = Settings.model_validate({"sessions": {"per_provider": legacy}})
     assert settings.sessions.per_provider == {"claude": 3, "codex": 3, "antigravity": 2}
     assert Settings().sessions.per_provider == {"claude": 3, "codex": 3, "antigravity": 2}
+
+
+FLOWS: dict[str, Any] = {
+    "simple": {"steps": ["plan", "implement", "review_code"]},
+    "standard": {"steps": ["plan", "implement", "review_code"]},
+    "critical": {"steps": ["plan", "implement", "review_code"]},
+}
+
+
+def test_builtin_skills_are_fixed() -> None:
+    agents = {**AGENTS, "planner": {"cli": "claude", "skill": "other"}}
+    message = (
+        "agents.planner.skill is fixed at plan; set it back, or copy the agent "
+        "(kengash agent copy planner <new>) to change what it does"
+    )
+    with pytest.raises(ValidationError, match=re.escape(message)):
+        Settings.model_validate({"agents": agents})
+    assert BUILTIN_SKILLS["security-reviewer"] == "review-security"
+
+
+def test_routing_defaults_and_validation() -> None:
+    plain = Settings.model_validate({"agents": AGENTS, "workflows": FLOWS})
+    assert plain.workflow_for("critical") == "critical"
+    hotfix = {**FLOWS, "hotfix": {"steps": ["implement"]}}
+    routed = Settings.model_validate(
+        {"agents": AGENTS, "workflows": hotfix, "routing": {"critical": "hotfix"}}
+    )
+    assert routed.workflow_for("critical") == "hotfix" and routed.workflow_for("simple") == "simple"
+    with pytest.raises(ValidationError, match=re.escape("routing.critical: no workflow hotfix")):
+        Settings.model_validate(
+            {"agents": AGENTS, "workflows": FLOWS, "routing": {"critical": "hotfix"}}
+        )
+    with pytest.raises(ValidationError, match="routing: unknown importance urgent"):
+        Settings.model_validate(
+            {"agents": AGENTS, "workflows": FLOWS, "routing": {"urgent": "simple"}}
+        )
+
+
+def test_on_fail_sends_back_only() -> None:
+    flow = {"steps": ["plan", "implement", "review_code"], "on_fail": {"plan": "review_code"}}
+    message = "on_fail edges must send back to an earlier step: plan->review_code"
+    with pytest.raises(ValidationError, match=re.escape(message)):
+        Settings.model_validate({"agents": AGENTS, "workflows": {"x": flow}})
+
+
+def test_workflow_names() -> None:
+    with pytest.raises(
+        ValidationError, match=re.escape("workflow name must match [a-z][a-z0-9_-]{0,30}")
+    ):
+        Settings.model_validate({"agents": AGENTS, "workflows": {"Hot Fix": {"steps": ["plan"]}}})
+    assert Settings.model_validate(
+        {"agents": AGENTS, "workflows": {"hot-fix_2": {"steps": ["plan"]}}}
+    )
+
+
+def test_a_step_appears_once() -> None:
+    with pytest.raises(ValidationError, match=re.escape("workflows.x: step plan appears twice")):
+        Settings.model_validate({"agents": AGENTS, "workflows": {"x": {"steps": ["plan", "plan"]}}})
+
+
+@pytest.mark.parametrize("cli", ["claude/", "claude/opus 4", "claude/" + "x" * 101])
+def test_models_are_one_word(cli: str) -> None:
+    with pytest.raises(ValidationError, match=re.escape(f"model must be one word: {cli}")):
+        Settings.model_validate(
+            {"agents": {**AGENTS, "implementer": {"cli": cli, "skill": "implement"}}}
+        )
+
+
+def test_model_names_may_carry_brackets_and_dots() -> None:
+    agents = {**AGENTS, "implementer": {"cli": "claude/opus[1m]", "skill": "implement"}}
+    assert (
+        Settings.model_validate({"agents": agents}).agents["implementer"].cli == "claude/opus[1m]"
+    )
+    assert Settings.model_validate({"memory": {"compactor": "antigravity/gemini-3.8-flash-low"}})

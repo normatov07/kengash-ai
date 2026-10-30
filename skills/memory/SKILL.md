@@ -1,5 +1,5 @@
 ---
-name: kengash-memory
+name: memory
 description: Use when the user states a lasting preference, working style or goal, turns an approach down for good, or a design decision is made that later sessions must respect, such as "from now on", "always", "never", "remember that" or "we decided".
 metadata: {source: kengash-ai}
 ---

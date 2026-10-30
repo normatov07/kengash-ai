@@ -1,7 +1,7 @@
 """Seed a demo store for checking the UI (SP5 spec decision 11).
 
-    uv run python scripts/demo_store.py /tmp/harness-demo
-    HARNESS_HOME=/tmp/harness-demo/.harness uv run harness ui open
+    uv run python scripts/demo_store.py /tmp/kengash-demo
+    KENGASH_HOME=/tmp/kengash-demo/.kengash uv run kengash ui open
 
 Builds three scratch repos, registers them, and writes plans, tickets in every column,
 journal events with token counts and diffs, held slots and a conductor ping, settings
@@ -23,6 +23,7 @@ TICKETS: list[dict[str, Any]] = [
     {
         "p": 0,
         "id": "4f2a1b7c",
+        "tags": ["webhooks"],
         "title": "Retry webhook delivery with backoff",
         "imp": "standard",
         "status": "in_process/under_implementation",
@@ -35,6 +36,7 @@ TICKETS: list[dict[str, Any]] = [
     {
         "p": 1,
         "id": "91c7a0d3",
+        "tags": ["ui", "sse", "realtime", "board"],
         "title": "Stream loop events to the board over SSE",
         "imp": "standard",
         "status": "in_process/under_review",
@@ -185,15 +187,21 @@ def commit_work(repo: Path, ticket: Any) -> None:
         (repo / name).write_text(body, encoding="utf-8")
         git(repo, "add", name)
         trailers = (
-            f"Harness-Ticket: {ticket.uuid}\nHarness-Step: implement\n"
-            f"Harness-Loop: {loop}\nHarness-Model: codex/gpt-5-codex"
+            f"Kengash-Ticket: {ticket.uuid}\nKengash-Step: implement\n"
+            f"Kengash-Loop: {loop}\nKengash-Model: codex/gpt-5-codex"
         )
-        git(repo, "commit", "-q", "-m", f"{ticket.id}: loop {loop}\n\n{trailers}")
+        git(
+            repo,
+            "commit",
+            "-q",
+            "-m",
+            f"kg({ticket.id}): loop {loop} implement: add {name}\n\n{trailers}",
+        )
     git(repo, "checkout", "-q", "main")
 
 
 def main(root: Path) -> int:
-    os.environ["HARNESS_HOME"] = str(root / ".harness")
+    os.environ["KENGASH_HOME"] = str(root / ".kengash")
     from kengash_ai import journal, memory
     from kengash_ai.model import (
         ConductorPing,
@@ -258,7 +266,8 @@ def main(root: Path) -> int:
                 "loop": item["loop"],
                 "loop_max": item["max"],
                 "touches": item["touches"],
-                "branch": f"hrn/{item['id']}",
+                "tags": item.get("tags", []),
+                "branch": f"kg/{item['id']}",
                 "tokens": (9000 + 3400 * item["loop"]) * item["loop"],
                 "created": now - timedelta(hours=3),
                 "updated": updated,
@@ -348,7 +357,7 @@ def main(root: Path) -> int:
     )
     runtime.save_slots(paths, SlotTable(held=slots))
     runtime.save_ping(paths, ConductorPing(pid=os.getpid(), agent="claude", project=None))
-    print(f"demo store at {paths.home}; run: HARNESS_HOME={paths.home} uv run harness ui open")
+    print(f"demo store at {paths.home}; run: KENGASH_HOME={paths.home} uv run kengash ui open")
     return 0
 
 

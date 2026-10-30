@@ -156,8 +156,10 @@ def test_detect_and_attach(fake_clis: FakeClis) -> None:
         True,
         "claude.ai",
     )
+    assert status.models == ["fable", "opus", "sonnet", "haiku"]
     fake_clis.sign_out("claude")
     assert Claude().detect().hint == "run `claude` and sign in with /login"
+    assert Claude().detect().models == []
     fake_clis.hide("claude")
     assert Claude().detect().installed is False
     assert Claude().attach_command("s-1") == ["claude", "--resume", "s-1"]

@@ -29,11 +29,11 @@ export function field({ key, label, value, setHere, min = 0, max, step = 1, wide
   </div>`;
 }
 
-export function text({ key, label, value, setHere, placeholder = "", list = "" }) {
+export function text({ key, label, value, setHere, placeholder = "" }) {
   const id = `f-${key.replaceAll(".", "-")}`;
   return html`<div class="field wide ${setHere ? "set" : ""}">
     <label for="${id}">${label}</label>
-    <input id="${id}" class="mono" type="text" data-key="${key}" data-kind="text" data-initial="${value ?? ""}" value="${value ?? ""}" placeholder="${placeholder}" ${list ? html`list="${list}"` : ""}>
+    <input id="${id}" class="mono" type="text" data-key="${key}" data-kind="text" data-initial="${value ?? ""}" value="${value ?? ""}" placeholder="${placeholder}">
     ${setMark(setHere)}
   </div>`;
 }

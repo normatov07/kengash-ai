@@ -51,3 +51,25 @@ def test_next_prints_at_most_five_lines(
     lines = runner.invoke(app, ["next"]).stdout.splitlines()
     assert len(lines) == 5
     assert lines[-1] == "+3 more; run: kengash next --json"
+
+
+def test_next_and_lists_take_a_project_folder(
+    inside_registered_repo: Path, store_paths: StorePaths, make_ticket: Make, tmp_path: Path
+) -> None:
+    documents.save_ticket(store_paths.project("payments-api"), make_ticket())
+    by_name = runner.invoke(app, ["next", "-p", "payments-api"])
+    by_folder = runner.invoke(app, ["next", "-p", str(inside_registered_repo)])
+    assert by_name.exit_code == by_folder.exit_code == 0
+    assert (
+        by_folder.stdout
+        == by_name.stdout
+        == "7b55e0c1 payments-api critical plan→claude Rotate keys\n"
+    )
+    listed = runner.invoke(app, ["ticket", "list", "-p", "."])
+    assert listed.stdout.startswith("7b55e0c1 in_queue/ready critical payments-api: ")
+    stranger = tmp_path / "stranger"
+    stranger.mkdir()
+    refused = runner.invoke(app, ["next", "-p", str(stranger)])
+    assert refused.exit_code == 4
+    assert refused.stderr == f"not a kengash project: {stranger}; run: kengash init {stranger}\n"
+    assert runner.invoke(app, ["next", "-p", "nope"]).exit_code == 1

@@ -1,6 +1,6 @@
 ---
-name: open-ui
-description: Use when the user runs /open-ui to see their projects, tickets, workflows, agents and memory in the local kengash web UI.
+name: ui
+description: Use when the user runs /kengash:ui to see their projects, tickets, workflows, agents and memory in the local kengash web UI.
 disable-model-invocation: true
 metadata: {source: kengash-ai}
 ---

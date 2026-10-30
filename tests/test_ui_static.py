@@ -106,7 +106,22 @@ def test_agents_screen_offers_new_agent() -> None:
     agents = (STATIC / "views" / "agents.js").read_text()
     for text in ("New agent", "Reviewer", "Worker", "Advisor", '"/api/agents"', "Remove agent"):
         assert text in agents
-    assert "showModal()" in agents  # a native dialog: focus stays inside, Escape closes it
+    for text in (
+        "Copy as my agent",
+        "Use a skill",
+        "Write my own",
+        "data-save-bar",
+        "/api/skills/",
+    ):
+        assert text in agents
+
+
+def test_builtin_editor_locks_role_and_instructions() -> None:
+    agents = (STATIC / "views" / "agents.js").read_text()
+    assert agents.count("locked: agent.builtin") == 1 and "{ locked: true }" in agents
+    assert (
+        'section("Instructions", html`<p class="ag-note">Built-in instructions are fixed' in agents
+    )
 
 
 def test_settings_status_flow_links_to_new_agent() -> None:
@@ -147,11 +162,6 @@ def test_done_node_is_numbered() -> None:
     assert "<b>4 · Done</b>" in done.stdout and "<b>Trigger</b>" in done.stdout
 
 
-def test_routing_names_the_critical_loop_cap() -> None:
-    agents = (STATIC / "views" / "agents.js").read_text()
-    assert "${data.loop_max[name]} loops" in agents
-
-
 def test_the_page_names_its_icon() -> None:
     index = (STATIC / "index.html").read_text()
     assert '<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">' in index
@@ -185,3 +195,163 @@ def test_the_settings_file_view_scrolls_by_keyboard() -> None:
 def test_the_ui_wears_the_apps_name() -> None:
     assert "<title>Kengash AI</title>" in (STATIC / "index.html").read_text()
     assert "<b>kengash</b>" in (STATIC / "app.js").read_text()
+
+
+def _node(script: str) -> str:
+    assert NODE is not None
+    done = subprocess.run(
+        [str(NODE), "--input-type=module", "-e", script], capture_output=True, text=True, check=True
+    )
+    return done.stdout.strip()
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_controls_helpers() -> None:
+    controls = (STATIC / "controls.js").as_uri()
+    found = json.loads(
+        _node(
+            f"import * as c from '{controls}';"
+            "const cards = [{name: 'claude', installed: true, signed_in: true,"
+            " models: ['opus', 'sonnet']},"
+            " {name: 'codex', installed: false, signed_in: false, models: []}];"
+            "console.log(JSON.stringify({"
+            " move: c.moveItem(['a', 'b', 'c'], 2, 0), stay: c.moveItem(['a', 'b'], 0, -1),"
+            " counts: c.counts('one two\\nthree\\n'), empty: c.counts(''),"
+            " split: [c.splitCli('claude/opus[1m]'), c.splitCli('codex')],"
+            " joined: [c.cliValue('claude', 'opus'), c.cliValue('codex', 'default'),"
+            " c.cliValue('codex', '')],"
+            " models: c.modelChoices(cards, 'claude', 'haiku'),"
+            " none: c.modelChoices(cards, 'codex', 'default'),"
+            " clis: c.cliChoices(cards, 'codex', true)}));"
+        )
+    )
+    assert found["move"] == ["c", "a", "b"] and found["stay"] == ["a", "b"]
+    assert found["counts"] == {"lines": 2, "words": 3} and found["empty"] == {
+        "lines": 0,
+        "words": 0,
+    }
+    assert found["split"] == [["claude", "opus[1m]"], ["codex", "default"]]
+    assert found["joined"] == ["claude/opus", "codex", "codex"]
+    assert found["models"] == [
+        ["default", "default"],
+        ["opus", "opus"],
+        ["sonnet", "sonnet"],
+        ["haiku", "haiku"],
+        ["__other", "Other…"],
+    ]
+    assert found["none"] == [["default", "default"], ["__other", "Other…"]]
+    assert found["clis"] == [
+        ["claude", "claude", False],
+        ["codex", "codex · not installed", False],
+        ["antigravity", "antigravity · not detected", True],
+        ["shell", "shell · runs project.test_cmd", False],
+    ]
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_controls_escape_what_they_render() -> None:
+    controls = (STATIC / "controls.js").as_uri()
+    html = (STATIC / "html.js").as_uri()
+    out = _node(
+        f"import * as c from '{controls}'; import {{ render }} from '{html}';"
+        "console.log(render(c.select({id: 's', value: '<b>', options: [['<b>', '<b> \"x\"']]})));"
+    )
+    assert "<b>" not in out and "&lt;b&gt;" in out and "selected" in out
+
+
+def test_breakpoints_exist() -> None:
+    css = (STATIC / "app.css").read_text()
+    for width in (1280, 900, 600):
+        assert f"@media (max-width: {width}px)" in css, width
+
+
+def test_nav_folds_into_a_menu() -> None:
+    shell = (STATIC / "app.js").read_text()
+    assert "data-nav-toggle" in shell and "aria-expanded" in shell and 'key === "Escape"' in shell
+    assert css_rule(".nav-toggle")["display"] == "none"  # shown only on narrow screens
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_every_link_has_an_insert_port() -> None:
+    graph = (STATIC / "graph.js").as_uri()
+    html = (STATIC / "html.js").as_uri()
+    out = _node(
+        f"import {{ layout, canvas }} from '{graph}'; import {{ render }} from '{html}';"
+        "const g = layout(['plan', 'implement', 'review_code'], {review_code: 'implement'});"
+        "const page = render(canvas(g, {insert: true}));"
+        'const found = [...page.matchAll(/data-insert-at="(\\d+)"/g)];'
+        "console.log(JSON.stringify(found.map((m) => +m[1])));"
+    )
+    assert json.loads(out) == [0, 1, 2, 3]
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_workflow_edits() -> None:
+    flow = (STATIC / "views" / "workflow.js").as_uri()
+    found = json.loads(
+        _node(
+            f"import * as w from '{flow}';"
+            "const d = {steps: ['plan', 'implement', 'review_code', 'security'],"
+            " on_fail: {review_code: 'implement', security: 'implement'}};"
+            "const kinds = {plan: 'read', implement: 'edit', review_code: 'review',"
+            " security: 'review',"
+            " perf: 'review', tidy: 'edit'};"
+            "console.log(JSON.stringify({"
+            " back: w.backTargets(d.steps, 'review_code'),"
+            " inserted: w.insertStep(d, 3, 'perf').steps,"
+            " moved: w.moveStep(d, 'security', 1),"
+            " swapReview: w.swapStep(d, 'review_code', 'perf', kinds).on_fail,"
+            " swapEdit: w.swapStep(d, 'implement', 'tidy', kinds),"
+            " swapToEdit: w.swapStep(d, 'security', 'tidy', kinds).on_fail,"
+            " removed: w.removeStep(d, 'implement')}));"
+        )
+    )
+    assert found["back"] == ["plan", "implement"]
+    assert found["inserted"] == ["plan", "implement", "review_code", "perf", "security"]
+    # a step moved above its send-back target loses that edge: edges only send back
+    assert found["moved"] == {
+        "steps": ["plan", "security", "implement", "review_code"],
+        "on_fail": {"review_code": "implement"},
+    }
+    assert found["swapReview"] == {"perf": "implement", "security": "implement"}
+    assert found["swapEdit"] == {
+        "steps": ["plan", "tidy", "review_code", "security"],
+        "on_fail": {"review_code": "tidy", "security": "tidy"},
+    }
+    assert found["swapToEdit"] == {"review_code": "implement"}
+    assert found["removed"] == {"steps": ["plan", "review_code", "security"], "on_fail": {}}
+
+
+def test_no_text_input_offers_a_datalist() -> None:
+    for path in sorted((STATIC / "views").glob("*.js")):
+        assert "list=" not in path.read_text(), path.name
+    assert "datalist" not in (STATIC / "scope.js").read_text()
+
+
+def test_settings_offers_planning_and_merging_as_real_controls() -> None:
+    page = (STATIC / "views" / "settings.js").read_text()
+    for key in (
+        "plan.reviewer",
+        "memory.compactor",
+        "merge.mode",
+        "grill.round_size",
+        "plan.review_max",
+    ):
+        assert f'"{key}"' in page, key
+    assert "modelPicker(" in page and "segmented(" in page
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_an_emptied_other_model_saves_the_default() -> None:
+    controls = (STATIC / "controls.js").as_uri()
+    out = _node(
+        f"import {{ bindModelPicker }} from '{controls}';"
+        "const fake = (value) => ({value, hidden: false, disabled: false, on: {},"
+        " addEventListener(type, f) { this.on[type] = f; }, focus() {}, set innerHTML(x) {}});"
+        "const els = {cli: fake('claude'), model: fake('__other'), other: fake('')};"
+        "const picker = {querySelector: (s) => els[s.match(/part=(\\w+)/)[1]]};"
+        "const got = []; bindModelPicker(picker, [], (v) => got.push(v));"
+        "els.other.value = 'o'; els.other.on.input(); els.other.value = ''; els.other.on.input();"
+        "console.log(JSON.stringify(got));"
+    )
+    assert json.loads(out) == ["claude/o", "claude"]

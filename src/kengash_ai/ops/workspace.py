@@ -7,7 +7,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from kengash_ai import memory, settings
-from kengash_ai.model import Folder, Settings, UserError
+from kengash_ai.model import Folder, NeedsSetup, Settings, UserError
 from kengash_ai.ops import compaction
 from kengash_ai.ops.records import repo_root
 from kengash_ai.store import documents
@@ -46,6 +46,26 @@ def resolve_slug(project: str | None, cwd: Path, paths: StorePaths | None = None
         if here == entry.path or entry.path in here.parents:
             return slug
     return None
+
+
+def project_slug(value: str, cwd: Path, paths: StorePaths | None = None) -> str:
+    """A `--project` value as a slug (SP9 spec decision 1): a registered slug as is, else a
+    folder inside a registered repo, the deepest repo when registered repos nest."""
+    paths = paths or StorePaths.default()
+    registry = load_registry(paths)
+    if value in registry.projects:
+        return value
+    folder = (cwd / Path(value).expanduser()).resolve()
+    if not folder.is_dir():
+        raise UserError(f"unknown project: {value}")
+    holders = [
+        (len(entry.path.parts), slug)
+        for slug, entry in registry.projects.items()
+        if folder == entry.path or entry.path in folder.parents
+    ]
+    if not holders:
+        raise NeedsSetup(f"not a kengash project: {folder}; run: kengash init {folder}")
+    return max(holders)[1]
 
 
 def settings_for(project: str | None, cwd: Path) -> Settings:

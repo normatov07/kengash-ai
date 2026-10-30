@@ -1,5 +1,7 @@
 from typing import Any
 
+import pytest
+
 from kengash_ai.model import Settings
 from kengash_ai.workflow import (
     AWAITING_MERGE,
@@ -17,6 +19,7 @@ from kengash_ai.workflow import (
     approve,
     before,
     fingerprint,
+    first_step,
     steps_for,
 )
 
@@ -200,3 +203,33 @@ def test_a_custom_step_follows_its_agents_switches() -> None:
     assert steps_for(custom(on=False), "standard", hitl=False)[-1] == "review_code"
     halted = before(custom(on=False, blocking=True), progress("perf_review"))
     assert halted.decision == Halt(FAILED, "role perf-reviewer is off and blocking")
+
+
+HELPER = {"helper": {"cli": "claude/sonnet", "skill": "helper"}}
+ADVISE = {"advise": {"role": "helper", "kind": "read", "does": "Note the risks."}}
+
+
+@pytest.mark.parametrize(
+    "order",
+    [
+        ["advise", "plan", "implement", "review_code"],
+        ["plan", "advise", "implement", "review_code"],
+        ["plan", "implement", "review_code", "advise"],
+        ["plan", "implement", "advise", "approve", "review_code"],
+    ],
+)
+def test_custom_agent_runs_anywhere(order: list[str]) -> None:
+    flows = WORKFLOWS | {"standard": {"steps": order}}
+    resolved = settings(HELPER, steps=ADVISE, workflows=flows)
+    assert first_step(resolved, "standard", hitl=False) == order[0]
+    walked: list[str] = []
+    routed = before(resolved, progress(order[0]))
+    while isinstance(routed.decision, Run):  # as the worker does: before() ahead of each step
+        walked.append(routed.decision.step)
+        routed = after(resolved, routed.progress, PASS)
+        if isinstance(routed.decision, Run):
+            routed = before(resolved, routed.progress)
+    stop = order.index("approve") if "approve" in order else len(order)
+    assert walked == order[:stop]
+    expected = Halt(NEEDS_APPROVAL, "waiting for the user's approval", "approve_step")
+    assert routed.decision == (expected if "approve" in order else DONE)

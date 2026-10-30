@@ -1,12 +1,14 @@
 ---
-name: to-loop
-description: Use when the user runs /to-loop to have the queued tickets of their projects worked, reviewed and merged.
+name: loop
+description: Use when the user runs /kengash:loop to have the queued tickets of their projects worked, reviewed and merged.
 disable-model-invocation: true
 metadata: {source: kengash-ai}
 ---
 # Run the ticket loop
 
 Workers do the tickets; you start them, wait, and bring the user each decision. Use the shell only for the `kengash` commands below, each as its own call with nothing chained before or after it. Never edit the repo's files or the `.kengash` store yourself.
+
+`/kengash:loop <project>` (a name or folder) scopes the loop: add `-p <project>` to every `kengash next`, `kengash wait` and `kengash status` below. Plain `/kengash:loop` covers every project. On exit 4 `not a kengash project`, ask whether to register that folder; only on yes, run `kengash init <folder>`, then retry.
 
 0. Run `kengash --version`. If it does not print `kengash-ai <version>`, say "Install Kengash AI first: uv tool install kengash-ai" and stop.
 1. Run `kengash doctor --quiet`. Show the user any problem it prints; warnings do not stop the loop.
@@ -19,7 +21,7 @@ Workers do the tickets; you start them, wait, and bring the user each decision. 
    |---|---|
    | `awaiting_merge` | ask the user; on yes, `kengash merge <id>` |
    | `needs_approval` | explain the detail (loop or token cap, approval step); on yes, `kengash approve <id>` (`--loops N` for more loops) |
-   | `stalled` | show `kengash ticket show <id>` findings; offer to re-plan with `/to-plan` or to retry with `kengash run <id>` |
+   | `stalled` | show `kengash ticket show <id>` findings; offer to re-plan with `/kengash:plan` or to retry with `kengash run <id>` |
    | `failed` | show the reason; once it is fixed (for example a sign-in), `kengash run <id>` |
    | `done/…` or `merged` | tell the user |
 

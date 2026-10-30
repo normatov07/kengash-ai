@@ -11,6 +11,7 @@ from conftest import Engine, Events
 from kengash_ai import journal
 from kengash_ai.model import (
     Event,
+    JournalCursor,
     PlanMode,
     PlanStatus,
     SlotEntry,
@@ -160,3 +161,34 @@ def test_kengash_agent_wins_over_the_old_name(
     waiting.ping(store_paths, "payments-api")
     [ping] = [json.loads(p.read_text()) for p in store_paths.conductors.glob("[0-9]*.json")]
     assert ping["agent"] == "claude"
+
+
+def test_wait_is_never_idle_over_a_gate_its_worker_is_journaling(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A worker saves its ticket at a gate, journals the gate, then exits; a `wait` that read
+    the journal just before that event must report it, not `idle`."""
+    runtime.save_worker(
+        engine.paths, WorkerRecord(id="7b55e0c1", project=engine.slug, pid=os.getpid())
+    )
+    waiting.wait(None, timeout=0.1)  # sets the cursor
+    real_read = journal.read_after
+    finished: list[bool] = []
+
+    def read_then_the_worker_finishes(
+        paths: StorePaths, cursor: JournalCursor
+    ) -> tuple[list[Event], JournalCursor]:
+        found = real_read(paths, cursor)
+        if not finished:
+            finished.append(True)
+            doc = engine.ticket()
+            before, doc.meta.status = doc.meta.status, "in_process/awaiting_merge"
+            documents.save_ticket(engine.paths.project(engine.slug), doc)
+            event = lifecycle.status_event(engine.slug, doc.meta, before, "every step passed")
+            journal.append(engine.paths, event)
+            runtime.drop_worker(engine.paths, "7b55e0c1")
+        return found
+
+    monkeypatch.setattr(journal, "read_after", read_then_the_worker_finishes)
+    result = waiting.wait(None, timeout=2, poll_s=0.05)
+    assert [(e.id, e.status) for e in result.events] == [("7b55e0c1", "in_process/awaiting_merge")]

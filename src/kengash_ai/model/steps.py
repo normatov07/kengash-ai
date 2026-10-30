@@ -173,6 +173,7 @@ class ProviderStatus(_Step):
     signed_in: bool = False
     auth_method: str | None = None
     hint: str = ""
+    models: list[str] = []  # what `--model` takes, when the CLI says (SP10 §5.2)
 
     @property
     def usable(self) -> bool:

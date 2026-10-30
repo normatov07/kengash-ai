@@ -109,6 +109,7 @@ class CliProvider(ABC):
     binary: str
     install_hint: str
     signin_hint: str
+    MODELS: tuple[str, ...] = ()  # the model names the CLI takes, when they are fixed
 
     @abstractmethod
     def command(self, req: StepRequest) -> list[str]: ...
@@ -125,6 +126,10 @@ class CliProvider(ABC):
 
     def recover_session(self, log: Path) -> str | None:
         return None
+
+    def models(self) -> list[str]:
+        """Model names for `--model`, offered in the UI's pickers; read after `signed_in`."""
+        return list(self.MODELS)
 
     def run(self, req: StepRequest) -> StepResult:
         size = len(req.prompt.encode()) + len((req.skill or "").encode())
@@ -158,4 +163,5 @@ class CliProvider(ABC):
             signed_in=signed_in,
             auth_method=method,
             hint="" if signed_in else self.signin_hint,
+            models=self.models() if signed_in else [],
         )

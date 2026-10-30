@@ -53,7 +53,7 @@ Each milestone is planned just before it is built (`docs/superpowers/plans/`), e
 32. **DECISIONS archive.** When `memory add --decision` takes DECISIONS.md past 300 lines, its oldest entries move, oldest first, to `memory/archive/DECISIONS.md` until it has 300 lines again; the `memory.write` event counts them (`archived`).
 33. **Job workers.** Plan-review and compaction workers write `workers/<id>.json` with their `job`, heartbeat like ticket workers, and journal `worker.exited` (`job`, `ok: false`, `reason`) when they fail. The dead-worker check drops a dead job's record, frees its slot and journals `worker.exited` "worker died". `wait` reports `plan.reviewed` events, a reviewed plan awaiting approval counts as an open gate, and a running plan review counts as running work.
 34. **Resuming a stalled ticket** clears its stall streaks and its failing `review_plan` rounds.
-35. **Live smoke** runs with `uv run pytest -m live` (or `make live`), never in `make check`. For each provider installed and signed in: one ticket through plan → implement → review_code → merge, one plan-review round and one compaction, on claude `haiku`, agy `gemini-3.8-flash-low` or codex's default (`HARNESS_LIVE_<PROVIDER>_MODEL` overrides).
+35. **Live smoke** runs with `uv run pytest -m live` (or `make live`), never in `make check`. For each provider installed and signed in: one ticket through plan → implement → review_code → merge, one plan-review round and one compaction, on claude `haiku`, agy `gemini-3.8-flash-low` or codex's default (`KENGASH_LIVE_<PROVIDER>_MODEL` overrides).
 
 ## 3. Units
 

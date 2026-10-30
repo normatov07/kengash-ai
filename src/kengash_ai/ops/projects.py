@@ -10,7 +10,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from kengash_ai.model import NeedsSetup, Plan, ProjectEntry, Ticket, UserError, utc_now
-from kengash_ai.ops import jobs, providers, waiting
+from kengash_ai.ops import jobs, providers, skills, waiting
 from kengash_ai.ops.records import repo_root
 from kengash_ai.store import documents, links, migrate, seed, storegit
 from kengash_ai.store.locks import locked
@@ -121,6 +121,32 @@ def doctor(
         notice = providers.trust_notice(paths, slug, entry.path) if entry.path.is_dir() else None
         if notice is not None:
             problems.append(Problem(notice, slug, warning=True))
+    copies: dict[Path, list[str]] = {}
+    for copy in skills.ignored_copies(paths):
+        copies.setdefault(copy.parent, []).append(copy.name)
+    for folder, names in copies.items():
+        listed = f"built-in skill copies in {folder} ({', '.join(names)})"
+        if fix:  # the store is a git repo: its history keeps what this removes
+            for name in names:
+                shutil.rmtree(folder / name)
+            removed = f"removed ignored {listed}; the store's git history keeps them"
+            problems.append(Problem(removed, fixed=True))
+        else:
+            hint = (
+                "built-in skills are fixed; copy the agent to change one, "
+                "or run: kengash doctor --fix"
+            )
+            problems.append(Problem(f"ignored {listed}: {hint}", warning=True))
+    if fix and copies:
+        storegit.commit_store(paths, "kengash: doctor removes ignored built-in skill copies")
+    repos = [entry.path for _, entry in sorted(registry.projects.items()) if entry.path.is_dir()]
+    home = skills.home_folder()
+    for root in [*repos, home]:
+        scope = " --global" if root == home else ""
+        for folder, agent in skills.old_installs([root]):
+            hint = f"run: kengash skills install --agent {agent}{scope}"
+            message = f"old kengash skill names installed in {folder}; {hint}"
+            problems.append(Problem(message, warning=True))
     if scan is not None:
         known = {entry.path.resolve() for entry in registry.projects.values()}
         for found in real_folders(scan.resolve(), SCAN_DEPTH):

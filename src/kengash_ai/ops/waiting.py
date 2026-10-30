@@ -105,12 +105,15 @@ def wait(project: str | None, *, timeout: float, poll_s: float = 1.0) -> WaitRes
             return WaitResult(events=gates)
     deadline = time.monotonic() + timeout
     while True:
+        # checked before the read: a worker journals its last event before it exits, so once
+        # nothing runs, every event that ended the work is already in the journal
+        running = _running(paths, slugs)
         events, cursor = journal.read_after(paths, cursor)
         runtime.save_cursor(paths, scope, cursor)
         found = [_wait_event(paths, event) for event in events if _wanted(event, slugs)]
         if found:
             return WaitResult(events=found)
-        if not _running(paths, slugs):
+        if not running:
             return WaitResult(idle=True)
         remaining = deadline - time.monotonic()
         if remaining <= 0:
@@ -175,14 +178,13 @@ def _open_gates(paths: StorePaths, slugs: list[str]) -> list[WaitEvent]:
 
 
 def _running(paths: StorePaths, slugs: list[str]) -> bool:
-    """A ticket in scope is running a step, or a plan review in scope is running."""
-    reviewing = any(
-        record.job == "plan-review"
-        and record.project in slugs
-        and jobs.alive(paths, record.id) is not None
+    """A ticket in scope is running a step, or a worker in scope (a ticket's or a plan
+    review's) is still alive: one that just saved its ticket at a gate journals it next."""
+    working = any(
+        record.project in slugs and jobs.alive(paths, record.id) is not None
         for record in runtime.load_workers(paths)
     )
-    return reviewing or any(
+    return working or any(
         doc.meta.folder is Folder.in_process and doc.meta.sub_status not in NOT_RUNNING
         for slug in slugs
         for doc in records.project_tickets(paths, slug).values()

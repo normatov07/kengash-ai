@@ -61,6 +61,10 @@ workflows:
   critical: {steps: [plan, review_plan, implement, review_code, security],
              on_fail: {review_plan: plan, review_code: implement, security: implement}}
 
+# routing: the workflow a new ticket of each importance runs; an importance left out runs
+# the workflow of its own name. Any other workflow is picked per ticket.
+# routing: {simple: simple, standard: standard, critical: hotfix}
+
 # sub-status shown while a step runs
 status.names: {plan: under_planning, review_plan: under_plan_review, implement: under_implementation,
                review_code: under_review, security: under_security_review, run_tests: under_test,

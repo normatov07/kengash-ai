@@ -1,4 +1,4 @@
-"""Time each UI view against a store: `uv run python scripts/bench_views.py ~/.harness`.
+"""Time each UI view against a store: `uv run python scripts/bench_views.py ~/.kengash`.
 
 Manual, not in CI: timings depend on the machine. SP7 targets every view under 1 s warm on
 a store of 1,500 tickets and 30,000 journal events.
@@ -12,8 +12,8 @@ from pathlib import Path
 
 
 def main(store: Path) -> int:
-    os.environ["HARNESS_HOME"] = str(store)
-    from kengash_ai.ops import views  # after HARNESS_HOME: the store is read at call time
+    os.environ["KENGASH_HOME"] = str(store)
+    from kengash_ai.ops import views  # after KENGASH_HOME: the store is read at call time
 
     checks: list[tuple[str, Callable[[], object]]] = [
         ("overview", lambda: views.overview(window="today")),
