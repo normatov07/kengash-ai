@@ -6,7 +6,7 @@ from typing import Any
 
 from conftest import FakeClis
 
-from kengash_ai.adapters.antigravity import EDIT_LINE, READ_ONLY_LINE, Antigravity
+from kengash_ai.adapters.antigravity import EDIT_LINE, READ_ONLY_LINE, Antigravity, parse_models
 from kengash_ai.model import OUTPUT_SCHEMAS, ReviewOutput, StepRequest, Usage, WorkOutput
 
 
@@ -107,8 +107,33 @@ def test_stale_and_denied_turns(fake_clis: FakeClis, tmp_path: Path) -> None:
     assert Antigravity().run(_request(tmp_path, prompt="p")).error == "auth"
 
 
+AGY_MODELS = """Fetching available models...
+gemini-3.8-flash-high\tGemini 3.8 Flash (High)
+gemini-3.8-flash-medium\tGemini 3.8 Flash (Medium)
+gemini-3.8-flash-low\tGemini 3.8 Flash (Low)
+claude-sonnet-4-6\tClaude Sonnet 4.6 (Thinking)
+claude-opus-4-6-thinking\tClaude Opus 4.6 (Thinking)
+gpt-oss-120b-medium\tGPT-OSS 120B (Medium)
+"""  # agy 1.4.11, 2026-10-30
+
+
+def test_agy_models_parse() -> None:
+    assert parse_models(AGY_MODELS) == [
+        "gemini-3.8-flash-high",
+        "gemini-3.8-flash-medium",
+        "gemini-3.8-flash-low",
+        "claude-sonnet-4-6",
+        "claude-opus-4-6-thinking",
+        "gpt-oss-120b-medium",
+    ]
+    assert parse_models("gemini-3-pro\n") == ["gemini-3-pro"]
+    assert parse_models("Error: not signed in\n") == []
+
+
 def test_detect(fake_clis: FakeClis) -> None:
     assert (Antigravity().detect().version, Antigravity().detect().signed_in) == ("1.4.5", True)
+    assert Antigravity().detect().models == ["gemini-3-pro"]
     fake_clis.sign_out("agy")
     assert Antigravity().detect().hint == "run `agy` and sign in"
+    assert Antigravity().detect().models == []
     assert Antigravity().attach_command("c-1") == ["agy", "--conversation", "c-1"]

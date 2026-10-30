@@ -28,10 +28,11 @@ from kengash_ai.model import (
     utc_now,
 )
 from kengash_ai.model import Gate as TicketGate
-from kengash_ai.ops import agents, jobs, records
+from kengash_ai.ops import agent_config, agents, jobs, records
 from kengash_ai.ops import changes as changes_ops
 from kengash_ai.ops import projects as project_ops
 from kengash_ai.ops import skills as skill_ops
+from kengash_ai.ops.agent_config import AgentDetail
 from kengash_ai.ops.workspace import GATES
 from kengash_ai.store import links as store_links
 from kengash_ai.store import runtime
@@ -59,7 +60,6 @@ COLUMNS = (
     ("done", "Done"),
 )
 CORE_STEPS = frozenset({"plan", "implement", "review_code", "security"})  # shown even when empty
-BUILTIN_ROLES = frozenset(role for role in STEP_ROLES.values() if role)
 CHIPS = {
     "blocked": "blocked",
     "parked": "parked",
@@ -236,40 +236,32 @@ class ProviderCard:
     slots_total: int
     spend: int
     checked: bool = True  # False until the CLI's sign-in check has run
+    models: list[str] = field(default_factory=list)  # for the model pickers (SP10 §5.2)
 
 
 @dataclass
-class Role:
-    role: str
-    on: bool
-    cli: str
-    provider: str
-    model: str
-    skill: str
-    skill_file: str
-    blocking: bool
-    fallback: list[str]
-    used_in: list[str]
-    tokens: int
-    custom: bool = False  # a user's role (SP6), not one of the built-in steps' roles
-    step: str | None = None  # the custom step it runs
-    does: str = ""  # that step's instruction
+class SkillRef:
+    """A role skill an agent can run: the package's, or one of the user's in the store."""
+
+    name: str
+    source: skill_ops.SkillSource
 
 
 @dataclass
 class AgentsView:
-    """The Agents screen for one scope: providers, the role roster, limits and routing."""
+    """The Agents screen for one scope (SP10 spec §5.3): providers, every agent in full, the
+    role skills an agent may run, the instruction caps and the session and token limits."""
 
     scope: str | None
     projects: list[str]
     providers: list[ProviderCard] = field(default_factory=list)
-    roster: list[Role] = field(default_factory=list)
+    agents: list[AgentDetail] = field(default_factory=list)
+    skills: list[SkillRef] = field(default_factory=list)
+    instruction_caps: list[int] = field(default_factory=list)  # lines, words
     sessions_max: int = 0
     tokens_per_ticket: int = 0
     fallback_on_rate_limit: bool = True
     per_provider: dict[str, int] = field(default_factory=dict)
-    routing: dict[str, list[str]] = field(default_factory=dict)
-    loop_max: dict[str, int] = field(default_factory=dict)  # each importance's loop cap
     set_here: list[str] = field(default_factory=list)
     problem: str = ""
 
@@ -736,42 +728,22 @@ def agents_view(
                 resolved.sessions.per_provider.get(name, 0),
                 spend.get(name, 0),
                 status is not None,
+                list(status.models) if status else [],
             )
         )
     tokens = _role_tokens(events, window)
-    for role, agent in resolved.agents.items():
-        provider, model = split_cli(agent.cli)
-        used_in = [
-            name
-            for name, flow in resolved.workflows.items()
-            if any(resolved.role_of(step) == role for step in flow.steps)
-        ]
-        own = [name for name, step in resolved.steps.items() if step.role == role]
-        skill_file = skill_ops.role_file(paths, project, agent.skill)
-        found.roster.append(
-            Role(
-                role,
-                agent.on,
-                agent.cli,
-                provider,
-                model or "default",
-                agent.skill,
-                str(skill_file) if skill_file else "",
-                agent.blocking,
-                agent.fallback,
-                used_in,
-                tokens.get(role, 0),
-                role not in BUILTIN_ROLES,
-                own[0] if own else None,
-                resolved.steps[own[0]].does if own else "",
-            )
-        )
+    for role in resolved.agents:
+        detail = agent_config.describe(paths, resolved, project, role)
+        detail.tokens = tokens.get(role, 0)
+        found.agents.append(detail)
+    found.skills = [
+        SkillRef(name, source) for name, source in skill_ops.role_skills(paths, project)
+    ]
+    found.instruction_caps = list(agent_config.instruction_caps("role", resolved.skill))
     found.sessions_max = resolved.sessions.max
     found.tokens_per_ticket = resolved.tokens.per_ticket_max
     found.fallback_on_rate_limit = resolved.fallback_on_rate_limit
     found.per_provider = dict(resolved.sessions.per_provider)
-    found.routing = {name: list(flow.steps) for name, flow in resolved.workflows.items()}
-    found.loop_max = resolved.loop_max.model_dump()
     return found
 
 

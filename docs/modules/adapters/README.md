@@ -8,7 +8,7 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 
 - `get(name, runtime=)` → `Provider`: `claude`, `codex` (schema files in `runtime/schemas/`), `antigravity`, `shell`; `gemini`, replaced by Antigravity (`model.REPLACED`), and unknown names raise `UserError`. `runtime` holds files a CLI needs on disk.
 - `Provider` protocol: `name`, `detect()` → `ProviderStatus`, `run(StepRequest)` → `StepResult`, `attach_command(session_id)` (the caller runs it in the worktree), `recover_session(log)` (a killed step's session id, when the CLI printed it).
-- `base.CliProvider`: shared `run` and `detect`; subclasses give `command(req)` (pure argv), `parse(req, proc)`, `signed_in()` and `attach_command`.
+- `base.CliProvider`: shared `run` and `detect` (which also fills `models()`: the class `MODELS`, or what the sign-in check found); subclasses give `command(req)` (pure argv), `parse(req, proc)`, `signed_in()` and `attach_command`.
 - `process.run_process(argv, cwd=, env=, timeout_s=, log=, grace_s=10)` → `ProcessResult(exit_code, stdout, stderr, timed_out, duration_s)`.
 - `env.worker_env(environ, provider, role, allow_api_key=)`: the worker environment.
 - Helpers: `positional` (argv text never starts with `-`), `classify` (`auth`, `rate_limit` or `crash` from an error message), `tail`, `schema_json`, `checked`.
@@ -29,6 +29,7 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 
 ## Changes
 
+- 2026-10-30: `ProviderStatus.models` from `detect()` once signed in: claude's `MODELS` aliases (fable, opus, sonnet, haiku), agy's from the `agy models` sign-in check (`antigravity.parse_models`), none for codex (SP10 M3).
 - 2026-10-26: workers get `KENGASH_AGENT` (SP8).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-26: `UNSUPPORTED` removed: Antigravity replaces gemini; `get("gemini")` names the replacement (SP7).

@@ -36,6 +36,7 @@ class Claude(CliProvider):
     binary = "claude"
     install_hint = "install Claude Code, then run `claude` once to sign in"
     signin_hint = "run `claude` and sign in with /login"
+    MODELS = ("fable", "opus", "sonnet", "haiku")  # `--model` aliases for the latest of each
 
     def command(self, req: StepRequest) -> list[str]:
         argv = [self.binary, "-p", positional(req.prompt)]

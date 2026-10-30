@@ -30,6 +30,7 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 
 ## Changes
 
+- 2026-10-30: `GET /api/agents` returns `agents` (`AgentDetail`), `skills`, `instruction_caps` and each provider's `models`; `POST /api/agents/{role}` edits an agent (`{project, patch}`), `POST /api/agents/{role}/copy` copies one (`{project, new}`); new agents take `fallback`, `skill`, `instructions` (SP10 M3).
 - 2026-10-27: board cards show up to three `#tag` chips, then `+N`; untagged cards are unchanged (SP9).
 - 2026-10-26: screens name `kengash`, `~/.kengash` and `.kengash` (SP8).
 - 2026-10-26: changes need the `X-Kengash` header (the 0.1.0 `X-Harness` is refused); the cookie is `kengash_token_<port>` (SP8).

@@ -93,6 +93,37 @@ class NewAgent(BaseModel):
     workflows: list[str] = []
     after: str | None = None
     send_back: str | None = None
+    fallback: list[str] = []
+    skill: str | None = None
+    instructions: str | None = None
+
+
+class AgentPatchBody(BaseModel):
+    """The fields of an agent edit (SP10 spec §6); a field left out stays as it is."""
+
+    cli: str | None = None
+    fallback: list[str] | None = None
+    on: bool | None = None
+    blocking: bool | None = None
+    bypass_permissions: bool | None = None
+    kind: Literal["read", "edit", "review"] | None = None
+    does: str | None = None
+    skill: str | None = None
+    instructions: str | None = None
+
+
+class AgentEdit(BaseModel):
+    """The body of an agent edit: the scope and the patch."""
+
+    project: str = ""
+    patch: AgentPatchBody
+
+
+class AgentCopy(BaseModel):
+    """The body of an agent copy: the scope and the new role's name."""
+
+    project: str = ""
+    new: str
 
 
 class Scope(BaseModel):
@@ -259,9 +290,25 @@ def create_app(*, token: str, port: int) -> FastAPI:
             workflows=body.workflows,
             after=body.after,
             send_back=body.send_back,
+            fallback=body.fallback,
+            skill=body.skill,
+            instructions=body.instructions,
             project=project,
             by=BY,
         )
+        return views.agents_view(project=project, detect=False)
+
+    @app.post("/api/agents/{role}")
+    def edit_agent(role: str, body: AgentEdit) -> views.AgentsView:
+        project = body.project or None
+        patch = agent_config.AgentPatch(**body.patch.model_dump())
+        agent_config.edit_agent(role, patch, project=project, by=BY)
+        return views.agents_view(project=project, detect=False)
+
+    @app.post("/api/agents/{role}/copy")
+    def copy_agent(role: str, body: AgentCopy) -> views.AgentsView:
+        project = body.project or None
+        agent_config.copy_agent(role, body.new, project=project, by=BY)
         return views.agents_view(project=project, detect=False)
 
     @app.post("/api/agents/{role}/remove")

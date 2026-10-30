@@ -19,7 +19,8 @@ from kengash_ai.model import (
     Ticket,
     utc_now,
 )
-from kengash_ai.ops import agents, configure, views
+from kengash_ai.model.settings import SkillCaps
+from kengash_ai.ops import agent_config, agents, configure, skills, views
 from kengash_ai.store import StorePaths, documents, runtime
 
 Make = Callable[..., Doc[Ticket]]
@@ -256,15 +257,30 @@ def test_agents_sum_tokens_per_role_and_list_their_workflows(
     event = step_end("aaaaaaa3", "codex", 700)
     journal.append(seeded, Event.model_validate({**event.model_dump(), "role": "implementer"}))
     found = views.agents_view(seeded, project="payments-api", window="all")
-    roles = {role.role: role for role in found.roster}
+    roles = {agent.role: agent for agent in found.agents}
     assert roles["implementer"].tokens == 700 and roles["planner"].tokens == 0
-    assert roles["implementer"].used_in == ["simple", "standard", "critical"]
+    assert [use.workflow for use in roles["implementer"].used_in] == [
+        "simple",
+        "standard",
+        "critical",
+    ]
     assert roles["test-runner"].used_in == [] and roles["test-runner"].on is False
-    assert roles["planner"].skill_file.endswith("roles/plan/SKILL.md")
+    assert roles["planner"].builtin and roles["planner"].instructions.startswith("# Planner")
     cards = {card.name: card for card in found.providers}
     assert cards["claude"].signed_in and cards["codex"].hint == "run: codex login"
     assert (cards["codex"].slots_used, cards["codex"].slots_total) == (1, 3)
-    assert found.routing["simple"] == ["plan", "implement", "review_code"]
+
+
+def test_agents_view_lists_skills_models_and_caps(seeded: StorePaths, detected: list[str]) -> None:
+    role_dir = seeded.project("payments-api").root / "roles" / "perf-reviewer"
+    role_dir.mkdir(parents=True)
+    (role_dir / "SKILL.md").write_text("---\nname: perf-reviewer\ndescription: x\n---\nFast.\n")
+    found = views.agents_view(seeded, project="payments-api", window="all")
+    sources = {skill.name: skill.source for skill in found.skills}
+    assert sources["review-code"] == "package" and sources["perf-reviewer"] == "project"
+    assert list(sources)[:7] == sorted(skills.ROLES)
+    assert found.instruction_caps == list(agent_config.instruction_caps("x", SkillCaps()))
+    assert {card.name: card.models for card in found.providers}["claude"] == []  # the fake detector
 
 
 def test_provider_detection_is_reused_for_a_minute(seeded: StorePaths, detected: list[str]) -> None:
@@ -459,10 +475,14 @@ def test_custom_steps_reach_the_workflow_view(
 
 def test_the_roster_marks_custom_agents(seeded: StorePaths, detected: list[str]) -> None:
     configure.save_settings(PERF_CHANGES, project="payments-api", by="ui")
-    roles = {r.role: r for r in views.agents_view(seeded, project="payments-api").roster}
+    roles = {r.role: r for r in views.agents_view(seeded, project="payments-api").agents}
     perf = roles["perf-reviewer"]
-    assert (perf.custom, perf.step, perf.used_in) == (True, "perf_review", ["critical"])
-    assert (roles["planner"].custom, roles["planner"].step) == (False, None)
+    assert (perf.builtin, perf.step, [use.workflow for use in perf.used_in]) == (
+        False,
+        "perf_review",
+        ["critical"],
+    )
+    assert (roles["planner"].builtin, roles["planner"].step) == (True, "plan")
 
 
 def test_the_board_has_a_column_for_a_custom_step(seeded: StorePaths, make_ticket: Make) -> None:
@@ -478,10 +498,10 @@ def test_the_board_has_a_column_for_a_custom_step(seeded: StorePaths, make_ticke
     assert (perf.title, [card.id for card in perf.cards]) == ("Perf review", ["aaaaaaa6"])
 
 
-def test_the_agents_view_carries_each_workflows_loop_cap(
+def test_the_workflows_view_carries_each_importances_loop_cap(
     seeded: StorePaths, detected: list[str]
 ) -> None:
-    found = views.agents_view(seeded, project="payments-api")
+    found = views.workflows_view(seeded, project="payments-api")
     assert found.loop_max == {"simple": 3, "standard": 4, "critical": 6}
 
 

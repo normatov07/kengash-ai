@@ -56,6 +56,23 @@ def role_file(paths: StorePaths, slug: str | None, skill: str) -> Path | None:
     return None
 
 
+type SkillSource = Literal["package", "defaults", "project"]
+
+
+def role_skills(paths: StorePaths, slug: str | None) -> list[tuple[str, SkillSource]]:
+    """Every role skill an agent of this scope can run, with where it lives: the package's
+    built-in ones, then the user's in the defaults and the project."""
+    found: dict[str, SkillSource] = dict.fromkeys(sorted(ROLES), "package")
+    folders: list[tuple[Path, SkillSource]] = [(paths.defaults / "roles", "defaults")]
+    if slug is not None:
+        folders.append((paths.project(slug).root / "roles", "project"))
+    for folder, source in folders:
+        for child in sorted(folder.iterdir()) if folder.is_dir() else []:
+            if child.name not in ROLES and (child / "SKILL.md").is_file():
+                found[child.name] = source
+    return list(found.items())
+
+
 def ignored_copies(paths: StorePaths) -> list[Path]:
     """Store copies of built-in skills, which `role_file` never reads: the ones `kengash
     init` seeded before SP10, and any the user wrote by hand."""
