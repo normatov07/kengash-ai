@@ -1,4 +1,4 @@
-skill: to-ticket
+skill: ticket
 description: an approved plan is sliced into tickets the user checks before they are added
 notes: >-
   RED 2026-10-23: claude (haiku) added no tickets; agy found `kengash ticket add` on its own
@@ -22,7 +22,7 @@ setup:
       - [ ] calc.mul(2, 3) == 6
   - args: [plan, approve, "{plan}", --skip-review]
 turns:
-  - "/to-ticket {plan}"
+  - "{kg}ticket {plan}"
   - "Looks good, add them."
 expect:
   journal: [ticket.created]

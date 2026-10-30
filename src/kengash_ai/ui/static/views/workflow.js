@@ -119,7 +119,7 @@ function editor(data) {
       ${state.dry ? html`<div class="wf-dry"><span class="faint">A ${name} ticket runs</span> <span class="mono">${runs.length ? runs.join(" → ") : "no step"}</span>${runs.length < draft.steps.length ? html`<span class="faint"> · skipped: ${draft.steps.filter((s) => !runs.includes(s)).join(", ")}</span>` : ""}</div>` : ""}
       <div class="wf-stage"><div class="wf-zoom" style="transform: scale(${state.zoom}); width: ${100 / state.zoom}%">${canvas(graph, {
         selected: state.selected,
-        sub: (id) => (id === "trigger" ? "in_queue · /to-loop" : id === "done" ? "tasks/<project>/done/" : !data.roles[id] ? "you approve" : data.blocking.includes(data.roles[id]) ? "blocking gate" : cliOf(data, data.roles[id]).replace("/", " · ")),
+        sub: (id) => (id === "trigger" ? "in_queue · /kengash:loop" : id === "done" ? "tasks/<project>/done/" : !data.roles[id] ? "you approve" : data.blocking.includes(data.roles[id]) ? "blocking gate" : cliOf(data, data.roles[id]).replace("/", " · ")),
         off: (id) => draft.steps.includes(id) && !runs.includes(id),
         gate: (id) => data.blocking.includes(data.roles[id]),
         ghost,

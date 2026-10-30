@@ -223,3 +223,23 @@ def test_install_removes_obsolete_skills_of_ours_only(tmp_path: Path, source: Pa
     removed = sorted(e.name for e in result.entries if e.state == "removed")
     assert removed == ["harness-memory", "retired"]
     assert not (folder / "harness-memory").exists() and (folder / "theirs" / "SKILL.md").is_file()
+
+
+def test_installed_skills_are_the_six_short_names() -> None:
+    found = {p.name for p in skills.packaged().iterdir() if (p / "SKILL.md").is_file()}
+    assert found == {"plan", "grill", "ticket", "loop", "ui", "memory"}
+
+
+OLD_COMMANDS = ("/to-plan", "/to-ticket", "/to-loop", "/open-ui", "/to-plan-with-grill")
+
+
+def test_no_old_command_spelling_left() -> None:
+    root = Path(__file__).resolve().parents[1]
+    texts = [root / "README.md", *(root / "skills").rglob("*.md")]
+    texts += (root / "src" / "kengash_ai" / "ui" / "static").rglob("*.js")
+    stale = [
+        str(path)
+        for path in texts
+        if any(old in path.read_text(encoding="utf-8") for old in OLD_COMMANDS)
+    ]
+    assert stale == []

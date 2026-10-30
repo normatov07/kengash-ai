@@ -33,7 +33,11 @@ Leave out `[ui]` for the CLI alone. The latest code: `uv tool install 'kengash-a
 
 `uv tool upgrade kengash-ai`, then run any `kengash` command once: it moves `~/.harness` to `~/.kengash` and leaves a link behind, so nothing in flight breaks. Then `kengash skills install --agent … --global` (it replaces `harness-memory` with `kengash-memory`) and `kengash doctor --fix` (it turns each project's `.harness` link into `.kengash`). The `harness` and `hrn` commands keep working with a warning until 0.3.0. If your agent's permissions allow `Bash(harness:*)`, allow `Bash(kengash:*)` too.
 
-The skills can also come from Claude Code's plugin marketplace (`/plugin install kengash-ai --marketplace normatov07/kengash-ai`) or `npx skills add normatov07/kengash-ai`.
+The skills install as the `kengash` plugin: in Claude Code and Antigravity you type `/kengash:plan`, `/kengash:grill`, `/kengash:ticket`, `/kengash:loop` and `/kengash:ui`; Codex has no plugin namespace, so it gets `$kengash-plan` and so on. Claude Code can also take the plugin from its marketplace: `/plugin marketplace add normatov07/kengash-ai`, then `/plugin install kengash@kengash-ai`.
+
+### Upgrading from 0.2.0
+
+Run `kengash skills install --agent … --global` again: the commands are now `/kengash:<name>`, and the old `to-plan`, `to-plan-with-grill`, `to-ticket`, `to-loop`, `open-ui` and `kengash-memory` skills of ours are removed (`kengash doctor` points out any left behind).
 
 ## Quick start
 
@@ -42,12 +46,12 @@ The skills can also come from Claude Code's plugin marketplace (`/plugin install
 
 Then, in your agent:
 
-1. `/to-plan` (or `/to-plan-with-grill` to be interviewed first): a plan, reviewed by an agent on another provider.
-2. `/to-ticket`: the plan becomes tickets with importance, dependencies and touched paths.
-3. `/to-loop`: tickets run in their loops; the agent waits, reports gates and asks before granting loops or merging.
+1. `/kengash:plan` (or `/kengash:grill` to be interviewed first): a plan, reviewed by an agent on another provider.
+2. `/kengash:ticket`: the plan becomes tickets with importance, dependencies and touched paths.
+3. `/kengash:loop`: tickets run in their loops; the agent waits, reports gates and asks before granting loops or merging.
+4. `/kengash:ui` (or `kengash ui open`): the web UI on 127.0.0.1 behind a private link.
 
-Each of these takes an optional project name or folder at the end, such as `/to-loop payments-api` or `/to-ticket "<prompt>" ~/code/payments`; without one, planning uses the project you are in and `/to-loop` works every project. Every `--project/-p` option of `kengash` takes a name or a folder too.
-4. `/open-ui` (or `kengash ui open`): the web UI on 127.0.0.1 behind a private link.
+The first three take an optional project name or folder at the end, such as `/kengash:loop payments-api` or `/kengash:ticket "<prompt>" ~/code/payments`; without one, planning uses the project you are in and `/kengash:loop` works every project. Every `--project/-p` option of `kengash` takes a name or a folder too. In Codex, type `$kengash-loop` and so on.
 
 ## Commands
 

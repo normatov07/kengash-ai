@@ -1,4 +1,4 @@
-skill: to-plan
+skill: plan
 description: a direct plan from a one-line request, reviewed, then approved by the user
 notes: >-
   RED 2026-10-23: claude (haiku) tried to edit calc.py and stopped at the denied write; agy
@@ -10,7 +10,7 @@ files:
   calc.py: "\"\"\"Small arithmetic helpers.\"\"\"\n\n\ndef sub(a: int, b: int) -> int:\n    return a - b\n"
 settings: "plan.reviewer: {cli}\nplan.review_max: 1\n"
 turns:
-  - "/to-plan Add an add(a, b) function to calc.py"
+  - "{kg}plan Add an add(a, b) function to calc.py"
   - "Approve it."
 expect:
   journal: [plan.created, plan.saved, plan.reviewed, plan.approved]

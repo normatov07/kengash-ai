@@ -12,13 +12,13 @@ from scripts import check_dist
 WHEEL = [
     "kengash_ai/__init__.py",
     "kengash_ai/ui/static/fonts/inter.woff2",
-    "kengash_ai/skills/to-loop/SKILL.md",
+    "kengash_ai/skills/loop/SKILL.md",
     "kengash_ai/store/defaults/SETTINGS.md",
     "kengash_ai/ui/static/index.html",
     "kengash_ai/roles/plan/SKILL.md",
     "kengash_ai-0.1.0.dist-info/METADATA",
 ]
-SDIST = ["src/kengash_ai/__init__.py", "skills/to-loop/SKILL.md", "LICENSE", "pyproject.toml"]
+SDIST = ["src/kengash_ai/__init__.py", "skills/loop/SKILL.md", "LICENSE", "pyproject.toml"]
 
 
 def build(folder: Path, wheel: list[str], sdist: list[str]) -> Path:

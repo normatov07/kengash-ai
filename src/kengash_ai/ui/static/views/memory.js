@@ -44,7 +44,7 @@ function indexBody(data) {
         const atCap = row.loop >= row.loop_max && !done;
         return html`<a class="trow idx-row" href="#/ticket/${row.id}"><span class="i-id mono">${row.id}</span><span class="i-title ellipsis" title="${row.title}">${row.title}</span><span class="i-proj ellipsis muted">${row.project}</span><span class="i-folder mono ${done ? "ok-text" : row.status.startsWith("in_process/") ? "warn-text" : "faint"}">${row.status.replace("in_process/under_", "in_process/")}</span><span class="i-loops mono ${atCap ? "danger-text" : ""}">${row.loop}/${row.loop_max}</span><span class="i-models">${row.models.map((m) => html`<span class="mchip mono">${m.split("/").pop()}</span>`)}</span><span class="i-closed mono faint">${row.closed ? clock(row.closed).slice(0, 5) : "—"}</span></a>`;
       })
-    : html`<div class="empty">${data.index.length ? "No ticket matches." : "No ticket yet: plans become tickets with /to-ticket."}</div>`}
+    : html`<div class="empty">${data.index.length ? "No ticket matches." : "No ticket yet: plans become tickets with /kengash:ticket."}</div>`}
     <div class="trow idx-foot"><span class="faint">${shown.length} of ${rows.length} shown</span><a class="end" href="#/board">Open the board</a></div>`;
 }
 

@@ -86,7 +86,7 @@ function card(item, key) {
 
 function columnFoot(column) {
   const tint = TINTS[column.key] ?? TINTS.in_queue;
-  if (column.key === "in_queue") return html`<button class="col-add" type="button" data-copy="/to-ticket" data-note="Copied: run /to-ticket in your agent to cut tickets from a plan.">${icon("plus", { size: 12, width: 1.9 })}<span class="long">Add with</span> /to-ticket</button>`;
+  if (column.key === "in_queue") return html`<button class="col-add" type="button" data-copy="/kengash:ticket" data-note="Copied: run /kengash:ticket in your agent to cut tickets from a plan.">${icon("plus", { size: 12, width: 1.9 })}<span class="long">Add with</span> /kengash:ticket</button>`;
   if (column.key === "done") return html`<button class="col-open" type="button" data-only="done">Open tasks/done</button>`;
   return html`<div class="col-note" style="color: ${tint.foot[1]}">${column.footer}</div>`;
 }
@@ -168,7 +168,7 @@ export function top(data, app) {
     <label class="sr-only" for="bq">Filter tickets</label>
     <input id="bq" class="search" type="search" placeholder="Filter by title, tag or id…" value="${state.text}">
     <div class="segmented" role="group" aria-label="View">${[["board", "Board"], ["list", "List"]].map(([key, label]) => html`<button type="button" data-view="${key}" aria-pressed="${state.view === key ? "true" : "false"}">${label}</button>`)}</div>
-    <button class="btn mono accent" type="button" data-copy="/to-loop">${icon("play", { size: 13, width: 1.8 })}/to-loop</button>`;
+    <button class="btn mono accent" type="button" data-copy="/kengash:loop">${icon("play", { size: 13, width: 1.8 })}/kengash:loop</button>`;
 }
 
 export function view(data, app) {

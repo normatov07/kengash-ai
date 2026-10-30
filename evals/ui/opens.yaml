@@ -1,0 +1,12 @@
+skill: ui
+description: /kengash:ui starts the local UI and hands the user its link
+notes: >-
+  RED 2026-10-24: claude (haiku) said the /kengash:ui command was not installed and did nothing;
+  agy guessed `kengash ui open` from the store and passed even without the skill.
+turns:
+  - "{kg}ui"
+expect:
+  ui: true
+  reply: ["http://127.0.0.1:"]
+  clean: true
+timeout_s: 300

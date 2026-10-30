@@ -78,8 +78,8 @@ function defaultTop() {
     )}</select>
     <label class="sr-only" for="q">Search tickets</label>
     <input id="q" class="search" type="search" placeholder="Search tickets, ids, projects…" value="${app.query}">
-    <button class="btn mono quiet" type="button" data-copy="/to-ticket">${icon("plus-square", { size: 13 })}/to-ticket</button>
-    <button class="btn mono accent" type="button" data-copy="/to-loop">${icon("play", { size: 13, width: 1.8 })}/to-loop</button>`;
+    <button class="btn mono quiet" type="button" data-copy="/kengash:ticket">${icon("plus-square", { size: 13 })}/kengash:ticket</button>
+    <button class="btn mono accent" type="button" data-copy="/kengash:loop">${icon("play", { size: 13, width: 1.8 })}/kengash:loop</button>`;
 }
 
 function placeholder(name) {

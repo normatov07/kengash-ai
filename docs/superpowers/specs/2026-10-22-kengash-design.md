@@ -423,16 +423,18 @@ Errors: `auth` stops the ticket with "sign in to <cli> interactively"; `rate_lim
 
 | Skill | Invoked by | Steps |
 |---|---|---|
-| `to-plan-with-grill` | user | `harness context` → `harness plan new` → look up facts yourself (code, docs, memory; a subagent if the host has one) → grill rounds of at most `grill.round_size` questions, each with a recommended answer, using the host's multiple-choice tool if it has one, until nothing is left to ask and nothing is silently assumed → restate the shared understanding; the user confirms → `harness plan save` → `harness plan review` → show open findings → the user approves, edits or rejects → `harness plan approve` |
-| `to-plan` | user | the same without grilling; every unasked decision becomes an `## Assumptions` line |
-| `to-ticket` | user | an approved plan id, or a short prompt (creates a `quick` plan) → vertical slices: end to end, verifiable alone, one fresh context window each; wide refactors split expand → migrate → contract → importance by rubric → numbered list (title · importance · blockers · touches) → the user adjusts → `harness ticket add --plan <id>` |
-| `to-loop` | user | `harness doctor --quiet` → loop: `harness next` → `harness run` → `harness wait` → act on each event (ask the user to grant loops, re-plan stalled tickets, approve merges) until nothing is runnable or the user stops |
-| `open-ui` | user | `harness ui open`; on exit 4, ask to install the UI extra, install it, open |
-| `harness-memory` | model | triggered when the user states a lasting preference or goal, rejects an approach, or a design decision is made → `harness memory add` |
+| `grill` | user | `harness context` → `harness plan new` → look up facts yourself (code, docs, memory; a subagent if the host has one) → grill rounds of at most `grill.round_size` questions, each with a recommended answer, using the host's multiple-choice tool if it has one, until nothing is left to ask and nothing is silently assumed → restate the shared understanding; the user confirms → `harness plan save` → `harness plan review` → show open findings → the user approves, edits or rejects → `harness plan approve` |
+| `plan` | user | the same without grilling; every unasked decision becomes an `## Assumptions` line |
+| `ticket` | user | an approved plan id, or a short prompt (creates a `quick` plan) → vertical slices: end to end, verifiable alone, one fresh context window each; wide refactors split expand → migrate → contract → importance by rubric → numbered list (title · importance · blockers · touches) → the user adjusts → `harness ticket add --plan <id>` |
+| `loop` | user | `harness doctor --quiet` → loop: `harness next` → `harness run` → `harness wait` → act on each event (ask the user to grant loops, re-plan stalled tickets, approve merges) until nothing is runnable or the user stops |
+| `ui` | user | `harness ui open`; on exit 4, ask to install the UI extra, install it, open |
+| `memory` | model | triggered when the user states a lasting preference or goal, rejects an approach, or a design decision is made → `harness memory add` |
 
-The planning skills, `to-ticket` and `to-loop` take an optional project name or folder after their argument and pass it on as `-p`; a folder no project holds is registered only on the user's yes (SP9 spec decision 2).
+Users type them as `/kengash:<name>` (Claude Code and Antigravity load them as the `kengash` plugin) or `$kengash-<name>` (Codex, which gets prefixed copies); before SP10 they were `to-plan-with-grill`, `to-plan`, `to-ticket`, `to-loop`, `open-ui` and `kengash-memory` (SP10 spec §3).
 
-Importance rubric (`to-ticket/references/importance.md`): critical when the slice touches auth, secrets, payments, data migrations, infrastructure or anything irreversible; standard when it spans modules or changes a public interface; simple otherwise.
+The planning skills, `ticket` and `loop` take an optional project name or folder after their argument and pass it on as `-p`; a folder no project holds is registered only on the user's yes (SP9 spec decision 2).
+
+Importance rubric (`ticket/references/importance.md`): critical when the slice touches auth, secrets, payments, data migrations, infrastructure or anything irreversible; standard when it spans modules or changes a public interface; simple otherwise.
 
 Every skill's step 0 runs `harness --version`. If the command is missing or is not super-harness, the skill prints the install line and stops.
 
@@ -462,9 +464,8 @@ super-harness/
 └── src/super_harness/              harness CLI and role skills
 ```
 
-- `npx skills add <owner>/super-harness [-g]`. Claude Code gets `.claude/skills/`; Codex, Antigravity, Gemini CLI, Cursor, Copilot and OpenCode get `.agents/skills/`.
 - `uv tool install super-harness && harness skills install --agent claude,codex,antigravity [--global]`, with no Node needed.
-- Claude and Codex plugin marketplaces, for auto-update.
+- Claude Code's plugin marketplace (`/plugin install kengash@kengash-ai`), for auto-update. `kengash skills install` writes the plugin into `.claude/skills/kengash/` for Claude Code, runs `agy plugin install` for Antigravity and copies `kengash-<name>` skills for Codex (SP10 spec §3.2).
 
 ## 9. UI
 

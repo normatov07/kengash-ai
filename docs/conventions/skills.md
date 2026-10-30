@@ -36,8 +36,9 @@ An installed skill's name and description load into every session of every agent
 
 ## Invocation
 
-- User commands (`to-plan-with-grill`, `to-plan`, `to-ticket`, `to-loop`, `open-ui`) set `disable-model-invocation: true` for Claude Code, so only the user starts them.
-- Model-invoked skills (`kengash-memory`) need sharp triggers, because the agent decides when to load them.
+- Names are short (`plan`, `grill`, `ticket`, `loop`, `ui`, `memory`): the `kengash` plugin namespace makes them `/kengash:<name>`, and Codex copies are renamed `kengash-<name>` at install time.
+- User commands (`grill`, `plan`, `ticket`, `loop`, `ui`) set `disable-model-invocation: true` for Claude Code, so only the user starts them.
+- Model-invoked skills (`memory`) need sharp triggers, because the agent decides when to load them.
 
 ## Test first
 
@@ -57,9 +58,10 @@ Skills are built like code, test first (superpowers `writing-skills`):
 
 | Route | Where skills land |
 |---|---|
-| `npx skills add <owner>/Kengash AI [-g]` | Claude Code: `.claude/skills/`; Codex, Antigravity, Gemini CLI, Cursor, Copilot, OpenCode: `.agents/skills/` |
-| `kengash skills install --agent claude,codex,antigravity [--global]` | the same paths, no Node needed |
-| Claude and Codex plugin marketplaces | managed by the agent, with auto-update |
+| `kengash skills install --agent claude [--global]` | the plugin folder `.claude/skills/kengash/` (`~/.claude/skills/kengash/`), loaded as `kengash@skills-dir` |
+| `kengash skills install --agent antigravity` | `agy plugin install` of the plugin built in `~/.kengash/runtime/plugin/kengash/`; `kengash-<name>` copies if that fails |
+| `kengash skills install --agent codex [--global]` | `kengash-<name>` copies in `.agents/skills/` (`~/.agents/skills/`) |
+| Claude Code's marketplace | `/plugin marketplace add normatov07/kengash-ai`, then `/plugin install kengash@kengash-ai` |
 
 Role skills are never installed into agents: `kengash` injects them into worker sessions.
 
