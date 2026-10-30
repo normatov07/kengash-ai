@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 
 from kengash_ai.model import Doc, Folder, NeedsSetup, Ticket, UserError
-from kengash_ai.ops import projects, providers
+from kengash_ai.ops import projects, providers, skills
 from kengash_ai.store import StorePaths, documents, links
 from kengash_ai.store.paths import ProjectPaths
 from kengash_ai.store.registry import load_registry
@@ -282,3 +282,29 @@ def test_adopt_and_the_scan_take_either_real_folder(
     result = projects.adopt(repo)
     assert (repo / ".kengash").is_symlink() and not (repo / ".harness").exists()
     assert (store_paths.project(result.slug).settings).read_text() == "loop_grant: 3\n"
+
+
+def old_skill(folder: Path, name: str) -> None:
+    (folder / name).mkdir(parents=True)
+    meta = f"---\nname: {name}\ndescription: Use when.\nmetadata: {{source: kengash-ai}}\n---\n"
+    (folder / name / "SKILL.md").write_text(meta, encoding="utf-8")
+
+
+def test_doctor_warns_about_old_skill_names(store_paths: StorePaths, repo: Path) -> None:
+    projects.init_project(repo)
+    old_skill(repo / ".claude/skills", "to-loop")
+    old_skill(skills.home_folder() / ".agents/skills", "open-ui")
+    old_skill(repo / ".claude/skills", "loop")  # a current name: not old
+    found = [(p.message, p.warning) for p in projects.doctor().problems]
+    assert found == [
+        (
+            f"old kengash skill names installed in {repo / '.claude/skills'}; "
+            "run: kengash skills install --agent claude",
+            True,
+        ),
+        (
+            f"old kengash skill names installed in {skills.home_folder() / '.agents/skills'}; "
+            "run: kengash skills install --agent codex,antigravity",
+            True,
+        ),
+    ]

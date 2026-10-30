@@ -224,7 +224,12 @@ def test_settings_and_turns_get_the_agent_placeholders(
     settings = (work / "home" / ".kengash" / "defaults" / "SETTINGS.md").read_text()
     assert settings == "plan.reviewer: claude/haiku\n"
     assert fake_clis.calls("claude")[0]["argv"][1] == "/plan on claude haiku"
-    assert evals.agent_values("codex", None) == {"agent": "codex", "model": "", "cli": "codex"}
+    assert evals.agent_values("codex", None) == {
+        "agent": "codex",
+        "model": "",
+        "cli": "codex",
+        "kg": "$kengash-",
+    }
 
 
 def test_a_clean_expectation_names_changed_files(
@@ -273,3 +278,20 @@ def test_a_ui_the_conductor_starts_is_stopped_after_the_run(
     assert not record.exists() and not lifecycle.pid_alive(pid)
     (call,) = fake_clis.calls("claude")
     assert call["env"]["BROWSER"] == "true"  # `kengash ui open` opens no window in an eval
+
+
+def test_agent_values_spell_each_cli() -> None:
+    spelled = {
+        agent: evals.agent_values(agent, None)["kg"] for agent in ("claude", "codex", "antigravity")
+    }
+    assert spelled == {"claude": "/kengash:", "codex": "$kengash-", "antigravity": "/kengash-"}
+
+
+def test_claude_conductor_loads_the_plugin_dir(
+    work: Path, source: Path, fake_clis: FakeClis
+) -> None:
+    fake_clis.queue("claude", stdout=claude_reply(), shell=PLAN_NEW)
+    assert run(work, source, scenario(turns=["{kg}plan Add add(a, b)"])).passed
+    argv = fake_clis.calls("claude")[0]["argv"]
+    assert argv[1] == "/kengash:plan Add add(a, b)"
+    assert argv[argv.index("--plugin-dir") + 1] == str(work / "repo/.claude/skills/kengash")

@@ -125,17 +125,29 @@ def _agents(named: Sequence[str] | None) -> list[str]:
 
 def agent_values(agent: str, model: str | None) -> dict[str, str]:
     """`{agent}`, `{model}` and `{cli}` (`<agent>/<model>`, or the agent alone), so a
-    scenario can put workers and reviewers on the conductor's own CLI and model."""
-    return {"agent": agent, "model": model or "", "cli": f"{agent}/{model}" if model else agent}
+    scenario can put workers and reviewers on the conductor's own CLI and model, and `{kg}`,
+    how that agent types a kengash command (`/kengash:`, `$kengash-` or `/kengash-`)."""
+    kg = skills.SPELLING.get(agent, f"/{skills.PLUGIN}:")  # agy evals install copies
+    cli = f"{agent}/{model}" if model else agent
+    return {"agent": agent, "model": model or "", "cli": cli, "kg": kg}
 
 
-def conductor_argv(agent: str, turn: str, *, model: str | None, session: str | None) -> list[str]:
-    """One headless conductor turn (SP4 spec §5): a new session, or `session` resumed."""
+def conductor_argv(
+    agent: str,
+    turn: str,
+    *,
+    model: str | None,
+    session: str | None,
+    plugin_dir: Path | None = None,
+) -> list[str]:
+    """One headless conductor turn (SP4 spec §5): a new session, or `session` resumed;
+    claude loads the installed plugin with `--plugin-dir`, since `-p` skips project plugins."""
     text = positional(turn)
     if agent == "claude":
         argv = ["claude", "-p", text, "--output-format", "json"]
         argv += ["--resume", session] if session else []
         argv += ["--model", model] if model else []
+        argv += ["--plugin-dir", str(plugin_dir)] if plugin_dir else []
         argv += ["--setting-sources", "project,local", "--strict-mcp-config"]
         return [*argv, "--permission-mode", "dontAsk", "--allowedTools", *CLAUDE_TOOLS]
     if agent == "antigravity":
@@ -237,10 +249,14 @@ def _turns(
 
     session: str | None = None
     reply = ""
+    folder = repo / skills.AGENT_DIRS["claude"] / skills.PLUGIN
+    plugin = folder if folder.is_dir() else None  # none in a baseline run
     before = _changes(repo)  # installed skills are the runner's, not the conductor's
     try:
         for number, turn in enumerate(scenario.turns, 1):
-            argv = conductor_argv(agent, fill(turn, values), model=model, session=session)
+            argv = conductor_argv(
+                agent, fill(turn, values), model=model, session=session, plugin_dir=plugin
+            )
             log = work / f"turn-{number}.out"
             result = run_process(argv, cwd=repo, env=env, timeout_s=scenario.timeout_s, log=log)
             if result.timed_out:

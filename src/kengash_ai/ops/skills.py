@@ -217,6 +217,33 @@ AGY_PLUGINS = ".gemini/config/plugins"  # where `agy plugin install` copies a pl
 AGY_FAILED = "agy plugin install failed; copies instead"
 # how a copy names a command: Codex mentions skills with `$`, Antigravity types `/`
 SPELLING = {"codex": f"${PLUGIN}-", "antigravity": f"/{PLUGIN}-"}
+# the names our skills had before SP10 (and 0.1.0's harness-memory), and who reads each folder
+OLD_NAMES = frozenset(
+    {"to-plan", "to-plan-with-grill", "to-ticket", "to-loop", "open-ui"}
+    | {"kengash-memory", "harness-memory"}
+)
+READERS = {
+    ".claude/skills": "claude",
+    ".agents/skills": "codex,antigravity",
+    ".gemini/config/skills": "antigravity",
+}
+
+
+def home_folder() -> Path:
+    """The user's home folder: where global skills and agy's plugins live."""
+    return Path.home()
+
+
+def old_installs(roots: Sequence[Path]) -> list[tuple[Path, str]]:
+    """Skill folders under `roots` that still hold our skills by their old names, each with
+    the agents that read it."""
+    found: list[tuple[Path, str]] = []
+    for root in roots:
+        for folder, agents in READERS.items():
+            path = root / folder
+            if any(stale.name in OLD_NAMES for stale in _obsolete(path, ())):
+                found.append((path, agents))
+    return found
 
 
 @dataclass
@@ -302,7 +329,7 @@ def install(
             continue
         if agent == "antigravity" and agy_plugin:
             _clean(result, agent, folder, keep)
-            installed = (user_home or Path.home()) / AGY_PLUGINS / PLUGIN
+            installed = (user_home or home_folder()) / AGY_PLUGINS / PLUGIN
             entry = _agy_plugin(source, names, cli_name, installed, run or _run)
             if entry is not None:
                 result.entries.append(entry)

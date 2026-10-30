@@ -10,7 +10,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from kengash_ai.model import NeedsSetup, Plan, ProjectEntry, Ticket, UserError, utc_now
-from kengash_ai.ops import jobs, providers, waiting
+from kengash_ai.ops import jobs, providers, skills, waiting
 from kengash_ai.ops.records import repo_root
 from kengash_ai.store import documents, links, migrate, seed, storegit
 from kengash_ai.store.locks import locked
@@ -121,6 +121,12 @@ def doctor(
         notice = providers.trust_notice(paths, slug, entry.path) if entry.path.is_dir() else None
         if notice is not None:
             problems.append(Problem(notice, slug, warning=True))
+    repos = [entry.path for _, entry in sorted(registry.projects.items()) if entry.path.is_dir()]
+    for folder, agent in skills.old_installs([*repos, skills.home_folder()]):
+        message = f"old kengash skill names installed in {folder}; "
+        problems.append(
+            Problem(f"{message}run: kengash skills install --agent {agent}", warning=True)
+        )
     if scan is not None:
         known = {entry.path.resolve() for entry in registry.projects.values()}
         for found in real_folders(scan.resolve(), SCAN_DEPTH):
