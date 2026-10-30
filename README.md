@@ -62,7 +62,8 @@ The first three take an optional project name or folder at the end, such as `/ke
 | `kengash next`, `run`, `wait`, `status` | what can start, start it, wait for gates, a summary |
 | `kengash approve`, `park`, `stop`, `pause`, `resume`, `merge` | steer running work |
 | `kengash settings show\|get\|check`, `memory …`, `context` | settings, memory and the conductor's digest |
-| `kengash agent new\|remove` | your own roles and steps |
+| `kengash agent new\|edit\|copy\|show\|remove` | agents: yours in full, built-in ones' CLI, fallbacks and switches |
+| `kengash workflow new\|rename\|remove\|route\|set` | workflows and which one each importance gets |
 | `kengash skills install\|lint\|eval`, `ui open\|stop` | skills and the web UI |
 
 Every command takes `--help`, and most take `--json`. Exit codes: 0 done, 1 a problem, 3 timed out, 4 setup needed, 5 your decision needed.
@@ -82,10 +83,15 @@ Add your own agent to a workflow, for example a performance reviewer that sends 
     kengash agent new perf-reviewer --kind review --does "Flag N+1 queries and hot loops." \
         --cli claude/sonnet --workflow critical --after review_code
 
+Send critical tickets through a workflow of your own:
+
+    kengash workflow new hotfix --from critical
+    kengash workflow route critical hotfix
+
 ## Security model
 
 - Providers run only through their official binaries under your login; kengash never reads or reuses OAuth tokens and removes provider API-key variables from worker environments.
-- The UI binds to 127.0.0.1, checks Host and Origin, needs a fresh per-run token (kept in an `HttpOnly`, `SameSite=Strict` cookie), requires an `X-Harness` header on every change, and sends a strict Content Security Policy.
+- The UI binds to 127.0.0.1, checks Host and Origin, needs a fresh per-run token (kept in an `HttpOnly`, `SameSite=Strict` cookie), requires an `X-Kengash` header on every change, and sends a strict Content Security Policy.
 - The store is a private git repository; text written to memory, tickets and the journal is redacted for common secret shapes.
 - Workers are short-lived processes, one per job; nothing runs in the background between jobs.
 

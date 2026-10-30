@@ -2,18 +2,34 @@
 
 All notable changes to this project are written here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
-## [0.2.0] - unreleased
+## [Unreleased]
+
+### Breaking
+
+- Skills are the `kengash` plugin: `/kengash:plan`, `/kengash:grill`, `/kengash:ticket`, `/kengash:loop`, `/kengash:ui`, and `memory` loads itself; Codex, which has no plugin namespace, gets `$kengash-plan` and so on. Run `kengash skills install --agent … [--global]` again: Claude Code gets the plugin folder `.claude/skills/kengash/`, Antigravity `agy plugin install`, Codex `kengash-<name>` copies, and 0.2.0's `to-plan`, `to-plan-with-grill`, `to-ticket`, `to-loop`, `open-ui` and `kengash-memory` skills of ours are removed. `kengash doctor` points out any left behind.
+- Built-in agents keep their skill: a SETTINGS.md that points one at another skill fails validation and says how to fix it, and the copies of built-in role skills `kengash init` seeded into the store are no longer read (`kengash doctor` names them). Copy the agent to change what it does.
+- A send-back (`on_fail`) edge only points to an earlier step; workflow names are lowercase letters, digits, `-` and `_`; a model after `/` is one word.
 
 ### Added
 
+- Your own agents in full, from the UI or the CLI: kind, description, CLI and model, ordered fallbacks, a skill or instructions of their own (`roles/<role>/SKILL.md`, within the skill caps), blocking and permission switches, and the workflows they run in. `kengash agent edit|copy|show`; `kengash agent new` takes `--fallback`, `--skill` and `--instructions-file`.
+- Workflows you create, copy, rename and delete, and `routing`, which picks the workflow each importance gets (`kengash workflow new|rename|remove|route|set`).
+- The Agents screen lists every agent beside a full editor, with drafts per agent and one Save; built-in agents show their instructions read-only and offer "Copy as my agent".
+- The Workflow screen inserts any agent on any link, moves steps by drag or Alt+arrow keys, swaps a step's agent, and sets each importance's workflow and loop cap.
+- Settings shows the plan reviewer, plan review rounds, grill round size, merge mode and memory compactor as real controls; model pickers list each CLI's models (agy's from `agy models`).
 - Every `--project/-p` option takes a project name or a folder inside a registered repo; a folder no project holds exits 4 naming `kengash init`.
-- `/to-loop`, `/to-ticket`, `/to-plan` and `/to-plan-with-grill` take an optional project name or folder after their argument; an unregistered folder is registered only on your yes.
+- The planning, ticket and loop skills take an optional project name or folder after their argument; an unregistered folder is registered only on your yes.
 - Board cards show up to three tags.
 
 ### Fixed
 
-- `kengash wait` could answer `idle` while a finishing worker journaled its gate, so `/to-loop` ended without asking for the merge; it now checks running work, live workers included, before reading the journal.
+- Every screen works from 360 px up: the sidebar folds into a menu below 900 px, the roster no longer overlaps, the workflow graph pans inside its stage, the ticket index keeps its title column, and closed choices are selects or radio cards instead of text boxes.
+- `kengash agent new --help` crashed on Rich markup in its help text.
+- The Workflow screen's send-back select shared its id with the graph's arrow marker.
+- `kengash wait` could answer `idle` while a finishing worker journaled its gate, so the loop ended without asking for the merge; it now checks running work, live workers included, before reading the journal.
 - `make lint` and `make evals` ran the deprecated `harness` command; the demo store, the view benchmark and the live smoke still used 0.1.0 names.
+
+## [0.2.0] - 2026-10-26
 
 ### Changed
 

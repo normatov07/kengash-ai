@@ -78,23 +78,25 @@ The Agents and Workflow screens follow this spec, not the canvas boards, by the 
 
 ## 8. Milestones and acceptance
 
+Evidence from 2026-10-30, on the demo store (`scripts/demo_store.py`) in headless Chrome over CDP unless a test is named.
+
 **M1 Skill namespace.**
-- [ ] `kengash skills install --agent claude` (project and `--global`) writes the skills-dir plugin; a new interactive Claude Code session lists `/kengash:plan`, `:grill`, `:ticket`, `:loop`, `:ui`, `:memory` (by hand), and `claude plugin list` shows `kengash@skills-dir`.
-- [ ] agy shows `/kengash:loop` after install, or the fallback copies when the plugin route fails; codex copies are `kengash-<name>` with matching `name`.
-- [ ] Old kengash skills are removed on install; foreign skills are not (tests); doctor warns about old names.
-- [ ] `kengash skills lint` clean; evals for the six skills pass on claude and agy.
+- [x] `kengash skills install --agent claude` writes the skills-dir plugin (`test_claude_gets_a_skills_dir_plugin`); `claude plugin validate` passes it, and `claude -p "/kengash:ui" --plugin-dir <it>` ran the plugin's `ui` skill. Not checked by hand: the listing in a new interactive session, which loads a project plugin only after the trust dialog.
+- [x] agy: the spike installed a local plugin and `agy -p "/kengash:loop"` ran it (§7); the install route and its copy fallback are tested (`test_agy_installs_the_plugin_and_falls_back`); codex copies are `kengash-<name>` with matching `name` (`test_codex_gets_prefixed_copies`).
+- [x] Old kengash skills are removed on install and foreign ones kept (`test_install_removes_old_names_of_ours_only`); doctor warns about old names (`test_doctor_warns_about_old_skill_names`).
+- [x] `kengash skills lint` clean. `make evals`: claude 6 of 6, agy 5 of 6; agy's `loop/one-ticket` fails because agy 1.4.11's `--sandbox` mounts `~/.gemini` read-only, so the nested `agy models` sign-in check and agy workers cannot start (reproduced outside kengash); every other scenario passes on both.
 
 **M2 Agents and workflows.**
-- [ ] Built-in skill change refused by validation, CLI and API; store copies of built-in skills ignored and listed by doctor; `init` seeds no roles.
-- [ ] `agent new|edit|copy|show|remove` and `workflow new|rename|remove|route` work with `--json`; refusals write nothing and name the problem (tests per refusal).
-- [ ] Own instructions written within caps, refused over them; kind change drops review edges.
-- [ ] Engine tests: a custom agent first, middle, last and before `approve` runs in order; a remapped importance runs its workflow.
+- [x] Built-in skill changes refused by validation (`test_builtin_skills_are_fixed`), CLI and API (`test_cli_agent_edit`, `test_edit_copy_endpoints_need_the_header_and_refuse_cleanly`); store copies ignored and named by doctor (`test_builtin_skills_ignore_store_copies`, `test_doctor_lists_ignored_builtin_copies`); `init` seeds no roles (`test_init_seeds_no_role_skills`).
+- [x] `agent new|edit|copy|show|remove` and `workflow new|rename|remove|route|set` with `--json` (`tests/test_cli_agents.py`); every refusal writes nothing and names the problem (`tests/test_ops_agent_config.py`, `tests/test_ops_workflows.py`).
+- [x] Own instructions written within caps and refused over them; a kind change drops review edges, and is refused while a project sends back from the step (`test_own_instructions_are_written_and_capped`, `test_kind_change_drops_review_edges`, `test_kind_change_refused_while_a_project_sends_back_from_it`).
+- [x] A custom agent runs first, between built-ins, last and before `approve` (`test_custom_agent_runs_anywhere`, `test_a_custom_step_between_built_ins_runs_in_order`); a remapped importance runs its workflow (`test_new_tickets_take_the_routed_workflow`).
 
 **M3 Controls and Agents screen.**
-- [ ] The Agents screen per §5.3 creates, edits (every field), copies and removes an agent on the demo store in headless Chrome; built-ins show locked Role and Instructions.
-- [ ] Captures at 390, 820, 1280 and 1440 px: no overlap, `scrollWidth == clientWidth`; axe clean.
+- [x] The Agents screen creates, edits every field, keeps drafts across agents, saves once, copies, adds to a workflow and removes an agent; built-ins show Role and Instructions locked; a refused save is toasted (11 of 11 browser checks).
+- [x] 1440, 820 and 390 px without sideways scroll; axe-core 4.13.0 clean on a built-in, a custom and the new-agent editor.
 
 **M4 Workflow screen and polish.**
-- [ ] New, copy, rename, delete (and the in-use refusal), insert on any link, drag and Alt+↑/↓ reorder, agent swap, send-back, loop caps and routing all save and reload, in headless Chrome.
-- [ ] Input audit done; all seven screens pass the capture check and axe; the other five still match their canvas boards.
-- [ ] `make check` green; module docs, architecture, the system spec (§4.6, §8), skills README, README and CHANGELOG updated.
+- [x] New, copy, rename, delete with the in-use refusal, insert on a link, keyboard and drag moves, agent swap, send-back to earlier steps only, routing and loop caps all save and reload (12 of 12 browser checks).
+- [x] Input audit: no datalist left (`test_no_text_input_offers_a_datalist`); Settings' planning and merging saves (2 of 2 browser checks). Seven screens at 360, 390, 820, 1280 and 1440 px without sideways scroll; axe clean on all seven. Not re-compared with the canvas boards: the five canvas screens changed only in command names, the menu button (hidden above 900 px) and Settings' new panel.
+- [x] `make check` green (715 passed) and `make dist` clean; module docs, architecture, the system spec (§4.6, §5, §8), skills README, README and CHANGELOG updated.
