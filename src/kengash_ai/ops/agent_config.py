@@ -289,6 +289,17 @@ def describe(paths: StorePaths, resolved: Settings, project: str | None, role: s
     )
 
 
+def show_agent(role: str, *, project: str | None) -> AgentDetail:
+    """`kengash agent show`: one agent of the defaults or a project."""
+    paths = StorePaths.default()
+    if project is not None:
+        records.scope(paths, project)
+    resolved = settings.load(paths, project)
+    if role not in resolved.agents:
+        raise UserError(f"no agent {role}")
+    return describe(paths, resolved, project, role)
+
+
 def instruction_caps(role: str, caps: SkillCaps) -> tuple[int, int]:
     """The lines and words an agent's own instructions may hold: the skill caps less the
     header kengash writes above them."""

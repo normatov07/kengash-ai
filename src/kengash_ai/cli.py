@@ -29,6 +29,7 @@ from kengash_ai.ops import (
     tickets,
     ui_server,
     waiting,
+    workflows,
     workspace,
 )
 
@@ -877,6 +878,33 @@ class AgentKind(StrEnum):
     review = "review"
 
 
+Fallback = Annotated[
+    str | None,
+    typer.Option(
+        "--fallback", help="CLIs to try next, comma-separated: PROVIDER or PROVIDER/MODEL,…"
+    ),
+]
+SkillName = Annotated[
+    str | None, typer.Option("--skill", help="Run this role skill, e.g. review-code.")
+]
+InstructionsFile = Annotated[
+    str | None,
+    typer.Option(
+        "--instructions-file", help="The agent's own instructions: a file, or - for stdin."
+    ),
+]
+
+
+def _list(value: str | None) -> list[str]:
+    return [item.strip() for item in (value or "").split(",") if item.strip()]
+
+
+def _instructions(source: str | None) -> str | None:
+    if source is None:
+        return None
+    return _stdin("instructions") if source == "-" else Path(source).read_text(encoding="utf-8")
+
+
 @agent_app.command("new")
 def agent_new(
     role: Annotated[str, typer.Argument(help="Role name, e.g. perf-reviewer.")],
@@ -884,7 +912,9 @@ def agent_new(
         AgentKind, typer.Option("--kind", help="read, edit or review: what its step does.")
     ],
     does: Annotated[str, typer.Option("--does", help="One line: what its step does.")],
-    cli: Annotated[str, typer.Option("--cli", help="PROVIDER[/MODEL] that runs it.")] = "claude",
+    cli: Annotated[
+        str, typer.Option("--cli", help="PROVIDER or PROVIDER/MODEL that runs it.")
+    ] = "claude",
     step: Annotated[
         str | None, typer.Option("--step", help="Step name; default: the role with _.")
     ] = None,
@@ -898,6 +928,9 @@ def agent_new(
         str | None,
         typer.Option("--send-back", help="Review steps: where a fail sends the ticket."),
     ] = None,
+    fallback: Fallback = None,
+    skill: SkillName = None,
+    instructions_file: InstructionsFile = None,
     project: Scope = None,
     by: By = "unknown",
     as_json: AsJson = False,
@@ -913,6 +946,9 @@ def agent_new(
             workflows=workflow or [],
             after=after,
             send_back=send_back,
+            fallback=_list(fallback),
+            skill=skill,
+            instructions=_instructions(instructions_file),
             project=project,
             by=by,
         )
@@ -932,6 +968,187 @@ def agent_remove(
     with _errors():
         change = agent_config.remove_agent(role, project=project, by=by)
     _emit(change, as_json, f"removed {role}")
+
+
+@agent_app.command("edit")
+def agent_edit(
+    role: Annotated[
+        str,
+        typer.Argument(
+            help="Any agent; a built-in one takes only its CLI, fallbacks and switches."
+        ),
+    ],
+    cli: Annotated[
+        str | None, typer.Option("--cli", help="PROVIDER or PROVIDER/MODEL that runs it.")
+    ] = None,
+    fallback: Fallback = None,
+    on: Annotated[bool | None, typer.Option("--on/--off", help="Switch it on or off.")] = None,
+    blocking: Annotated[
+        bool | None, typer.Option("--blocking/--no-blocking", help="Stop tickets until it passes.")
+    ] = None,
+    bypass: Annotated[
+        bool | None,
+        typer.Option(
+            "--bypass-permissions/--no-bypass-permissions",
+            help="Skip the CLI's permission prompts.",
+        ),
+    ] = None,
+    kind: Annotated[AgentKind | None, typer.Option("--kind", help="read, edit or review.")] = None,
+    does: Annotated[str | None, typer.Option("--does", help="One line: what it does.")] = None,
+    skill: SkillName = None,
+    instructions_file: InstructionsFile = None,
+    project: Scope = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Change an agent: its CLI, fallbacks and switches; for yours also its kind, description,
+    skill or own instructions."""
+    with _errors():
+        patch = agent_config.AgentPatch(
+            cli=cli,
+            fallback=_list(fallback) if fallback is not None else None,
+            on=on,
+            blocking=blocking,
+            bypass_permissions=bypass,
+            kind=kind.value if kind else None,
+            does=does,
+            skill=skill,
+            instructions=_instructions(instructions_file),
+        )
+        change = agent_config.edit_agent(role, patch, project=project, by=by)
+    line = f"edited {role}: {', '.join(change.keys) or 'nothing changed'}"
+    if change.skill_file:
+        line += f"; instructions roles/{role}/SKILL.md"
+    _emit(change, as_json, line)
+
+
+@agent_app.command("copy")
+def agent_copy(
+    source: Annotated[str, typer.Argument(help="The agent to copy, built-in or yours.")],
+    new: Annotated[str, typer.Argument(help="The new agent's role name.")],
+    project: Scope = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Make an agent of your own from another: its kind, CLI, fallbacks and instructions."""
+    with _errors():
+        change = agent_config.copy_agent(source, new, project=project, by=by)
+    _emit(change, as_json, f"copied {source} to {new}: step {change.step}")
+
+
+@agent_app.command("show")
+def agent_show(
+    role: Annotated[str, typer.Argument(help="Any agent.")],
+    project: Scope = None,
+    as_json: AsJson = False,
+) -> None:
+    """One agent: its kind, CLI, switches, skill, where it runs and its instructions."""
+    with _errors():
+        found = agent_config.show_agent(role, project=project)
+    if as_json:
+        return _emit_json(found)
+    yes = {True: "yes", False: "no"}
+    used = ", ".join(f"{use.workflow} #{use.position}" for use in found.used_in) or "no workflow"
+    cli = found.cli + (f" · fallback: {', '.join(found.fallback)}" if found.fallback else "")
+    lines = [
+        f"{role} · {'built-in' if found.builtin else 'yours'} · {found.kind} · "
+        f"step {found.step} · {'on' if found.on else 'off'}",
+        f"cli: {cli}",
+        f"blocking: {yes[found.blocking]} · "
+        f"skip permission prompts: {yes[found.bypass_permissions]}",
+        f"skill: {found.skill}{' (own instructions)' if found.instructions_own else ''}",
+        f"used in: {used}",
+        f"does: {found.does}",
+        "",
+        found.instructions.rstrip("\n"),
+    ]
+    typer.echo("\n".join(lines))
+
+
+workflow_app = typer.Typer(
+    help="Workflows: create, route and edit the step lists.", no_args_is_help=True
+)
+app.add_typer(workflow_app, name="workflow")
+
+
+@workflow_app.command("new")
+def workflow_new(
+    name: Annotated[str, typer.Argument(help="Lowercase letters, digits, - and _.")],
+    from_: Annotated[str | None, typer.Option("--from", help="Copy this workflow.")] = None,
+    project: Scope = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Add a workflow: a copy of another, or one implement step."""
+    with _errors():
+        change = workflows.new_workflow(name, from_=from_, project=project, by=by)
+    _emit(change, as_json, f"added workflow {name}")
+
+
+@workflow_app.command("rename")
+def workflow_rename(
+    old: Annotated[str, typer.Argument(help="One of your workflows.")],
+    new: Annotated[str, typer.Argument(help="Its new name.")],
+    project: Scope = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Rename one of your workflows; importance routing follows it."""
+    with _errors():
+        change = workflows.rename_workflow(old, new, project=project, by=by)
+    _emit(change, as_json, f"renamed workflow {old} to {new}")
+
+
+@workflow_app.command("remove")
+def workflow_remove(
+    name: Annotated[str, typer.Argument(help="One of your workflows.")],
+    project: Scope = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Remove one of your workflows that nothing uses."""
+    with _errors():
+        change = workflows.remove_workflow(name, project=project, by=by)
+    _emit(change, as_json, f"removed workflow {name}")
+
+
+@workflow_app.command("route")
+def workflow_route(
+    importance: Annotated[str, typer.Argument(help="simple, standard or critical.")],
+    workflow: Annotated[str, typer.Argument(help="The workflow its new tickets run.")],
+    project: Scope = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Choose the workflow new tickets of an importance run."""
+    with _errors():
+        change = workflows.route(importance, workflow, project=project, by=by)
+    _emit(change, as_json, f"{importance} tickets run {workflow}")
+
+
+@workflow_app.command("set")
+def workflow_set(
+    name: Annotated[str, typer.Argument(help="The workflow to write.")],
+    steps: Annotated[str, typer.Option("--steps", help="Steps in order, comma-separated.")],
+    on_fail: Annotated[
+        list[str] | None,
+        typer.Option("--on-fail", help="STEP=TARGET: a failing review step sends the ticket back."),
+    ] = None,
+    project: Scope = None,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Write a workflow's steps and send-back edges whole."""
+    with _errors():
+        edges: dict[str, str] = {}
+        for edge in on_fail or []:
+            source, sep, target = edge.partition("=")
+            if not sep or not source or not target:
+                raise UserError(f"--on-fail takes STEP=TARGET, got {edge}")
+            edges[source.strip()] = target.strip()
+        order = _list(steps)
+        change = workflows.set_workflow(name, order, edges, project=project, by=by)
+    _emit(change, as_json, f"set workflow {name}: {' → '.join(order)}")
 
 
 skills_app = typer.Typer(help="Skills: lint, install and eval.", no_args_is_help=True)
