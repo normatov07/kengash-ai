@@ -41,9 +41,6 @@ Documentation = "https://github.com/normatov07/kengash-ai#readme"
 
 [project.scripts]
 kengash = "kengash_ai.cli:app"
-# the 0.1.0 names: they warn, then run, until 0.3.0 (SP8 spec decision 1)
-harness = "kengash_ai.cli:legacy"
-hrn = "kengash_ai.cli:legacy"
 
 [project.optional-dependencies]
 ui = [
@@ -59,6 +56,7 @@ dev = [
     "mypy>=1.13",
     "pre-commit>=4",
     "pytest>=8",
+    "pytest-timeout>=2.3",
     "ruff>=0.8",
     "uvicorn>=0.32",
 ]
@@ -122,6 +120,9 @@ files = ["src", "scripts", "tests"]
 
 [tool.pytest.ini_options]
 addopts = "-q -m 'not live'"
+# a hung test fails with every thread's stack instead of sitting silent until CI's job limit
+timeout = 300
+timeout_method = "thread"
 markers = ["live: runs the real provider CLIs; opt in with -m live"]
 testpaths = ["tests"]
 pythonpath = ["."]

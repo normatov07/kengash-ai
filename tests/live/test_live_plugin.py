@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.live
+pytestmark = [pytest.mark.live, pytest.mark.timeout(0)]  # real CLIs take minutes
 ROOT = Path(__file__).resolve().parents[2]
 VALIDATORS = {"claude": shutil.which("claude"), "agy": shutil.which("agy")}
 

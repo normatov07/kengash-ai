@@ -31,7 +31,7 @@ Leave out `[ui]` for the CLI alone. The latest code: `uv tool install 'kengash-a
 
 ### Upgrading from 0.1.0
 
-`uv tool upgrade kengash-ai`, then run any `kengash` command once: it moves `~/.harness` to `~/.kengash` and leaves a link behind, so nothing in flight breaks. Then `kengash skills install --agent … --global` (it replaces `harness-memory` with `kengash-memory`) and `kengash doctor --fix` (it turns each project's `.harness` link into `.kengash`). The `harness` and `hrn` commands keep working with a warning until 0.3.0. If your agent's permissions allow `Bash(harness:*)`, allow `Bash(kengash:*)` too.
+`uv tool upgrade kengash-ai`, then run any `kengash` command once: it moves `~/.harness` to `~/.kengash` and leaves a link behind, so nothing in flight breaks. Then `kengash skills install --agent … --global` (it replaces `harness-memory` with `kengash-memory`) and `kengash doctor --fix` (it turns each project's `.harness` link into `.kengash`). From 0.3.0 only `kengash` is installed; the `harness` and `hrn` commands are gone. If your agent's permissions allow `Bash(harness:*)`, allow `Bash(kengash:*)` too.
 
 The skills install as the `kengash` plugin: in Claude Code and Antigravity you type `/kengash:plan`, `/kengash:grill`, `/kengash:ticket`, `/kengash:loop` and `/kengash:ui`; Codex has no plugin namespace, so it gets `$kengash-plan` and so on. Claude Code can also take the plugin from its marketplace: `/plugin marketplace add normatov07/kengash-ai`, then `/plugin install kengash@kengash-ai`.
 
