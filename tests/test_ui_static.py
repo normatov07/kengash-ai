@@ -269,3 +269,54 @@ def test_nav_folds_into_a_menu() -> None:
     shell = (STATIC / "app.js").read_text()
     assert "data-nav-toggle" in shell and "aria-expanded" in shell and 'key === "Escape"' in shell
     assert css_rule(".nav-toggle")["display"] == "none"  # shown only on narrow screens
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_every_link_has_an_insert_port() -> None:
+    graph = (STATIC / "graph.js").as_uri()
+    html = (STATIC / "html.js").as_uri()
+    out = _node(
+        f"import {{ layout, canvas }} from '{graph}'; import {{ render }} from '{html}';"
+        "const g = layout(['plan', 'implement', 'review_code'], {review_code: 'implement'});"
+        "const page = render(canvas(g, {insert: true}));"
+        'const found = [...page.matchAll(/data-insert-at="(\\d+)"/g)];'
+        "console.log(JSON.stringify(found.map((m) => +m[1])));"
+    )
+    assert json.loads(out) == [0, 1, 2, 3]
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_workflow_edits() -> None:
+    flow = (STATIC / "views" / "workflow.js").as_uri()
+    found = json.loads(
+        _node(
+            f"import * as w from '{flow}';"
+            "const d = {steps: ['plan', 'implement', 'review_code', 'security'],"
+            " on_fail: {review_code: 'implement', security: 'implement'}};"
+            "const kinds = {plan: 'read', implement: 'edit', review_code: 'review',"
+            " security: 'review',"
+            " perf: 'review', tidy: 'edit'};"
+            "console.log(JSON.stringify({"
+            " back: w.backTargets(d.steps, 'review_code'),"
+            " inserted: w.insertStep(d, 3, 'perf').steps,"
+            " moved: w.moveStep(d, 'security', 1),"
+            " swapReview: w.swapStep(d, 'review_code', 'perf', kinds).on_fail,"
+            " swapEdit: w.swapStep(d, 'implement', 'tidy', kinds),"
+            " swapToEdit: w.swapStep(d, 'security', 'tidy', kinds).on_fail,"
+            " removed: w.removeStep(d, 'implement')}));"
+        )
+    )
+    assert found["back"] == ["plan", "implement"]
+    assert found["inserted"] == ["plan", "implement", "review_code", "perf", "security"]
+    # a step moved above its send-back target loses that edge: edges only send back
+    assert found["moved"] == {
+        "steps": ["plan", "security", "implement", "review_code"],
+        "on_fail": {"review_code": "implement"},
+    }
+    assert found["swapReview"] == {"perf": "implement", "security": "implement"}
+    assert found["swapEdit"] == {
+        "steps": ["plan", "tidy", "review_code", "security"],
+        "on_fail": {"review_code": "tidy", "security": "tidy"},
+    }
+    assert found["swapToEdit"] == {"review_code": "implement"}
+    assert found["removed"] == {"steps": ["plan", "review_code", "security"], "on_fail": {}}

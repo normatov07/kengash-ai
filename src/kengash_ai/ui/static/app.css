@@ -487,7 +487,7 @@ a.dep-row:hover { border-color: var(--line-strong); color: var(--text); }
 .zoom button:hover { background: var(--pressed); color: var(--text); }
 .zoom span { padding: 0 6px; font-size: 11px; min-width: 42px; text-align: center; }
 .wf-dry { padding: 10px 18px; border-bottom: 1px solid var(--line-soft); font-size: 12.5px; }
-.wf-stage { padding: 20px; overflow: auto; max-height: 1060px; }
+.wf-stage { position: relative; padding: 20px; overflow: auto; max-height: 1060px; }
 .wf-zoom { transform-origin: top left; }
 .wf-canvas { position: relative; border-radius: 10px; background-color: #111417; background-image: radial-gradient(#272d35 1.2px, transparent 1.2px); background-size: 20px 20px; }
 .wf-edges { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
@@ -848,4 +848,34 @@ a.idx-row:hover { background: #191c21; color: var(--text); }
   .seg { grid-template-columns: 1fr; }
   .fields { flex-direction: column; }
   .top .btn { padding: 7px 10px; }
+}
+
+/* workflow (SP10 spec §5.4): tabs with New workflow and a menu, a + on every link, the
+   importance panel, the new and rename dialog */
+.flow-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.flow-bar .imp-tabs { margin-left: 0; max-width: 100%; overflow-x: auto; }
+.flow-bar .imp-tabs button { white-space: nowrap; }
+.wf-insert { position: absolute; z-index: 2; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 1.5px solid #4a535e; border-radius: 50%; background: #111417; color: var(--muted); cursor: pointer; }
+.wf-insert:hover, .wf-insert:focus-visible { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.wf-node[draggable="true"] { cursor: grab; }
+.wf-pick-layer { position: absolute; inset: 0; pointer-events: none; }
+.wf-pick-layer > * { pointer-events: auto; }
+.sel-link { display: inline-block; margin-top: 6px; font-size: 12px; }
+.route, .route-head { display: grid; grid-template-columns: 3px 64px minmax(0, 1fr) 58px; align-items: center; gap: 9px; }
+.route-head { padding: 0 13px; font-size: 11px; }
+.route-name { font-size: 13px; }
+.route-flow { min-width: 0; width: 100%; font-family: var(--sans); }
+.route-flow.set, .route-loops.set { border-color: #4a3a24; background-color: #211d18; }
+.route-loops { width: 100%; padding: 7px 9px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--raised); color: var(--text); font-size: 12px; }
+.wf-dialog { width: min(440px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--panel); color: var(--text); }
+.wf-dialog::backdrop { background: rgba(7, 9, 11, 0.76); }
+.wf-dialog-form { display: flex; flex-direction: column; gap: 14px; padding: 20px 22px; }
+.wf-dialog h2 { margin: 0; font-size: 17px; font-weight: 600; }
+.wf-dialog .field label { letter-spacing: 0; font-size: 12px; font-weight: 500; color: var(--muted); }
+.wf-dialog small { display: block; margin-top: 4px; font-size: 11px; }
+.wf-dialog-error { margin: 0; font-size: 12px; }
+.wf-dialog-error:empty { display: none; }
+.wf-dialog-foot { display: flex; justify-content: flex-end; gap: 8px; }
+@media (max-width: 900px) {
+  .wf-side { flex-basis: 100%; }
 }

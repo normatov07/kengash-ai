@@ -75,8 +75,9 @@ function geometry(graph) {
 }
 
 // sub(id): the node's second line; off(id): the step is skipped; ghost: a step shown as
-// "not wired in" beside done.
-export function canvas(graph, { selected = "", sub = () => "", off = () => false, gate = () => false, ghost = "" } = {}) {
+// "not wired in" beside done; insert: a "+" on every link, carrying the step index a new
+// step takes there (SP10), and nodes that can be dragged.
+export function canvas(graph, { selected = "", sub = () => "", off = () => false, gate = () => false, ghost = "", insert = false } = {}) {
   const { at, backs, width, height } = geometry(graph);
   const pass = graph.edges.filter((edge) => edge.kind === "pass");
   const done = at.done;
@@ -94,7 +95,11 @@ export function canvas(graph, { selected = "", sub = () => "", off = () => false
         return html`<path d="M${a.x + W + 5} ${y1} H${edge.lane} V${y2} H${b.x + W + 12}" fill="none" stroke="#8E6B5E" stroke-width="2" stroke-dasharray="6 5" stroke-linejoin="round" marker-end="url(#wf-back)"><title>${LABELS[edge.from] ?? edge.from} sends back to ${LABELS[edge.to] ?? edge.to}</title></path>`;
       })}
     </svg>
-    ${pass.map((edge) => (PASS[edge.from] ? html`<div class="wf-label" style="left: ${X + W / 2 + 12}px; top: ${at[edge.from].y + H + 24}px">${PASS[edge.from]}</div>` : ""))}
+    ${pass.map((edge) => (PASS[edge.from] ? html`<div class="wf-label" style="left: ${X + W / 2 + (insert ? 20 : 12)}px; top: ${at[edge.from].y + H + 24}px">${PASS[edge.from]}</div>` : ""))}
+    ${insert ? pass.map((edge, i) => {
+      const [a, b] = [at[edge.from], at[edge.to]];
+      return html`<button type="button" class="wf-insert" data-insert-at="${i}" style="left: ${X + W / 2 - 11}px; top: ${(a.y + H + b.y) / 2 - 11}px" aria-label="Insert an agent between ${LABELS[edge.from] ?? edge.from} and ${LABELS[edge.to] ?? edge.to}" title="Insert an agent here">${icon("plus", { size: 12, width: 2 })}</button>`;
+    }) : ""}
     ${backs.map((edge) => html`<div class="wf-label back" style="left: ${edge.lane + 8}px; top: ${(at[edge.from].y + 52 + at[edge.to].y + 22) / 2 - 8}px">${BACK[edge.from] ?? "send back"}</div>`)}
     ${graph.nodes.map((node, i) => {
       const fixed = node.id === "trigger" || node.id === "done";
@@ -102,7 +107,7 @@ export function canvas(graph, { selected = "", sub = () => "", off = () => false
       const outBack = backs.some((edge) => edge.from === node.id);
       const inBack = backs.some((edge) => edge.to === node.id);
       const classes = ["wf-node", node.id === "trigger" ? "trigger" : "", node.id === "done" ? "done" : "", gate(node.id) ? "gate" : "", node.id === selected ? "selected" : "", off(node.id) ? "off" : ""].join(" ");
-      return html`<div class="${classes}" style="left: ${node.x}px; top: ${node.y}px" ${fixed ? "" : html`data-node="${node.id}" tabindex="0" role="button" aria-pressed="${node.id === selected ? "true" : "false"}"`}>
+      return html`<div class="${classes}" style="left: ${node.x}px; top: ${node.y}px" ${fixed ? "" : html`data-node="${node.id}" tabindex="0" role="button" aria-pressed="${node.id === selected ? "true" : "false"}" ${insert ? html`draggable="true" aria-description="Alt and arrow keys move it"` : ""}`}>
         ${node.id !== "trigger" ? html`<span class="port p-top"></span>` : ""}${inBack ? html`<span class="port p-in"></span>` : ""}${outBack ? html`<span class="port p-out"></span>` : ""}${node.id !== "done" ? html`<span class="port p-bottom ${node.id === selected ? "lit" : ""}"></span>` : ""}
         <span class="wf-icon" style="background: ${tile}">${icon(STEP_ICONS[node.id] ?? "plan", { size: 15, stroke, width: 1.6 })}</span>
         <span class="wf-text"><b>${node.id === "trigger" ? LABELS.trigger : `${i} · ${LABELS[node.id] ?? node.id}`}</b><span class="mono ${gate(node.id) ? "gate-sub" : ""}">${off(node.id) ? "off · skipped" : sub(node.id)}</span></span>
