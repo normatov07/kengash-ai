@@ -9,7 +9,7 @@ from kengash_ai.adapters.codex import Codex
 from kengash_ai.adapters.shell import Shell
 from kengash_ai.model import REPLACED, UserError, replaced
 
-__all__ = ["Provider", "get"]
+__all__ = ["Provider", "get", "known_models"]
 
 
 def get(name: str, *, runtime: Path) -> Provider:
@@ -25,3 +25,9 @@ def get(name: str, *, runtime: Path) -> Provider:
     if name in REPLACED:
         raise UserError(replaced(name))
     raise UserError(f"unknown provider: {name}")
+
+
+def known_models(name: str) -> list[str]:
+    """The model names a CLI is known to take without asking it: Claude Code's aliases;
+    none for CLIs whose list comes from the CLI itself or that have no list."""
+    return list(Claude.MODELS) if name == "claude" else []

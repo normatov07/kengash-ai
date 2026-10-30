@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
-from kengash_ai import __version__, journal, settings, workflow
+from kengash_ai import __version__, adapters, journal, settings, workflow
 from kengash_ai.model import (
     BUILTIN_KINDS,
     IMPORTANCES,
@@ -750,7 +750,7 @@ def agents_view(
                 resolved.sessions.per_provider.get(name, 0),
                 spend.get(name, 0),
                 status is not None,
-                list(status.models) if status else [],
+                list(status.models) if status else adapters.known_models(name),
             )
         )
     tokens = _role_tokens(events, window)

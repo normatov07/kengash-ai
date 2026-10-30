@@ -30,6 +30,7 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 
 ## Changes
 
+- 2026-10-30: Settings gains Planning and merging (plan reviewer: another provider or a picked CLI and model; plan review rounds; questions per grill round; merge mode as radio cards) and the memory compactor picker, saved through hidden `data-key` inputs; scope.text loses its datalist option; narrow-screen fixes: the ticket index's title column (`.table .idx-rows`), ticket tabs that never wrap, board columns that snap, journal lines that wrap on phones; providers that were not detected still list their fixed models (SP10 M4).
 - 2026-10-30: the Workflow screen is rebuilt on the SP10 spec (insert anywhere, drag and keyboard moves, agent swap, routing and loop caps, new / rename / copy / delete workflows; the node library goes); the send-back select's id no longer clashes with the graph's `wf-back` arrow marker (SP10 M4).
 - 2026-10-30: `POST /api/workflows` `{project, name, from}`, `POST /api/workflows/{name}/rename` `{project, new}`, `POST /api/workflows/{name}/remove` `{project}` call `ops.workflows` and answer with the Workflows view, which gains `routing` and `picker` (SP10 M4).
 - 2026-10-30: the Agents screen is rebuilt on the SP10 spec (list and editor, drafts and a save bar, copy, instructions, used-in editing; axe clean, 1440 / 820 / 390 px without sideways scroll); `GET /api/skills/{name}`; scope tabs never wrap (SP10 M3).

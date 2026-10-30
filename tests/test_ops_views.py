@@ -441,6 +441,13 @@ def test_a_gate_at_its_loop_cap_reads_as_a_loop_cap(seeded: StorePaths) -> None:
 def test_agents_render_before_detection_runs(seeded: StorePaths, detected: list[str]) -> None:
     found = views.agents_view(seeded, project=None, window="today", detect=False)
     assert detected == [] and not any(card.checked for card in found.providers)
+    # the fixed model names come without running any CLI, so pickers offer them at once
+    models = {card.name: card.models for card in found.providers}
+    assert models == {
+        "claude": ["fable", "opus", "sonnet", "haiku"],
+        "codex": [],
+        "antigravity": [],
+    }
     views.agents_view(seeded, project=None, window="today")  # detection runs and is kept
     again = views.agents_view(seeded, project=None, window="today", detect=False)
     assert all(card.checked for card in again.providers)

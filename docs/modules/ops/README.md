@@ -58,6 +58,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-30: a provider card not detected yet lists `adapters.known_models(name)` (SP10 M4).
 - 2026-10-30: `views.workflows_view` gains `routing` and `picker` (SP10 M4).
 - 2026-10-30: `views.skill_text(project=, name=)` → `SkillText(name, source, text)`; `agent_config.body(path)` is public (SP10 M3).
 - 2026-10-30: `views.agents_view` returns full agent details, role skills and instruction caps, and providers' models; `routing` and `loop_max` leave it for the Workflow screen; `skills.role_skills` (SP10 M3).

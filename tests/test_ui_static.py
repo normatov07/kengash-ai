@@ -320,3 +320,22 @@ def test_workflow_edits() -> None:
     }
     assert found["swapToEdit"] == {"review_code": "implement"}
     assert found["removed"] == {"steps": ["plan", "review_code", "security"], "on_fail": {}}
+
+
+def test_no_text_input_offers_a_datalist() -> None:
+    for path in sorted((STATIC / "views").glob("*.js")):
+        assert "list=" not in path.read_text(), path.name
+    assert "datalist" not in (STATIC / "scope.js").read_text()
+
+
+def test_settings_offers_planning_and_merging_as_real_controls() -> None:
+    page = (STATIC / "views" / "settings.js").read_text()
+    for key in (
+        "plan.reviewer",
+        "memory.compactor",
+        "merge.mode",
+        "grill.round_size",
+        "plan.review_max",
+    ):
+        assert f'"{key}"' in page, key
+    assert "modelPicker(" in page and "segmented(" in page

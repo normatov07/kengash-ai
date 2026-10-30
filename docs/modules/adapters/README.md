@@ -29,6 +29,7 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 
 ## Changes
 
+- 2026-10-30: `known_models(name)`: Claude Code's aliases without running the CLI (SP10 M4).
 - 2026-10-30: `ProviderStatus.models` from `detect()` once signed in: claude's `MODELS` aliases (fable, opus, sonnet, haiku), agy's from the `agy models` sign-in check (`antigravity.parse_models`), none for codex (SP10 M3).
 - 2026-10-26: workers get `KENGASH_AGENT` (SP8).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
