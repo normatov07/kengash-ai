@@ -88,8 +88,9 @@ def add_tickets(plan_id: str, text: str, *, project: str | None, by: str) -> Bat
     slug, plan_path = records.locate_plan(paths, plan_id, project)
     resolved = settings.load(paths, slug)
     for number, item in enumerate(items, 1):
-        if item.importance.value not in resolved.workflows:
-            raise UserError(f"ticket {number}: settings have no workflow {item.importance.value!r}")
+        flow = resolved.workflow_for(item.importance.value)
+        if flow not in resolved.workflows:
+            raise UserError(f"ticket {number}: settings have no workflow {flow!r}")
     project_paths = paths.project(slug)
     with locked(paths.locks / f"{slug}.lock"):
         plan_doc = records.load_plan(plan_path)
@@ -114,7 +115,7 @@ def add_tickets(plan_id: str, text: str, *, project: str | None, by: str) -> Bat
                 plan=plan.id,
                 title=item.title,
                 importance=item.importance,
-                workflow=item.importance.value,
+                workflow=resolved.workflow_for(item.importance.value),
                 status="in_queue/ready" if _met(depends_on, existing) else "in_queue/blocked",
                 gate=item.gate,
                 loop_max=getattr(resolved.loop_max, item.importance.value),

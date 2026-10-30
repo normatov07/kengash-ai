@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from conftest import write_settings
 
 from kengash_ai.model import Doc, Folder, NeedsUser, PlanMode, Ticket, UserError
 from kengash_ai.ops import plans, tickets
@@ -233,3 +234,22 @@ def test_closing_a_ticket_clears_its_step(
     assert tickets.show_ticket("7b55e0c1", project=None).meta["step"] == "implement"
     tickets.move_ticket("7b55e0c1", "done", "dropped", project=None, by="x")
     assert "step" not in tickets.show_ticket("7b55e0c1", project=None).meta
+
+
+ROUTED = """\
+workflows:
+  hotfix: {steps: [implement, review_code], on_fail: {review_code: implement}}
+routing: {critical: hotfix}
+"""
+
+
+def test_new_tickets_take_the_routed_workflow(
+    store_paths: StorePaths, registered_repo: Path
+) -> None:
+    write_settings(store_paths, ROUTED)
+    keyring, rotate = tickets.add_tickets(
+        plan_for(registered_repo), BATCH, project=None, by="x"
+    ).tickets
+    meta = tickets.show_ticket(keyring.id, project=None).meta
+    assert (meta["workflow"], meta["loop_max"]) == ("hotfix", 6)  # loops stay the importance's
+    assert tickets.show_ticket(rotate.id, project=None).meta["workflow"] == "standard"
