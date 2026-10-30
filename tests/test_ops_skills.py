@@ -1,9 +1,12 @@
-"""Skills: role skill lookup and seeding, lint, install (SP4 spec decisions 2-7)."""
+"""Skills: role skill lookup and seeding, lint, install (SP4 spec decisions 2-7, SP10 §3)."""
 
+import json
+import shutil
 from pathlib import Path
 
 import pytest
 
+import kengash_ai
 from kengash_ai.model import SkillMeta, UserError
 from kengash_ai.model.settings import SkillCaps
 from kengash_ai.ops import skills
@@ -142,7 +145,8 @@ def test_mentions_reads_code_spans_and_fenced_commands() -> None:
 ALPHA = "---\nname: alpha\ndescription: Use when alpha.\n---\n0. Run `kengash --version`.\n"
 BETA = (
     "---\nname: beta\ndescription: Use when beta.\n---\n"
-    "The kengash store keeps plans.\n\n```\nkengash plan new --title T\n$ kengash wait\n```\n"
+    "The kengash store keeps plans; `/kengash:alpha` uses it.\n\n"
+    "```\nkengash plan new --title T\n$ kengash wait\n```\n"
     "Then `kengash plan review <id>`.\n"
 )
 
@@ -157,51 +161,107 @@ def source(tmp_path: Path) -> Path:
     return folder
 
 
-def test_install_writes_each_agents_folder_once(tmp_path: Path, source: Path) -> None:
-    root = tmp_path / "repo"
-    result = skills.install(["claude", "codex", "agy"], root=root, source=source)
+class FakeAgy:
+    """`agy plugin install` as the spike saw it: the folder is copied into the plugins dir."""
+
+    def __init__(self, home: Path, code: int = 0) -> None:
+        self.home, self.code = home, code
+        self.calls: list[list[str]] = []
+
+    def __call__(self, argv: list[str]) -> int:
+        self.calls.append(argv)
+        if self.code == 0:
+            target = self.home / ".gemini/config/plugins/kengash"
+            shutil.rmtree(target, ignore_errors=True)
+            shutil.copytree(argv[-1], target)
+        return self.code
+
+
+def install(agents: list[str], root: Path, source: Path, **kw: object) -> skills.InstallResult:
+    kw.setdefault("run", FakeAgy(root))
+    kw.setdefault("user_home", root)
+    return skills.install(agents, root=root, source=source, **kw)  # type: ignore[arg-type]
+
+
+def test_claude_gets_a_skills_dir_plugin(tmp_path: Path, source: Path) -> None:
+    result = install(["claude"], tmp_path, source)
+    plugin = tmp_path / ".claude/skills/kengash"
+    manifest = json.loads((plugin / ".claude-plugin/plugin.json").read_text())
+    assert (manifest["name"], manifest["version"]) == ("kengash", kengash_ai.__version__)
+    assert (plugin / "skills/alpha/SKILL.md").read_text() == ALPHA
+    assert (plugin / "skills/beta/references/notes.md").read_text() == "notes\n"
     assert [(e.agent, e.name, e.state) for e in result.entries] == [
         ("claude", "alpha", "installed"),
         ("claude", "beta", "installed"),
-        ("codex,antigravity", "alpha", "installed"),
-        ("codex,antigravity", "beta", "installed"),
     ]
-    assert (root / ".claude/skills/beta/references/notes.md").read_text() == "notes\n"
-    assert (root / ".agents/skills/alpha/SKILL.md").read_text() == ALPHA
+
+
+def test_codex_gets_prefixed_copies(tmp_path: Path, source: Path) -> None:
+    install(["codex"], tmp_path, source)
+    assert (
+        "name: kengash-alpha\n" in (tmp_path / ".agents/skills/kengash-alpha/SKILL.md").read_text()
+    )
+    text = (tmp_path / ".agents/skills/kengash-beta/SKILL.md").read_text()
+    assert "name: kengash-beta\n" in text and "`$kengash-alpha`" in text and "/kengash:" not in text
+    assert (tmp_path / ".agents/skills/kengash-beta/references/notes.md").is_file()
+
+
+def test_agy_installs_the_plugin_and_falls_back(tmp_path: Path, source: Path) -> None:
+    agy = FakeAgy(tmp_path)
+    result = install(["agy"], tmp_path, source, run=agy)
+    assert [(e.agent, e.name, e.state) for e in result.entries] == [
+        ("antigravity", "kengash (plugin)", "installed")
+    ]
+    (argv,) = agy.calls
+    assert argv[:3] == ["agy", "plugin", "install"]
+    installed = tmp_path / ".gemini/config/plugins/kengash"
+    assert (
+        json.loads((installed / ".antigravity-plugin/plugin.json").read_text())["name"] == "kengash"
+    )
+    assert (installed / "skills/alpha/SKILL.md").read_text() == ALPHA
+    assert not pathlib_exists(argv[-1])  # the build folder is temporary
+    failed = install(["agy"], tmp_path / "other", source, run=FakeAgy(tmp_path / "other", 1))
+    text = (tmp_path / "other/.agents/skills/kengash-beta/SKILL.md").read_text()
+    assert "`/kengash-alpha`" in text and all(
+        e.note == "agy plugin install failed; copies instead" for e in failed.entries
+    )
 
 
 def test_install_twice_is_unchanged(tmp_path: Path, source: Path) -> None:
-    skills.install(["claude"], root=tmp_path, source=source)
-    again = skills.install(["claude"], root=tmp_path, source=source)
-    assert {e.state for e in again.entries} == {"unchanged"} and not again.needs_yes
+    for agents in (["claude"], ["codex"], ["antigravity"]):
+        install(agents, tmp_path, source)
+        agy = FakeAgy(tmp_path)
+        again = install(agents, tmp_path, source, run=agy)
+        assert {e.state for e in again.entries} == {"unchanged"} and not again.needs_yes
+        assert agy.calls == []
 
 
 def test_a_hand_edited_skill_needs_yes_and_shows_a_diff(tmp_path: Path, source: Path) -> None:
-    skills.install(["claude"], root=tmp_path, source=source)
-    edited = tmp_path / ".claude/skills/alpha/SKILL.md"
+    install(["claude"], tmp_path, source)
+    edited = tmp_path / ".claude/skills/kengash/skills/alpha/SKILL.md"
     edited.write_text(ALPHA + "My own line.\n")
-    held = skills.install(["claude"], root=tmp_path, source=source)
+    held = install(["claude"], tmp_path, source)
     assert held.needs_yes and edited.read_text().endswith("My own line.\n")
     (diff,) = held.diffs.values()
     assert "-My own line." in diff
-    replaced = skills.install(["claude"], root=tmp_path, source=source, yes=True)
+    replaced = install(["claude"], tmp_path, source, yes=True)
     assert [e.state for e in replaced.entries] == ["updated", "unchanged"]
     assert edited.read_text() == ALPHA
 
 
 def test_cli_name_rewrites_commands_not_prose() -> None:
     renamed = skills.rename_cli(BETA, "/opt/kg/bin/kengash")
-    assert "The kengash store keeps plans." in renamed
+    assert "The kengash store keeps plans;" in renamed
     assert "\n/opt/kg/bin/kengash plan new --title T\n$ /opt/kg/bin/kengash wait\n" in renamed
     assert "`/opt/kg/bin/kengash plan review <id>`" in renamed and "`kengash" not in renamed
 
 
 def test_global_install_uses_each_agents_home_folder(tmp_path: Path, source: Path) -> None:
-    result = skills.install(
-        ["claude", "codex", "antigravity"], root=tmp_path, home=True, source=source
+    result = install(["claude", "codex", "antigravity"], tmp_path, source, home=True)
+    folders = sorted(
+        {str(e.folder.relative_to(tmp_path)).rsplit("/", 1)[0] for e in result.entries}
     )
-    folders = sorted({str(e.folder.parent.relative_to(tmp_path)) for e in result.entries})
-    assert folders == [".agents/skills", ".claude/skills", ".gemini/config/skills"]
+    assert folders == [".agents/skills", ".claude/skills/kengash/skills", ".gemini/config/plugins"]
 
 
 def test_unknown_agents_are_refused(tmp_path: Path, source: Path) -> None:
@@ -214,15 +274,22 @@ def ours(folder: Path, name: str, source: str) -> Path:
     return skill(folder, name, text)
 
 
-def test_install_removes_obsolete_skills_of_ours_only(tmp_path: Path, source: Path) -> None:
+def test_install_removes_old_names_of_ours_only(tmp_path: Path, source: Path) -> None:
     folder = tmp_path / ".claude/skills"
     ours(folder, "harness-memory", "super-harness")  # 0.1.0 shipped it under this name
-    ours(folder, "retired", "kengash-ai")
+    ours(folder, "to-loop", "kengash-ai")
     ours(folder, "theirs", "someone-else")
-    result = skills.install(["claude"], root=tmp_path, source=source)
-    removed = sorted(e.name for e in result.entries if e.state == "removed")
-    assert removed == ["harness-memory", "retired"]
-    assert not (folder / "harness-memory").exists() and (folder / "theirs" / "SKILL.md").is_file()
+    ours(tmp_path / ".agents/skills", "to-loop", "kengash-ai")
+    result = install(["claude", "codex"], tmp_path, source)
+    removed = sorted((e.agent, e.name) for e in result.entries if e.state == "removed")
+    assert removed == [("claude", "harness-memory"), ("claude", "to-loop"), ("codex", "to-loop")]
+    assert (folder / "theirs" / "SKILL.md").is_file() and (folder / "kengash").is_dir()
+
+
+def test_agy_plugin_keeps_codex_copies(tmp_path: Path, source: Path) -> None:
+    install(["codex"], tmp_path, source)
+    install(["antigravity"], tmp_path, source)
+    assert (tmp_path / ".agents/skills/kengash-alpha/SKILL.md").is_file()
 
 
 def test_installed_skills_are_the_six_short_names() -> None:
@@ -243,3 +310,7 @@ def test_no_old_command_spelling_left() -> None:
         if any(old in path.read_text(encoding="utf-8") for old in OLD_COMMANDS)
     ]
     assert stale == []
+
+
+def pathlib_exists(path: str) -> bool:
+    return Path(path).exists()

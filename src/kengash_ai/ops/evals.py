@@ -212,7 +212,8 @@ def run_scenario(
                 return failed(f"setup step {number} printed no id to save")
             values[step.save] = found.group(0)
     if not baseline:
-        skills.install([agent], root=repo, source=source)
+        # agy has no per-session plugin flag: copies keep the user's agy plugins untouched
+        skills.install([agent], root=repo, source=source, agy_plugin=False)
     try:
         return _turns(name, scenario, agent, work, model, values, paths, slug, repo, env)
     finally:

@@ -119,7 +119,7 @@ def test_a_scenario_passes_when_the_conductor_does_the_work(
     assert argv[argv.index("--model") + 1] == "haiku" and "dontAsk" in argv
     assert argv[-4:] == ["Read", "Grep", "Glob", "Bash(kengash:*)"]
     assert call["env"]["KENGASH_AGENT"] == "claude" and "CLAUDECODE" not in call["env"]
-    assert (work / "repo" / ".claude" / "skills" / "plan" / "SKILL.md").is_file()
+    assert (work / "repo/.claude/skills/kengash/skills/plan/SKILL.md").is_file()
 
 
 def test_later_turns_resume_the_session(work: Path, source: Path, fake_clis: FakeClis) -> None:
@@ -191,7 +191,7 @@ def test_agy_conductors_run_sandboxed_without_prompts(
     assert result.passed, result.failure
     argv = fake_clis.calls("agy")[0]["argv"]
     assert argv[-2:] == ["--dangerously-skip-permissions", "--sandbox"]
-    assert (work / "repo" / ".agents" / "skills" / "plan" / "SKILL.md").is_file()
+    assert (work / "repo/.agents/skills/kengash-plan/SKILL.md").is_file()
 
 
 def test_a_hanging_turn_times_out(work: Path, source: Path, fake_clis: FakeClis) -> None:

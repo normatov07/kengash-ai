@@ -59,7 +59,7 @@ Skills are built like code, test first (superpowers `writing-skills`):
 | Route | Where skills land |
 |---|---|
 | `kengash skills install --agent claude [--global]` | the plugin folder `.claude/skills/kengash/` (`~/.claude/skills/kengash/`), loaded as `kengash@skills-dir` |
-| `kengash skills install --agent antigravity` | `agy plugin install` of the plugin built in `~/.kengash/runtime/plugin/kengash/`; `kengash-<name>` copies if that fails |
+| `kengash skills install --agent antigravity` | `agy plugin install` of the plugin built in a temporary folder (agy copies it to `~/.gemini/config/plugins/kengash/`); `kengash-<name>` copies if that fails |
 | `kengash skills install --agent codex [--global]` | `kengash-<name>` copies in `.agents/skills/` (`~/.agents/skills/`) |
 | Claude Code's marketplace | `/plugin marketplace add normatov07/kengash-ai`, then `/plugin install kengash@kengash-ai` |
 
@@ -67,4 +67,4 @@ Role skills are never installed into agents: `kengash` injects them into worker 
 
 - Format: `src/kengash_ai/roles/<role>/SKILL.md` with `name` and `description`; workers get the body without the frontmatter.
 - Lookup: `projects/<slug>/roles/<role>/SKILL.md`, then `defaults/roles/` (seeded by `kengash init`, never overwritten), then the package.
-- Install folders: claude `.claude/skills/`, codex and antigravity `.agents/skills/` in a repo; with `--global`, `~/.claude/skills/`, `~/.agents/skills/` and `~/.gemini/config/skills/`. Antigravity reads its plugin manifest from `.antigravity-plugin/plugin.json`.
+- Install folders: the claude plugin in `.claude/skills/kengash/`, codex copies (and agy's fallback) in `.agents/skills/` in a repo; with `--global`, `~/.claude/skills/kengash/`, `~/.agents/skills/` and `~/.gemini/config/skills/`. Antigravity reads its plugin manifest from `.antigravity-plugin/plugin.json`.

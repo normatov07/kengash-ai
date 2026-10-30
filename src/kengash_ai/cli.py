@@ -999,7 +999,10 @@ def skills_install(
             )
         )
     else:
-        lines = [f"{e.agent} {e.name}: {e.state} → {e.folder}" for e in result.entries]
+        lines = [
+            f"{e.agent} {e.name}: {e.state} → {e.folder}" + (f" ({e.note})" if e.note else "")
+            for e in result.entries
+        ]
         for line in _capped(lines, "kengash skills install --json"):
             typer.echo(line)
         for diff in result.diffs.values():

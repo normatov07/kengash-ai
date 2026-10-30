@@ -46,7 +46,7 @@ def test_cli_install_exits_5_until_yes(
     repo = tmp_path / "repo"
     repo.mkdir()
     first = runner.invoke(app, ["skills", "install", "--agent", "claude", "--path", str(repo)])
-    folder = repo / ".claude" / "skills" / "alpha"
+    folder = repo / ".claude" / "skills" / "kengash" / "skills" / "alpha"
     assert (first.exit_code, first.stdout) == (0, f"claude alpha: installed → {folder}\n")
     (folder / "SKILL.md").write_text("---\nname: alpha\ndescription: Use when.\n---\nmine\n")
     held = runner.invoke(app, ["skills", "install", "--agent", "claude", "--path", str(repo)])
@@ -101,3 +101,20 @@ def test_cli_eval_needs_the_named_agent(tmp_path: Path, fake_clis: FakeClis) -> 
         app, ["skills", "eval", "probe", "--agent", "agy", "--dir", str(tmp_path / "evals")]
     )
     assert result.exit_code == 4 and "antigravity not installed" in result.stderr
+
+
+def test_cli_install_names_the_agy_fallback(
+    tmp_path: Path, store_paths: StorePaths, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source" / "alpha"
+    source.mkdir(parents=True)
+    (source / "SKILL.md").write_text("---\nname: alpha\ndescription: Use when.\n---\nv1\n")
+    monkeypatch.setattr(skills, "packaged", lambda: tmp_path / "source")
+    monkeypatch.setattr(skills, "_run", lambda argv: 1)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    result = runner.invoke(app, ["skills", "install", "--agent", "agy", "--path", str(repo)])
+    folder = repo / ".agents" / "skills" / "kengash-alpha"
+    note = "agy plugin install failed; copies instead"
+    assert result.stdout == f"antigravity alpha: installed → {folder} ({note})\n"
