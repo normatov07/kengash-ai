@@ -23,6 +23,7 @@ export const app = {
   project: "",
   scope: undefined, // the configure screens' scope: "" is the defaults, else a project
   dirty: false, // a configure screen holds unsaved edits; live refresh waits
+  navOpen: false, // below 900 px the sections fold into a menu
   query: "",
   window: "today",
   live: false,
@@ -61,13 +62,22 @@ function nav(current) {
   };
   mount(
     document.getElementById("nav-main"),
-    html`<div class="brand">${brand()}<b>kengash</b><span class="live ${app.live ? "on" : ""}" title="${app.live ? "live: updates as the journal grows" : "reconnecting to the journal"}"></span><span>${app.version}</span></div>
+    html`<div class="brand">${brand()}<b>kengash</b><span class="live ${app.live ? "on" : ""}" title="${app.live ? "live: updates as the journal grows" : "reconnecting to the journal"}"></span><span>${app.version}</span><button class="nav-toggle" type="button" data-nav-toggle aria-controls="nav" aria-expanded="${app.navOpen ? "true" : "false"}" aria-label="${app.navOpen ? "Close the menu" : "Open the menu"}">${icon(app.navOpen ? "close" : "menu", { size: 15, width: 1.7 })}</button></div>
       ${NAV.map(
         ([title, links]) => html`<div class="nav-group"><div class="nav-title">${title}</div>${links.map(
           ([name, label]) => html`<a class="nav-link" href="#/${name}" ${current === name ? html`aria-current="page"` : ""}>${icon(name, { width: 1.4 })}${label}${counts[name] ? html`<span class="nav-count ${name === "memory" ? "alarm" : ""}" ${name === "memory" ? html`title="folder links that need a fix"` : ""}>${counts[name]}</span>` : ""}</a>`,
         )}</div>`,
       )}`,
   );
+}
+
+function openNav(open) {
+  if (app.navOpen === open) return;
+  app.navOpen = open;
+  document.getElementById("nav").classList.toggle("open", open);
+  nav(navName(route().name));
+  if (open) document.querySelector("#nav [aria-current=page]")?.focus();
+  else document.querySelector("[data-nav-toggle]")?.focus();
 }
 
 function defaultTop() {
@@ -78,8 +88,8 @@ function defaultTop() {
     )}</select>
     <label class="sr-only" for="q">Search tickets</label>
     <input id="q" class="search" type="search" placeholder="Search tickets, ids, projects…" value="${app.query}">
-    <button class="btn mono quiet" type="button" data-copy="/to-ticket">${icon("plus-square", { size: 13 })}/to-ticket</button>
-    <button class="btn mono accent" type="button" data-copy="/to-loop">${icon("play", { size: 13, width: 1.8 })}/to-loop</button>`;
+    <button class="btn mono quiet" type="button" data-copy="/kengash:ticket">${icon("plus-square", { size: 13 })}/kengash:ticket</button>
+    <button class="btn mono accent" type="button" data-copy="/kengash:loop">${icon("play", { size: 13, width: 1.8 })}/kengash:loop</button>`;
 }
 
 function placeholder(name) {
@@ -153,9 +163,12 @@ document.addEventListener("input", (event) => {
   if (event.target.id === "q") app.query = event.target.value;
 });
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && app.navOpen) openNav(false);
   if (event.target.id === "q" && event.key === "Enter" && route().name !== "board") location.hash = "#/board";
 });
 document.addEventListener("click", async (event) => {
+  if (event.target.closest("[data-nav-toggle]")) return openNav(!app.navOpen);
+  if (app.navOpen && (event.target.closest(".nav-link") || !event.target.closest("#nav"))) openNav(false);
   const copy = event.target.closest("[data-copy]");
   if (copy) {
     const command = copy.dataset.copy;

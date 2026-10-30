@@ -1,6 +1,6 @@
 ---
-name: to-plan-with-grill
-description: Use when the user runs /to-plan-with-grill with a feature, change or project to plan after being questioned about it.
+name: grill
+description: Use when the user runs /kengash:grill with a feature, change or project to plan after being questioned about it.
 disable-model-invocation: true
 metadata: {source: kengash-ai}
 ---

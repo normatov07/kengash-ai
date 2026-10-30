@@ -46,8 +46,9 @@ def test_cli_install_exits_5_until_yes(
     repo = tmp_path / "repo"
     repo.mkdir()
     first = runner.invoke(app, ["skills", "install", "--agent", "claude", "--path", str(repo)])
-    folder = repo / ".claude" / "skills" / "alpha"
-    assert (first.exit_code, first.stdout) == (0, f"claude alpha: installed → {folder}\n")
+    folder = repo / ".claude" / "skills" / "kengash" / "skills" / "alpha"
+    note = "note: " + skills.TRUST_NOTE
+    assert (first.exit_code, first.stdout) == (0, f"claude alpha: installed → {folder}\n{note}\n")
     (folder / "SKILL.md").write_text("---\nname: alpha\ndescription: Use when.\n---\nmine\n")
     held = runner.invoke(app, ["skills", "install", "--agent", "claude", "--path", str(repo)])
     assert held.exit_code == 5 and "-mine\n+v1\n" in held.stdout
@@ -55,7 +56,7 @@ def test_cli_install_exits_5_until_yes(
     done = runner.invoke(
         app, ["skills", "install", "--agent", "claude", "--path", str(repo), "--yes"]
     )
-    assert done.exit_code == 0 and done.stdout == f"claude alpha: updated → {folder}\n"
+    assert done.exit_code == 0 and done.stdout == f"claude alpha: updated → {folder}\n{note}\n"
 
 
 @pytest.mark.skipif(UV is None, reason="uv is not installed")
@@ -101,3 +102,20 @@ def test_cli_eval_needs_the_named_agent(tmp_path: Path, fake_clis: FakeClis) -> 
         app, ["skills", "eval", "probe", "--agent", "agy", "--dir", str(tmp_path / "evals")]
     )
     assert result.exit_code == 4 and "antigravity not installed" in result.stderr
+
+
+def test_cli_install_names_the_agy_fallback(
+    tmp_path: Path, store_paths: StorePaths, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source" / "alpha"
+    source.mkdir(parents=True)
+    (source / "SKILL.md").write_text("---\nname: alpha\ndescription: Use when.\n---\nv1\n")
+    monkeypatch.setattr(skills, "packaged", lambda: tmp_path / "source")
+    monkeypatch.setattr(skills, "_run", lambda argv: 1)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    result = runner.invoke(app, ["skills", "install", "--agent", "agy", "--path", str(repo)])
+    folder = repo / ".agents" / "skills" / "kengash-alpha"
+    note = "agy plugin install failed; copies instead"
+    assert result.stdout == f"antigravity alpha: installed → {folder} ({note})\n"

@@ -16,7 +16,7 @@ import pytest
 
 from kengash_ai import gitops
 from kengash_ai.model import Doc, Plan, Ticket, TicketState
-from kengash_ai.ops import projects
+from kengash_ai.ops import projects, skills
 from kengash_ai.store import StorePaths, documents, runtime
 from kengash_ai.store.seed import ensure_store
 
@@ -47,9 +47,12 @@ def _hermetic_store(
     tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """No test reaches the developer's real store, nor moves a real ~/.harness: every test
-    starts with KENGASH_HOME in a temporary folder (tests of the move unset it)."""
+    starts with KENGASH_HOME in a temporary folder (tests of the move unset it). Nor their
+    installed skills: kengash looks for them in a temporary home folder."""
     monkeypatch.setenv("KENGASH_HOME", str(tmp_path_factory.mktemp("store") / ".kengash"))
     monkeypatch.delenv("HARNESS_HOME", raising=False)
+    home = tmp_path_factory.mktemp("home")
+    monkeypatch.setattr(skills, "home_folder", lambda: home)
 
 
 @pytest.fixture

@@ -18,7 +18,7 @@ from fastapi.responses import (
     StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from kengash_ai.model import JournalCursor, KengashError, NeedsSetup, NeedsUser
 from kengash_ai.ops import (
@@ -32,6 +32,7 @@ from kengash_ai.ops import (
     projects,
     tickets,
     views,
+    workflows,
 )
 
 STATIC = Path(__file__).parent / "static"
@@ -93,6 +94,53 @@ class NewAgent(BaseModel):
     workflows: list[str] = []
     after: str | None = None
     send_back: str | None = None
+    fallback: list[str] = []
+    skill: str | None = None
+    instructions: str | None = None
+
+
+class AgentPatchBody(BaseModel):
+    """The fields of an agent edit (SP10 spec §6); a field left out stays as it is."""
+
+    cli: str | None = None
+    fallback: list[str] | None = None
+    on: bool | None = None
+    blocking: bool | None = None
+    bypass_permissions: bool | None = None
+    kind: Literal["read", "edit", "review"] | None = None
+    does: str | None = None
+    skill: str | None = None
+    instructions: str | None = None
+
+
+class AgentEdit(BaseModel):
+    """The body of an agent edit: the scope and the patch."""
+
+    project: str = ""
+    patch: AgentPatchBody
+
+
+class AgentCopy(BaseModel):
+    """The body of an agent copy: the scope and the new role's name."""
+
+    project: str = ""
+    new: str
+
+
+class NewWorkflow(BaseModel):
+    """The body of a new workflow: a copy of `from`, or one implement step."""
+
+    model_config = ConfigDict(populate_by_name=True)
+    project: str = ""
+    name: str
+    from_: str | None = Field(None, alias="from")
+
+
+class RenameWorkflow(BaseModel):
+    """The body of a workflow rename."""
+
+    project: str = ""
+    new: str
 
 
 class Scope(BaseModel):
@@ -259,9 +307,25 @@ def create_app(*, token: str, port: int) -> FastAPI:
             workflows=body.workflows,
             after=body.after,
             send_back=body.send_back,
+            fallback=body.fallback,
+            skill=body.skill,
+            instructions=body.instructions,
             project=project,
             by=BY,
         )
+        return views.agents_view(project=project, detect=False)
+
+    @app.post("/api/agents/{role}")
+    def edit_agent(role: str, body: AgentEdit) -> views.AgentsView:
+        project = body.project or None
+        patch = agent_config.AgentPatch(**body.patch.model_dump())
+        agent_config.edit_agent(role, patch, project=project, by=BY)
+        return views.agents_view(project=project, detect=False)
+
+    @app.post("/api/agents/{role}/copy")
+    def copy_agent(role: str, body: AgentCopy) -> views.AgentsView:
+        project = body.project or None
+        agent_config.copy_agent(role, body.new, project=project, by=BY)
         return views.agents_view(project=project, detect=False)
 
     @app.post("/api/agents/{role}/remove")
@@ -269,9 +333,31 @@ def create_app(*, token: str, port: int) -> FastAPI:
         agent_config.remove_agent(role, project=body.project or None, by=BY)
         return views.agents_view(project=body.project or None, detect=False)
 
+    @app.get("/api/skills/{name}")
+    def skill_text(name: str, project: str = "") -> views.SkillText:
+        return views.skill_text(project=project or None, name=name)
+
     @app.get("/api/workflows")
     def workflows_view(project: str = "") -> views.WorkflowsView:
         return views.workflows_view(project=project or None)
+
+    @app.post("/api/workflows")
+    def new_workflow(body: NewWorkflow) -> views.WorkflowsView:
+        project = body.project or None
+        workflows.new_workflow(body.name, from_=body.from_, project=project, by=BY)
+        return views.workflows_view(project=project)
+
+    @app.post("/api/workflows/{name}/rename")
+    def rename_workflow(name: str, body: RenameWorkflow) -> views.WorkflowsView:
+        project = body.project or None
+        workflows.rename_workflow(name, body.new, project=project, by=BY)
+        return views.workflows_view(project=project)
+
+    @app.post("/api/workflows/{name}/remove")
+    def remove_workflow(name: str, body: Scope) -> views.WorkflowsView:
+        project = body.project or None
+        workflows.remove_workflow(name, project=project, by=BY)
+        return views.workflows_view(project=project)
 
     @app.get("/api/memory")
     def memory_view(project: str = "") -> views.MemoryView:

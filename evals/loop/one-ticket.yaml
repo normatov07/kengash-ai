@@ -1,4 +1,4 @@
-skill: to-loop
+skill: loop
 description: the conductor runs a ready ticket through its workers and merges it once the user agrees
 notes: >-
   RED 2026-10-23: claude (haiku) claimed no ticket; agy found next, run and wait on its own,
@@ -31,7 +31,7 @@ setup:
         acceptance: ["calc.add(2, 3) == 5"]
     save: ticket
 turns:
-  - "/to-loop"
+  - "{kg}loop"
   - "Yes, merge it."
 expect:
   journal: [ticket.claimed, step.end, ticket.merged]

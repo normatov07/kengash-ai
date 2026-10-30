@@ -1,4 +1,4 @@
-skill: to-plan-with-grill
+skill: grill
 description: questions with recommended answers first, then a reviewed plan the user approves
 notes: >-
   RED 2026-10-23: neither claude (haiku) nor agy created a kengash plan; both worked on the
@@ -9,7 +9,7 @@ files:
   calc.py: "\"\"\"Small arithmetic helpers.\"\"\"\n\n\ndef sub(a: int, b: int) -> int:\n    return a - b\n"
 settings: "plan.reviewer: {cli}\nplan.review_max: 1\n"
 turns:
-  - "/to-plan-with-grill Add an add(a, b) function to calc.py"
+  - "{kg}grill Add an add(a, b) function to calc.py"
   - "Take your recommended answers."
   - "Yes, that is what I want."
   - "Approve it."

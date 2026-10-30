@@ -1,6 +1,7 @@
 """Antigravity driver: `agy -p` with JSON output (SP3 spec §8.1, live runs of 2026-10-23)."""
 
 import json
+import re
 from typing import Any
 
 from kengash_ai.adapters.base import (
@@ -28,6 +29,8 @@ EDIT_LINE = (
 )
 MODE = {"read_only": "plan", "edit_worktree": "accept-edits"}
 
+_MODEL = re.compile(r"[A-Za-z0-9][\w.:-]*")
+
 
 class Antigravity(CliProvider):
     """No isolation flag: `--disable-slash-commands` makes agy ignore `--mode`."""
@@ -36,6 +39,9 @@ class Antigravity(CliProvider):
     binary = "agy"
     install_hint = "install the Antigravity CLI (agy), then run `agy` once to sign in"
     signin_hint = "run `agy` and sign in"
+
+    def __init__(self) -> None:
+        self._models: list[str] = []
 
     def command(self, req: StepRequest) -> list[str]:
         text = f"{req.skill}\n\n{req.prompt}" if req.skill and not req.resume else req.prompt
@@ -100,10 +106,25 @@ class Antigravity(CliProvider):
 
     def signed_in(self) -> tuple[bool, str | None]:
         result = probe([self.binary, "models"])
-        return result is not None and result.returncode == 0, None
+        ok = result is not None and result.returncode == 0
+        self._models = parse_models(result.stdout) if result is not None and ok else []
+        return ok, None
+
+    def models(self) -> list[str]:
+        return list(self._models)
 
     def attach_command(self, session_id: str) -> list[str]:
         return [self.binary, "--conversation", session_id]
+
+
+def parse_models(stdout: str) -> list[str]:
+    """The model ids `agy models` lists, one `<id>\t<label>` per line after a progress line."""
+    found: list[str] = []
+    for line in stdout.splitlines():
+        name = line.split("\t", 1)[0].strip()
+        if name and _MODEL.fullmatch(name):
+            found.append(name)
+    return found
 
 
 def _totals(usage: dict[str, Any]) -> Usage:

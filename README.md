@@ -33,7 +33,11 @@ Leave out `[ui]` for the CLI alone. The latest code: `uv tool install 'kengash-a
 
 `uv tool upgrade kengash-ai`, then run any `kengash` command once: it moves `~/.harness` to `~/.kengash` and leaves a link behind, so nothing in flight breaks. Then `kengash skills install --agent … --global` (it replaces `harness-memory` with `kengash-memory`) and `kengash doctor --fix` (it turns each project's `.harness` link into `.kengash`). The `harness` and `hrn` commands keep working with a warning until 0.3.0. If your agent's permissions allow `Bash(harness:*)`, allow `Bash(kengash:*)` too.
 
-The skills can also come from Claude Code's plugin marketplace (`/plugin install kengash-ai --marketplace normatov07/kengash-ai`) or `npx skills add normatov07/kengash-ai`.
+The skills install as the `kengash` plugin: in Claude Code and Antigravity you type `/kengash:plan`, `/kengash:grill`, `/kengash:ticket`, `/kengash:loop` and `/kengash:ui`; Codex has no plugin namespace, so it gets `$kengash-plan` and so on. Claude Code can also take the plugin from its marketplace: `/plugin marketplace add normatov07/kengash-ai`, then `/plugin install kengash@kengash-ai`.
+
+### Upgrading from 0.2.0
+
+Run `kengash skills install --agent … --global` again: the commands are now `/kengash:<name>`, and the old `to-plan`, `to-plan-with-grill`, `to-ticket`, `to-loop`, `open-ui` and `kengash-memory` skills of ours are removed (`kengash doctor` points out any left behind).
 
 ## Quick start
 
@@ -42,12 +46,12 @@ The skills can also come from Claude Code's plugin marketplace (`/plugin install
 
 Then, in your agent:
 
-1. `/to-plan` (or `/to-plan-with-grill` to be interviewed first): a plan, reviewed by an agent on another provider.
-2. `/to-ticket`: the plan becomes tickets with importance, dependencies and touched paths.
-3. `/to-loop`: tickets run in their loops; the agent waits, reports gates and asks before granting loops or merging.
+1. `/kengash:plan` (or `/kengash:grill` to be interviewed first): a plan, reviewed by an agent on another provider.
+2. `/kengash:ticket`: the plan becomes tickets with importance, dependencies and touched paths.
+3. `/kengash:loop`: tickets run in their loops; the agent waits, reports gates and asks before granting loops or merging.
+4. `/kengash:ui` (or `kengash ui open`): the web UI on 127.0.0.1 behind a private link.
 
-Each of these takes an optional project name or folder at the end, such as `/to-loop payments-api` or `/to-ticket "<prompt>" ~/code/payments`; without one, planning uses the project you are in and `/to-loop` works every project. Every `--project/-p` option of `kengash` takes a name or a folder too.
-4. `/open-ui` (or `kengash ui open`): the web UI on 127.0.0.1 behind a private link.
+The first three take an optional project name or folder at the end, such as `/kengash:loop payments-api` or `/kengash:ticket "<prompt>" ~/code/payments`; without one, planning uses the project you are in and `/kengash:loop` works every project. Every `--project/-p` option of `kengash` takes a name or a folder too. In Codex, type `$kengash-loop` and so on.
 
 ## Commands
 
@@ -58,7 +62,8 @@ Each of these takes an optional project name or folder at the end, such as `/to-
 | `kengash next`, `run`, `wait`, `status` | what can start, start it, wait for gates, a summary |
 | `kengash approve`, `park`, `stop`, `pause`, `resume`, `merge` | steer running work |
 | `kengash settings show\|get\|check`, `memory …`, `context` | settings, memory and the conductor's digest |
-| `kengash agent new\|remove` | your own roles and steps |
+| `kengash agent new\|edit\|copy\|show\|remove` | agents: yours in full, built-in ones' CLI, fallbacks and switches |
+| `kengash workflow new\|rename\|remove\|route\|set` | workflows and which one each importance gets |
 | `kengash skills install\|lint\|eval`, `ui open\|stop` | skills and the web UI |
 
 Every command takes `--help`, and most take `--json`. Exit codes: 0 done, 1 a problem, 3 timed out, 4 setup needed, 5 your decision needed.
@@ -78,10 +83,15 @@ Add your own agent to a workflow, for example a performance reviewer that sends 
     kengash agent new perf-reviewer --kind review --does "Flag N+1 queries and hot loops." \
         --cli claude/sonnet --workflow critical --after review_code
 
+Send critical tickets through a workflow of your own:
+
+    kengash workflow new hotfix --from critical
+    kengash workflow route critical hotfix
+
 ## Security model
 
 - Providers run only through their official binaries under your login; kengash never reads or reuses OAuth tokens and removes provider API-key variables from worker environments.
-- The UI binds to 127.0.0.1, checks Host and Origin, needs a fresh per-run token (kept in an `HttpOnly`, `SameSite=Strict` cookie), requires an `X-Harness` header on every change, and sends a strict Content Security Policy.
+- The UI binds to 127.0.0.1, checks Host and Origin, needs a fresh per-run token (kept in an `HttpOnly`, `SameSite=Strict` cookie), requires an `X-Kengash` header on every change, and sends a strict Content Security Policy.
 - The store is a private git repository; text written to memory, tickets and the journal is redacted for common secret shapes.
 - Workers are short-lived processes, one per job; nothing runs in the background between jobs.
 
@@ -89,7 +99,8 @@ Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
 
 ## Troubleshooting
 
-- `kengash doctor` names each problem and its fix; `kengash doctor --fix` repairs links, exclude entries and dead workers, and prunes old logs.
+- `kengash doctor` names each problem and its fix; `kengash doctor --fix` repairs links, exclude entries and dead workers, prunes old logs, and removes the store copies of built-in skills that earlier versions seeded.
+- Installed without `--global`, Claude Code loads the `kengash` plugin only after you trust the project folder.
 - A provider shows "signed out": run the sign-in command the Agents screen or `doctor` prints, then "Check sign-in again".
 - A ticket is stalled or at a loop cap: open it on the board; the sheet shows the findings and the approve or park actions.
 - Worker logs are in `~/.kengash/runtime/logs/`.

@@ -1,6 +1,6 @@
 ---
-name: to-ticket
-description: Use when the user runs /to-ticket with an approved plan id, or with a short prompt to turn straight into tickets.
+name: ticket
+description: Use when the user runs /kengash:ticket with an approved plan id, or with a short prompt to turn straight into tickets.
 disable-model-invocation: true
 metadata: {source: kengash-ai}
 ---
@@ -35,4 +35,4 @@ Read with your file tools; use the shell only for the `kengash` commands below, 
    ```
 
    It prints `N tickets: <ids> (R ready, B blocked)`.
-6. Tell the user the ticket ids and that `/to-loop` runs them.
+6. Tell the user the ticket ids and that `/kengash:loop` runs them.

@@ -335,3 +335,20 @@ def test_a_custom_read_step_hands_notes_on(
     assert engine.ticket().sections["Handoff"] == raw["structured_output"]["handoff"]
     subjects = run_git(engine.worktree, "log", "--format=%s", "main..HEAD").splitlines()
     assert [s for s in subjects if " advise:" in s] == []
+
+
+def test_a_custom_step_between_built_ins_runs_in_order(
+    engine: Engine, fake_clis: FakeClis, store_paths: StorePaths
+) -> None:
+    text = CUSTOM.replace("[plan, implement, {step}]", "[plan, {step}, implement]")
+    write_settings(store_paths, text.format(step="advise", kind="read", edges="{}"))
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "retries = 3\n"})
+    end = steps.run_job("7b55e0c1")
+    assert end == JobEnd("in_process/awaiting_merge", "every step passed")
+    planner, advisor = (" ".join(call["argv"]) for call in fake_clis.calls("claude"))
+    assert (
+        "Polish the change." not in planner and "Polish the change. Do not edit files." in advisor
+    )
+    assert len(fake_clis.calls("codex")) == 1

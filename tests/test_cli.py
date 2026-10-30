@@ -73,3 +73,13 @@ def test_the_first_command_moves_a_0_1_store_and_says_so(
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0 and (tmp_path / ".kengash").is_dir()
     assert f"moved {tmp_path / '.harness'} to {tmp_path / '.kengash'}" in result.stderr
+
+
+def test_every_command_help_renders() -> None:
+    """Rich reads `[...]` in help text as markup; a stray one breaks `--help` (SP6 shipped one)."""
+    from kengash_ai.cli import _command_tree
+
+    broken = [
+        c for c in sorted(_command_tree()) if runner.invoke(app, [*c.split(), "--help"]).exit_code
+    ]
+    assert broken == []

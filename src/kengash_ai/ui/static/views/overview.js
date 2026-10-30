@@ -22,7 +22,7 @@ function subtitle(data, app) {
   const conductors = data.conductors.length;
   const lead = conductors
     ? `${conductors} live ${conductors === 1 ? "conductor" : "conductors"} (${[...new Set(data.conductors.map((c) => c.agent))].join(", ")})`
-    : "no live conductor: run /to-loop in your agent";
+    : "no live conductor: run /kengash:loop in your agent";
   return `${projects} ${projects === 1 ? "project" : "projects"} · ${live} live CLI ${live === 1 ? "session" : "sessions"} · ${lead}${data.paused ? " · all loops paused" : ""}`;
 }
 
@@ -61,7 +61,7 @@ function sessions(data, app) {
             </div>`,
           )}
         </div></div>`
-      : html`<div class="empty">No agent is running a step. Start the queue with /to-loop in your agent.</div>`}
+      : html`<div class="empty">No agent is running a step. Start the queue with /kengash:loop in your agent.</div>`}
   </section>`;
 }
 

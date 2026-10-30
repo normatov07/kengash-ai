@@ -204,7 +204,7 @@ def test_the_agents_screen_reads_one_scope(
     signed_in(client)
     shown = client.get("/api/agents?project=payments-api&window=7d").json()
     assert shown["scope"] == "payments-api"
-    assert {role["role"] for role in shown["roster"]} >= {"planner", "implementer"}
+    assert {agent["role"] for agent in shown["agents"]} >= {"planner", "implementer"}
     assert [card["name"] for card in shown["providers"]] == ["claude", "codex", "antigravity"]
     assert {card["hint"] for card in shown["providers"]} == {"install it"}
 
@@ -271,9 +271,9 @@ def test_new_agent_endpoint_saves_and_needs_the_header(
     assert client.post("/api/agents", json=NEW_AGENT).status_code == 403
     added = client.post("/api/agents", json=NEW_AGENT, headers=POST)
     assert added.status_code == 200, added.text
-    roles = {row["role"]: row for row in added.json()["roster"]}
-    assert (roles["perf-reviewer"]["custom"], roles["perf-reviewer"]["step"]) == (
-        True,
+    roles = {row["role"]: row for row in added.json()["agents"]}
+    assert (roles["perf-reviewer"]["builtin"], roles["perf-reviewer"]["step"]) == (
+        False,
         "perf_review",
     )
     builtin = client.post("/api/agents", json=NEW_AGENT | {"role": "code-reviewer"}, headers=POST)
@@ -287,7 +287,33 @@ def test_remove_agent_endpoint(client: TestClient) -> None:
         "/api/agents/perf-reviewer/remove", json={"project": "payments-api"}, headers=POST
     )
     assert removed.status_code == 200
-    assert "perf-reviewer" not in {row["role"] for row in removed.json()["roster"]}
+    assert "perf-reviewer" not in {row["role"] for row in removed.json()["agents"]}
+
+
+def test_edit_copy_endpoints_need_the_header_and_refuse_cleanly(
+    client: TestClient, store_paths: StorePaths
+) -> None:
+    signed_in(client)
+    client.post("/api/agents", json=NEW_AGENT | {"instructions": "Fast.\n"}, headers=POST)
+    patch = {"project": "payments-api", "patch": {"cli": "codex", "instructions": "Faster.\n"}}
+    assert client.post("/api/agents/perf-reviewer", json=patch).status_code == 403
+    edited = client.post("/api/agents/perf-reviewer", json=patch, headers=POST)
+    assert edited.status_code == 200, edited.text
+    perf = {row["role"]: row for row in edited.json()["agents"]}["perf-reviewer"]
+    assert (perf["cli"], perf["instructions"], perf["instructions_own"]) == (
+        "codex",
+        "Faster.\n",
+        True,
+    )
+    before = (store_paths.defaults / "SETTINGS.md").read_bytes()
+    fixed = client.post("/api/agents/planner", json={"patch": {"kind": "read"}}, headers=POST)
+    assert fixed.status_code == 400 and "planner is a built-in agent" in fixed.json()["error"]
+    assert (store_paths.defaults / "SETTINGS.md").read_bytes() == before
+    copied = client.post(
+        "/api/agents/code-reviewer/copy", json={"new": "strict-reviewer"}, headers=POST
+    )
+    assert copied.status_code == 200
+    assert "strict-reviewer" in {row["role"] for row in copied.json()["agents"]}
 
 
 SECURITY_HEADERS = {
@@ -322,3 +348,32 @@ def test_the_0_1_change_header_is_refused(client: TestClient) -> None:
     signed_in(client)
     assert client.post("/api/pause", headers={"X-Harness": "1"}).status_code == 403
     assert client.post("/api/resume", headers=POST).status_code == 200
+
+
+def test_a_role_skill_is_served_for_its_preview(
+    client: TestClient, store_paths: StorePaths
+) -> None:
+    signed_in(client)
+    shown = client.get("/api/skills/review-code?project=payments-api").json()
+    assert (shown["name"], shown["source"]) == ("review-code", "package")
+    assert shown["text"].startswith("# Code reviewer")
+    assert client.get("/api/skills/nope").status_code == 400
+
+
+def test_workflow_endpoints_create_rename_and_refuse(
+    client: TestClient, store_paths: StorePaths, make_ticket: Callable[..., Doc[Ticket]]
+) -> None:
+    signed_in(client)
+    assert client.post("/api/workflows", json={"name": "hotfix"}).status_code == 403
+    made = client.post("/api/workflows", json={"name": "hotfix", "from": "simple"}, headers=POST)
+    assert made.status_code == 200 and "hotfix" in made.json()["names"]
+    renamed = client.post("/api/workflows/hotfix/rename", json={"new": "quickfix"}, headers=POST)
+    assert renamed.status_code == 200 and "quickfix" in renamed.json()["names"]
+    project = store_paths.project("payments-api")
+    documents.save_ticket(project, make_ticket("aa11bb22", workflow="quickfix"))
+    refused = client.post("/api/workflows/quickfix/remove", json={}, headers=POST)
+    assert (
+        refused.status_code == 400 and "used by open tickets: aa11bb22" in refused.json()["error"]
+    )
+    shipped = client.post("/api/workflows/critical/remove", json={}, headers=POST)
+    assert shipped.status_code == 400 and "ships with kengash" in shipped.json()["error"]

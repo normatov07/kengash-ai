@@ -1,6 +1,6 @@
 ---
-name: to-plan
-description: Use when the user runs /to-plan with a feature, change or project to plan without being questioned first.
+name: plan
+description: Use when the user runs /kengash:plan with a feature, change or project to plan without being questioned first.
 disable-model-invocation: true
 metadata: {source: kengash-ai}
 ---

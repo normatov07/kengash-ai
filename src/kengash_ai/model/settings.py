@@ -1,4 +1,5 @@
-"""SETTINGS.md schema (system spec §4.6, SP6 custom steps). Unknown keys are rejected."""
+"""SETTINGS.md schema (system spec §4.6, SP6 custom steps, SP10 routing and fixed built-in
+skills). Unknown keys are rejected."""
 
 import re
 from typing import Literal, Self
@@ -29,7 +30,20 @@ BUILTIN_KINDS: dict[str, Kind | None] = {
     "docs": "edit",
     "approve": None,
 }
+# what each built-in role runs; a user changes it only by copying the agent (SP10 §4.1)
+BUILTIN_SKILLS = {
+    "planner": "plan",
+    "plan-reviewer": "review-plan",
+    "implementer": "implement",
+    "code-reviewer": "review-code",
+    "security-reviewer": "review-security",
+    "test-runner": "run-tests",
+    "doc-writer": "sync-docs",
+}
+IMPORTANCES = ("simple", "standard", "critical")
 STEP_NAME = re.compile(r"[a-z][a-z0-9_]{1,30}")
+WORKFLOW_NAME = re.compile(r"[a-z][a-z0-9_-]{0,30}")
+MODEL_MAX = 100
 # a role names its skill folder too, so it follows the skill-name rule
 ROLE_NAME = re.compile(r"(?=.{2,31}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
 PROVIDERS = ("claude", "codex", "antigravity")
@@ -58,7 +72,9 @@ def split_cli(cli: str) -> tuple[str, str | None]:
 
 
 def _known(cli: str, *, allow_shell: bool = False) -> str:
-    provider, _ = split_cli(cli)
+    provider, slash, model = cli.partition("/")
+    if slash and (not model or len(model) > MODEL_MAX or any(c.isspace() for c in model)):
+        raise ValueError(f"model must be one word: {cli}")
     if provider in REPLACED:
         raise ValueError(replaced(provider))
     known = (*PROVIDERS, SHELL) if allow_shell else PROVIDERS
@@ -193,6 +209,14 @@ class Workflow(_Section):
         ]
         if stray:
             raise ValueError(f"on_fail edges must join steps of this workflow: {', '.join(stray)}")
+        forward = [
+            f"{source}->{target}"
+            for source, target in self.on_fail.items()
+            if self.steps.index(target) >= self.steps.index(source)
+        ]
+        if forward:
+            message = "on_fail edges must send back to an earlier step"
+            raise ValueError(f"{message}: {', '.join(forward)}")
         return self
 
 
@@ -226,6 +250,7 @@ class Settings(_Section):
     agents: dict[str, Agent] = Field(default_factory=dict)
     steps: dict[str, CustomStep] = Field(default_factory=dict)
     workflows: dict[str, Workflow] = Field(default_factory=dict)
+    routing: dict[str, str] = Field(default_factory=dict)  # importance → workflow
     status: StatusNames = Field(default_factory=StatusNames)
     merge: Merge = Field(default_factory=Merge)
 
@@ -247,6 +272,37 @@ class Settings(_Section):
                 # shell only runs project.test_cmd; it never reads a step's instruction
                 raise ValueError(f"steps.{name}: {step.role} needs a model CLI, not shell")
         return self
+
+    @model_validator(mode="after")
+    def _builtin_skills(self) -> Self:
+        for role, skill in BUILTIN_SKILLS.items():
+            agent = self.agents.get(role)
+            if agent is not None and agent.skill != skill:
+                raise ValueError(
+                    f"agents.{role}.skill is fixed at {skill}; set it back, or copy the agent "
+                    f"(kengash agent copy {role} <new>) to change what it does"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _workflows_and_routing(self) -> Self:
+        for name, flow in self.workflows.items():
+            if not WORKFLOW_NAME.fullmatch(name):
+                raise ValueError(f"workflow name must match {WORKFLOW_NAME.pattern}")
+            twice = sorted({step for step in flow.steps if flow.steps.count(step) > 1})
+            if twice:
+                raise ValueError(f"workflows.{name}: step {twice[0]} appears twice")
+        for importance, target in self.routing.items():
+            if importance not in IMPORTANCES:
+                raise ValueError(f"routing: unknown importance {importance}")
+            if target not in self.workflows:
+                raise ValueError(f"routing.{importance}: no workflow {target}")
+        return self
+
+    def workflow_for(self, importance: str) -> str:
+        """The workflow a new ticket of `importance` runs: its routing entry, else the
+        workflow named like the importance."""
+        return self.routing.get(importance, importance)
 
     @model_validator(mode="after")
     def _steps_have_agents(self) -> Self:

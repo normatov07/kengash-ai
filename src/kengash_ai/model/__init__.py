@@ -32,6 +32,8 @@ from kengash_ai.model.runtime import (
 )
 from kengash_ai.model.settings import (
     BUILTIN_KINDS,
+    BUILTIN_SKILLS,
+    IMPORTANCES,
     PROVIDERS,
     REPLACED,
     STEP_ROLES,
@@ -66,6 +68,8 @@ from kengash_ai.model.steps import (
 
 __all__ = [
     "BUILTIN_KINDS",
+    "BUILTIN_SKILLS",
+    "IMPORTANCES",
     "OUTPUT_SCHEMAS",
     "PLAN_SECTIONS",
     "PROVIDERS",
