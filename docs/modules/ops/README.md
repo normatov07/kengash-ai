@@ -58,6 +58,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-10-30 (final review): `new_agent` refuses a built-in skill's name; a review step's default send-back to `implement` only when `implement` comes before it; `skills.install` clears 0.2.0's skills from `.claude/skills` and, globally, agy's own folder once the plugin installs, and notes Claude Code's trust dialog for a project install (`InstallResult.notes`, `TRUST_NOTE`); `old_installs` no longer flags Codex's `kengash-memory` copy; doctor's old-name hint adds `--global` for the home folder, and `doctor --fix` removes ignored built-in skill copies in a store commit.
 - 2026-10-30: a provider card not detected yet lists `adapters.known_models(name)` (SP10 M4).
 - 2026-10-30: `views.workflows_view` gains `routing` and `picker` (SP10 M4).
 - 2026-10-30: `views.skill_text(project=, name=)` → `SkillText(name, source, text)`; `agent_config.body(path)` is public (SP10 M3).

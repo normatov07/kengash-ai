@@ -202,6 +202,12 @@ function editor(data, agent) {
   </div>`;
 }
 
+// The steps a new reviewer may send back to: those before where it is inserted.
+function backChoices(data, f) {
+  const steps = common(data, f.workflows).filter((step) => step !== "approve");
+  return f.after ? steps.slice(0, steps.indexOf(f.after) + 1) : steps;
+}
+
 function common(data, names) {
   const lists = names.map((name) => flowOf(data, name).steps);
   return lists.length ? lists[0].filter((step) => lists.every((list) => list.includes(step))) : [];
@@ -228,7 +234,7 @@ function newEditor(data) {
     ${section("Behaviour", html`<div class="ag-toggles">${c.toggle({ id: "ag-blocking", checked: f.blocking, label: "Blocking gate", hint: "A ticket stops here until this agent passes.", data: { new: "blocking" } })}${c.toggle({ id: "ag-bypass", checked: f.bypass_permissions, label: "Skip permission prompts", hint: "Adds the CLI's bypass flag: it edits and runs commands without asking.", data: { new: "bypass_permissions" } })}</div>`)}
     ${section("Add its step to", html`<div class="ag-flows">${names.map((name) => html`<label class="check"><input type="checkbox" data-new-flow="${name}" ${f.workflows.includes(name) ? "checked" : ""}>${name}</label>`)}</div>
       ${f.workflows.length ? html`<div class="ag-name-row"><div class="field"><label for="ag-new-after">Position</label>${c.select({ id: "ag-new-after", value: f.after, options: [["", "last, before approval"], ...steps.map((s) => [s, `after ${LABELS[s] ?? s.replace(/_/g, " ")}`])], data: { new: "after" } })}</div>
-      ${f.kind === "review" ? html`<div class="field"><label for="ag-new-back">A fail sends the ticket to</label>${c.select({ id: "ag-new-back", value: f.send_back, options: [["", "stop and ask me"], ...steps.map((s) => [s, LABELS[s] ?? s.replace(/_/g, " ")])], data: { new: "send_back" } })}</div>` : ""}</div>` : html`<p class="ag-note">Leave every box clear to add it to workflows later.</p>`}`)}
+      ${f.kind === "review" ? html`<div class="field"><label for="ag-new-back">A fail sends the ticket to</label>${c.select({ id: "ag-new-back", value: backChoices(data, f).includes(f.send_back) ? f.send_back : "", options: [["", "stop and ask me"], ...backChoices(data, f).map((s) => [s, LABELS[s] ?? s.replace(/_/g, " ")])], data: { new: "send_back" } })}</div>` : ""}</div>` : html`<p class="ag-note">Leave every box clear to add it to workflows later.</p>`}`)}
     <footer class="ag-foot"><span class="danger-text" role="alert">${f.error}</span><button class="btn quiet" type="button" data-back>Cancel</button><button class="btn accent" type="submit">${f.from ? "Create the copy" : "Create agent"}</button></footer>
   </form>`;
 }
@@ -476,12 +482,13 @@ export function bind(root, app, data, bar) {
   box.addEventListener("submit", async (event) => {
     event.preventDefault();
     const f = state.fresh;
-    const problem = !ROLE.test(f.role) ? "Name it with lowercase words joined by hyphens, 2 to 31 characters." : data.agents.some((a) => a.role === f.role) ? `An agent called ${f.role} exists.` : !f.does.trim() ? "Say in one line what it does." : f.mode === "own" && !f.instructions.trim() ? "Write its instructions, or pick the starter." : "";
+    const builtinSkill = data.skills.some((s) => s.source === "package" && s.name === f.role);
+    const problem = !ROLE.test(f.role) ? "Name it with lowercase words joined by hyphens, 2 to 31 characters." : data.agents.some((a) => a.role === f.role) ? `An agent called ${f.role} exists.` : builtinSkill ? `${f.role} is the name of a built-in skill; pick another name.` : !f.does.trim() ? "Say in one line what it does." : f.mode === "own" && !f.instructions.trim() ? "Write its instructions, or pick the starter." : "";
     if (problem) {
       f.error = problem;
       return redraw();
     }
-    const body = { project: scopeOf(app), role: f.role, kind: f.kind, does: f.does.trim(), cli: f.cli, fallback: f.fallback, workflows: f.workflows, after: f.workflows.length && f.after ? f.after : null, send_back: f.kind === "review" && f.workflows.length && f.send_back ? f.send_back : null };
+    const body = { project: scopeOf(app), role: f.role, kind: f.kind, does: f.does.trim(), cli: f.cli, fallback: f.fallback, workflows: f.workflows, after: f.workflows.length && f.after ? f.after : null, send_back: f.kind === "review" && f.workflows.length && backChoices(data, f).includes(f.send_back) ? f.send_back : null };
     if (f.mode === "skill") body.skill = f.skill;
     if (f.mode === "own") body.instructions = f.instructions;
     const submit = box.querySelector("[type=submit]");

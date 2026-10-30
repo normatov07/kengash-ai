@@ -47,7 +47,8 @@ def test_cli_install_exits_5_until_yes(
     repo.mkdir()
     first = runner.invoke(app, ["skills", "install", "--agent", "claude", "--path", str(repo)])
     folder = repo / ".claude" / "skills" / "kengash" / "skills" / "alpha"
-    assert (first.exit_code, first.stdout) == (0, f"claude alpha: installed → {folder}\n")
+    note = "note: " + skills.TRUST_NOTE
+    assert (first.exit_code, first.stdout) == (0, f"claude alpha: installed → {folder}\n{note}\n")
     (folder / "SKILL.md").write_text("---\nname: alpha\ndescription: Use when.\n---\nmine\n")
     held = runner.invoke(app, ["skills", "install", "--agent", "claude", "--path", str(repo)])
     assert held.exit_code == 5 and "-mine\n+v1\n" in held.stdout
@@ -55,7 +56,7 @@ def test_cli_install_exits_5_until_yes(
     done = runner.invoke(
         app, ["skills", "install", "--agent", "claude", "--path", str(repo), "--yes"]
     )
-    assert done.exit_code == 0 and done.stdout == f"claude alpha: updated → {folder}\n"
+    assert done.exit_code == 0 and done.stdout == f"claude alpha: updated → {folder}\n{note}\n"
 
 
 @pytest.mark.skipif(UV is None, reason="uv is not installed")

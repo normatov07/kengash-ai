@@ -99,7 +99,8 @@ Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
 
 ## Troubleshooting
 
-- `kengash doctor` names each problem and its fix; `kengash doctor --fix` repairs links, exclude entries and dead workers, and prunes old logs.
+- `kengash doctor` names each problem and its fix; `kengash doctor --fix` repairs links, exclude entries and dead workers, prunes old logs, and removes the store copies of built-in skills that earlier versions seeded.
+- Installed without `--global`, Claude Code loads the `kengash` plugin only after you trust the project folder.
 - A provider shows "signed out": run the sign-in command the Agents screen or `doctor` prints, then "Check sign-in again".
 - A ticket is stalled or at a loop cap: open it on the board; the sheet shows the findings and the approve or park actions.
 - Worker logs are in `~/.kengash/runtime/logs/`.

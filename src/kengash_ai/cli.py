@@ -902,7 +902,12 @@ def _list(value: str | None) -> list[str]:
 def _instructions(source: str | None) -> str | None:
     if source is None:
         return None
-    return _stdin("instructions") if source == "-" else Path(source).read_text(encoding="utf-8")
+    if source == "-":
+        return _stdin("instructions")
+    try:
+        return Path(source).read_text(encoding="utf-8")
+    except OSError as exc:
+        raise UserError(f"cannot read {source}: {exc.strerror or exc}") from exc
 
 
 @agent_app.command("new")
@@ -1222,6 +1227,8 @@ def skills_install(
         ]
         for line in _capped(lines, "kengash skills install --json"):
             typer.echo(line)
+        for note in result.notes:
+            typer.echo(f"note: {note}")
         for diff in result.diffs.values():
             typer.echo(diff, nl=False)
     if result.needs_yes:

@@ -414,3 +414,35 @@ def test_describe_lists_where_used(registered_repo: Path, store_paths: StorePath
     assert planner.instructions == package_body("plan") and planner.model == "opus"
     assert [use.workflow for use in planner.used_in] == ["simple", "standard", "critical"]
     assert planner.does == agent_config.BUILTIN_DOES["planner"]
+
+
+def test_new_agent_refuses_builtin_skill_names(
+    registered_repo: Path, store_paths: StorePaths
+) -> None:
+    """A role named like a built-in skill would run the package's skill, not its own text."""
+    before = scope_files(store_paths)
+    message = r"^review-security is the name of a built-in skill; pick another name$"
+    with pytest.raises(UserError, match=message):
+        agent_config.new_agent(
+            "review-security", kind="review", does=DOES, instructions="Mine.", project=None, by="x"
+        )
+    with pytest.raises(UserError, match=r"^sync-docs is the name of a built-in skill"):
+        agent_config.copy_agent("code-reviewer", "sync-docs", project=None, by="x")
+    assert scope_files(store_paths) == before
+
+
+def test_a_review_step_before_implement_gets_no_default_edge(
+    registered_repo: Path, store_paths: StorePaths
+) -> None:
+    agent_config.new_agent(
+        "spec-reviewer",
+        kind="review",
+        does=DOES,
+        workflows=["simple"],
+        after="plan",
+        project=None,
+        by="x",
+    )
+    flow = settings.load(store_paths).workflows["simple"]
+    assert flow.steps == ["plan", "spec_reviewer", "implement", "review_code"]
+    assert "spec_reviewer" not in flow.on_fail

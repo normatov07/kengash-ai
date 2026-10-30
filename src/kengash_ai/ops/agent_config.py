@@ -144,6 +144,8 @@ def new_agent(
     paths = StorePaths.default()
     if project is not None:
         records.scope(paths, project)
+    if role in skills.ROLES:  # its own skill would lose to the built-in one of that name
+        raise UserError(f"{role} is the name of a built-in skill; pick another name")
     name = step or role.replace("-", "_")
     if send_back is not None and kind != "review":
         raise UserError("only a review step sends a ticket back")
@@ -361,8 +363,8 @@ def _with_step(
     steps.insert(at, step)
     edges = dict(found.on_fail)
     target = send_back
-    if target is None and kind == "review" and "implement" in steps:
-        target = "implement"
+    if target is None and kind == "review" and "implement" in steps[: steps.index(step)]:
+        target = "implement"  # only an earlier step can take a send-back
     if target is not None:
         if target not in steps:
             raise UserError(f"workflow {flow} has no step {target}")

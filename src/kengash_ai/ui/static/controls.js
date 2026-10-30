@@ -80,7 +80,7 @@ export function modelPicker({ id, cards, value, allowShell = false, label = "CLI
   return html`<div class="model-picker" data-model-picker id="${id}" role="group" aria-label="${label}">
     ${select({ id: `${id}-cli`, value: provider, options: cliChoices(cards, provider, allowShell), label: "CLI", data: { part: "cli" } })}
     ${select({ id: `${id}-model`, value: model, options: models, label: "Model", data: { part: "model" } })}
-    <input class="text-input mono" id="${id}-other" data-part="other" placeholder="model name" aria-label="Model name" autocomplete="off" spellcheck="false" hidden>
+    <input class="text-input mono" id="${id}-other" data-part="other" placeholder="model name (empty: the default)" aria-label="Model name" autocomplete="off" spellcheck="false" hidden>
   </div>`;
 }
 
@@ -109,7 +109,7 @@ export function bindModelPicker(picker, cards, onChange) {
     if (model.value === OTHER) other.focus();
     else onChange(modelValue(picker));
   });
-  other.addEventListener("input", () => other.value.trim() && onChange(modelValue(picker)));
+  other.addEventListener("input", () => onChange(modelValue(picker))); // empty: the CLI's default
   sync();
 }
 

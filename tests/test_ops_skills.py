@@ -296,10 +296,17 @@ def test_install_removes_old_names_of_ours_only(tmp_path: Path, source: Path) ->
     ours(folder, "harness-memory", "super-harness")  # 0.1.0 shipped it under this name
     ours(folder, "to-loop", "kengash-ai")
     ours(folder, "theirs", "someone-else")
+    ours(folder, "kengash-memory", "kengash-ai")  # 0.2.0's name, now Codex's copy name
+    skill(source, "memory", "---\nname: memory\ndescription: Use when.\n---\nRemember.\n")
     ours(tmp_path / ".agents/skills", "to-loop", "kengash-ai")
     result = install(["claude", "codex"], tmp_path, source)
     removed = sorted((e.agent, e.name) for e in result.entries if e.state == "removed")
-    assert removed == [("claude", "harness-memory"), ("claude", "to-loop"), ("codex", "to-loop")]
+    assert removed == [
+        ("claude", "harness-memory"),
+        ("claude", "kengash-memory"),
+        ("claude", "to-loop"),
+        ("codex", "to-loop"),
+    ]
     assert (folder / "theirs" / "SKILL.md").is_file() and (folder / "kengash").is_dir()
 
 
@@ -331,3 +338,22 @@ def test_no_old_command_spelling_left() -> None:
 
 def pathlib_exists(path: str) -> bool:
     return Path(path).exists()
+
+
+def test_agy_plugin_clears_its_old_home_copies(tmp_path: Path, source: Path) -> None:
+    """Globally, agy's own skills folder holds no Codex copies: once the plugin installs,
+    0.2.0's skills and an earlier fallback's copies there go."""
+    folder = tmp_path / ".gemini/config/skills"
+    ours(folder, "kengash-memory", "kengash-ai")
+    ours(folder, "kengash-alpha", "kengash-ai")
+    result = install(["antigravity"], tmp_path, source, home=True)
+    assert sorted(e.name for e in result.entries if e.state == "removed") == [
+        "kengash-alpha",
+        "kengash-memory",
+    ]
+
+
+def test_a_project_claude_install_notes_the_trust_dialog(tmp_path: Path, source: Path) -> None:
+    assert install(["claude"], tmp_path, source).notes == [skills.TRUST_NOTE]
+    assert install(["claude"], tmp_path, source, home=True).notes == []
+    assert install(["codex"], tmp_path / "other", source).notes == []

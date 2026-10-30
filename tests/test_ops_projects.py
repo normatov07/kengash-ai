@@ -295,6 +295,7 @@ def test_doctor_warns_about_old_skill_names(store_paths: StorePaths, repo: Path)
     old_skill(repo / ".claude/skills", "to-loop")
     old_skill(skills.home_folder() / ".agents/skills", "open-ui")
     old_skill(repo / ".claude/skills", "loop")  # a current name: not old
+    old_skill(repo / ".agents/skills", "kengash-memory")  # Codex's current copy: not old
     found = [(p.message, p.warning) for p in projects.doctor().problems]
     assert found == [
         (
@@ -304,7 +305,7 @@ def test_doctor_warns_about_old_skill_names(store_paths: StorePaths, repo: Path)
         ),
         (
             f"old kengash skill names installed in {skills.home_folder() / '.agents/skills'}; "
-            "run: kengash skills install --agent codex,antigravity",
+            "run: kengash skills install --agent codex,antigravity --global",
             True,
         ),
     ]
@@ -319,7 +320,22 @@ def test_doctor_lists_ignored_builtin_copies(store_paths: StorePaths, repo: Path
     found = [(p.message, p.warning) for p in projects.doctor().problems]
     message = (
         f"ignored built-in skill copies in {store_paths.defaults / 'roles'} (plan, review-code): "
-        "built-in skills are fixed; copy the agent to change one"
+        "built-in skills are fixed; copy the agent to change one, or run: kengash doctor --fix"
     )
     assert found == [(message, True)]
     assert (store_paths.defaults / "roles" / "plan" / "SKILL.md").is_file()  # never deleted
+
+
+def test_doctor_fix_removes_ignored_builtin_copies(store_paths: StorePaths, repo: Path) -> None:
+    projects.init_project(repo)
+    folder = store_paths.defaults / "roles" / "plan"
+    folder.mkdir(parents=True)
+    (folder / "SKILL.md").write_text("---\nname: plan\ndescription: x\n---\nMine.\n")
+    found = [(p.message, p.fixed) for p in projects.doctor(fix=True).problems]
+    roles = store_paths.defaults / "roles"
+    message = (
+        f"removed ignored built-in skill copies in {roles} (plan); "
+        "the store's git history keeps them"
+    )
+    assert found == [(message, True)] and not folder.exists()
+    assert projects.doctor().problems == []

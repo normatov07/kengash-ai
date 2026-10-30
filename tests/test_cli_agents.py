@@ -140,3 +140,14 @@ def test_cli_workflow_commands(registered_repo: Path) -> None:
     assert code == 1 and "--on-fail takes STEP=TARGET" in out
     shown = json.loads(invoke("workflow", "route", "critical", "critical", "--json")[1])
     assert shown["keys"] == ["routing.critical"]
+
+
+def test_cli_names_an_instructions_file_it_cannot_read(
+    registered_repo: Path, tmp_path: Path
+) -> None:
+    assert invoke(*NEW)[0] == 0
+    missing = tmp_path / "nope.md"
+    code, out = invoke(
+        "agent", "edit", "perf-reviewer", "--instructions-file", str(missing), "-p", "payments-api"
+    )
+    assert code == 1 and f"cannot read {missing}" in out and "Traceback" not in out

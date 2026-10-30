@@ -29,6 +29,7 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warn and run it
 
 ## Changes
 
+- 2026-10-30 (final review): `skills install` prints `note: …` lines (Claude Code's trust dialog for a project install); an `--instructions-file` that cannot be read exits 1 naming it.
 - 2026-10-30: `agent edit|copy|show`, `agent new --fallback --skill --instructions-file`, the `workflow` group; help texts say `PROVIDER or PROVIDER/MODEL`, since Rich read `[/MODEL]` as markup and `agent new --help` crashed (SP10 M2).
 - 2026-10-30: `skills install` prints a note after an entry, such as the agy plugin fallback (SP10 M1).
 - 2026-10-27: `--project/-p` takes a project name or folder on every command (SP9).

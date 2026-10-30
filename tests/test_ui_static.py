@@ -339,3 +339,19 @@ def test_settings_offers_planning_and_merging_as_real_controls() -> None:
     ):
         assert f'"{key}"' in page, key
     assert "modelPicker(" in page and "segmented(" in page
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_an_emptied_other_model_saves_the_default() -> None:
+    controls = (STATIC / "controls.js").as_uri()
+    out = _node(
+        f"import {{ bindModelPicker }} from '{controls}';"
+        "const fake = (value) => ({value, hidden: false, disabled: false, on: {},"
+        " addEventListener(type, f) { this.on[type] = f; }, focus() {}, set innerHTML(x) {}});"
+        "const els = {cli: fake('claude'), model: fake('__other'), other: fake('')};"
+        "const picker = {querySelector: (s) => els[s.match(/part=(\\w+)/)[1]]};"
+        "const got = []; bindModelPicker(picker, [], (v) => got.push(v));"
+        "els.other.value = 'o'; els.other.on.input(); els.other.value = ''; els.other.on.input();"
+        "console.log(JSON.stringify(got));"
+    )
+    assert json.loads(out) == ["claude/o", "claude"]

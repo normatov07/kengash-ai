@@ -246,6 +246,10 @@ OURS = frozenset({"kengash-ai", "super-harness"})
 PLUGIN = "kengash"
 AGY_PLUGINS = ".gemini/config/plugins"  # where `agy plugin install` copies a plugin
 AGY_FAILED = "agy plugin install failed; copies instead"
+TRUST_NOTE = (
+    "Claude Code loads this project's plugin once you trust the folder; "
+    "--global loads it everywhere"
+)
 # how a copy names a command: Codex mentions skills with `$`, Antigravity types `/`
 SPELLING = {"codex": f"${PLUGIN}-", "antigravity": f"/{PLUGIN}-"}
 # the names our skills had before SP10 (and 0.1.0's harness-memory), and who reads each folder
@@ -272,7 +276,9 @@ def old_installs(roots: Sequence[Path]) -> list[tuple[Path, str]]:
     for root in roots:
         for folder, agents in READERS.items():
             path = root / folder
-            if any(stale.name in OLD_NAMES for stale in _obsolete(path, ())):
+            # kengash-memory is also the name of Codex's (and agy's fallback) current copy
+            old = OLD_NAMES if folder == AGENT_DIRS["claude"] else OLD_NAMES - {"kengash-memory"}
+            if any(stale.name in old for stale in _obsolete(path, ())):
                 found.append((path, agents))
     return found
 
@@ -290,6 +296,7 @@ class Installed:
 class InstallResult:
     entries: list[Installed] = field(default_factory=list)
     diffs: dict[str, str] = field(default_factory=dict)
+    notes: list[str] = field(default_factory=list)
 
     @property
     def needs_yes(self) -> bool:
@@ -351,7 +358,9 @@ def install(
     for agent in chosen:
         folder = root / dirs[agent]
         if agent == "claude":
-            _clean(result, agent, folder, keep)
+            _clean(result, agent, folder, ())  # our skills live in the plugin folder now
+            if not home:
+                result.notes.append(TRUST_NOTE)
             plugin = folder / PLUGIN
             _write_manifest(plugin / ".claude-plugin" / "plugin.json")
             _clean(result, agent, plugin / "skills", names)
@@ -360,7 +369,8 @@ def install(
                 _place(result, agent, skill, plugin / "skills" / skill, files, yes)
             continue
         if agent == "antigravity" and agy_plugin:
-            _clean(result, agent, folder, keep)
+            # a folder Codex shares keeps Codex's copies; agy's own loses every copy of ours
+            _clean(result, agent, folder, keep if folder == root / dirs["codex"] else ())
             installed = (user_home or home_folder()) / AGY_PLUGINS / PLUGIN
             entry = _agy_plugin(source, names, cli_name, installed, run or _run)
             if entry is not None:

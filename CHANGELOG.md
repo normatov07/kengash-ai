@@ -25,6 +25,7 @@ All notable changes to this project are written here. The format follows [Keep a
 
 - Every screen works from 360 px up: the sidebar folds into a menu below 900 px, the roster no longer overlaps, the workflow graph pans inside its stage, the ticket index keeps its title column, and closed choices are selects or radio cards instead of text boxes.
 - `kengash agent new --help` crashed on Rich markup in its help text.
+- `kengash agent new` with a review step placed before `implement` defaulted to a send-back to `implement`, which points forward; it now adds no edge there.
 - The Workflow screen's send-back select shared its id with the graph's arrow marker.
 - `kengash wait` could answer `idle` while a finishing worker journaled its gate, so the loop ended without asking for the merge; it now checks running work, live workers included, before reading the journal.
 - `make lint` and `make evals` ran the deprecated `harness` command; the demo store, the view benchmark and the live smoke still used 0.1.0 names.
