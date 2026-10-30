@@ -30,6 +30,7 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 
 ## Changes
 
+- 2026-10-30: `POST /api/workflows` `{project, name, from}`, `POST /api/workflows/{name}/rename` `{project, new}`, `POST /api/workflows/{name}/remove` `{project}` call `ops.workflows` and answer with the Workflows view, which gains `routing` and `picker` (SP10 M4).
 - 2026-10-30: the Agents screen is rebuilt on the SP10 spec (list and editor, drafts and a save bar, copy, instructions, used-in editing; axe clean, 1440 / 820 / 390 px without sideways scroll); `GET /api/skills/{name}`; scope tabs never wrap (SP10 M3).
 - 2026-10-30: `static/controls.js`: `select`, `segmented` (radio cards), `toggle`, `modelPicker` (CLI then that CLI's models, "Other…" for a typed one) with `modelValue`, `chipList` (ordered fallbacks: ✕, add, drag and Alt+arrows), `instructions` (counts against the caps), `agentPicker`, and the pure `splitCli`, `cliValue`, `cliChoices`, `modelChoices`, `moveItem`, `counts`; breakpoints at 1280, 900 and 600 px; below 900 px the sidebar folds into a menu button (`data-nav-toggle`, Escape and outside clicks close it); icons `menu`, `back`, `lock`, `grip`, `search`, `copy` (SP10 M3).
 - 2026-10-30: `GET /api/agents` returns `agents` (`AgentDetail`), `skills`, `instruction_caps` and each provider's `models`; `POST /api/agents/{role}` edits an agent (`{project, patch}`), `POST /api/agents/{role}/copy` copies one (`{project, new}`); new agents take `fallback`, `skill`, `instructions` (SP10 M3).

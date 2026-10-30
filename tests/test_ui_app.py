@@ -358,3 +358,22 @@ def test_a_role_skill_is_served_for_its_preview(
     assert (shown["name"], shown["source"]) == ("review-code", "package")
     assert shown["text"].startswith("# Code reviewer")
     assert client.get("/api/skills/nope").status_code == 400
+
+
+def test_workflow_endpoints_create_rename_and_refuse(
+    client: TestClient, store_paths: StorePaths, make_ticket: Callable[..., Doc[Ticket]]
+) -> None:
+    signed_in(client)
+    assert client.post("/api/workflows", json={"name": "hotfix"}).status_code == 403
+    made = client.post("/api/workflows", json={"name": "hotfix", "from": "simple"}, headers=POST)
+    assert made.status_code == 200 and "hotfix" in made.json()["names"]
+    renamed = client.post("/api/workflows/hotfix/rename", json={"new": "quickfix"}, headers=POST)
+    assert renamed.status_code == 200 and "quickfix" in renamed.json()["names"]
+    project = store_paths.project("payments-api")
+    documents.save_ticket(project, make_ticket("aa11bb22", workflow="quickfix"))
+    refused = client.post("/api/workflows/quickfix/remove", json={}, headers=POST)
+    assert (
+        refused.status_code == 400 and "used by open tickets: aa11bb22" in refused.json()["error"]
+    )
+    shipped = client.post("/api/workflows/critical/remove", json={}, headers=POST)
+    assert shipped.status_code == 400 and "ships with kengash" in shipped.json()["error"]

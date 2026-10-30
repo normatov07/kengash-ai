@@ -12,6 +12,7 @@ from typing import Any, Literal
 from kengash_ai import __version__, journal, settings, workflow
 from kengash_ai.model import (
     BUILTIN_KINDS,
+    IMPORTANCES,
     PROVIDERS,
     STEP_ROLES,
     ConductorPing,
@@ -275,6 +276,17 @@ class AgentsView:
 
 
 @dataclass
+class PickAgent:
+    """An agent the Workflow editor can insert: the step it runs; `approve` is the user."""
+
+    role: str
+    step: str
+    kind: str
+    builtin: bool
+    on: bool
+
+
+@dataclass
 class WorkflowsView:
     """The Workflow editor for one scope (SP5 spec decision 10): each workflow as written,
     the steps a ticket would run, loop caps per importance and each role's CLI."""
@@ -298,6 +310,8 @@ class WorkflowsView:
     roles: dict[str, str | None] = field(default_factory=lambda: dict(STEP_ROLES))
     kinds: dict[str, str | None] = field(default_factory=lambda: dict(BUILTIN_KINDS))
     does: dict[str, str] = field(default_factory=dict)  # each custom step's instruction
+    routing: dict[str, str] = field(default_factory=dict)  # importance → its workflow (SP10)
+    picker: list[PickAgent] = field(default_factory=list)  # what a "+" can insert (SP10)
     set_here: list[str] = field(default_factory=list)
     problem: str = ""
 
@@ -799,6 +813,13 @@ def workflows_view(paths: StorePaths | None = None, *, project: str | None) -> W
     found.roles = {step: resolved.role_of(step) for step in found.library}
     found.kinds = {step: resolved.kind_of(step) for step in found.library}
     found.does = {name: step.does for name, step in resolved.steps.items()}
+    found.routing = {importance: resolved.workflow_for(importance) for importance in IMPORTANCES}
+    for step in found.library:
+        role = resolved.role_of(step)
+        agent = resolved.agents.get(role) if role else None
+        kind = resolved.kind_of(step) or "approve"
+        builtin = step not in resolved.steps
+        found.picker.append(PickAgent(role or "", step, kind, builtin, agent.on if agent else True))
     return found
 
 

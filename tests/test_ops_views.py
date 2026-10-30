@@ -512,3 +512,21 @@ def test_a_custom_column_sits_where_its_workflow_runs_it(
     keys = [column.key for column in views.board(seeded, project="payments-api").columns]
     assert keys.index("perf_review") == keys.index("review_code") + 1
     assert keys.index("security") == keys.index("perf_review") + 1
+
+
+def test_workflows_view_has_routing_and_picker(seeded: StorePaths) -> None:
+    configure.save_settings(PERF_CHANGES, project="payments-api", by="ui")
+    found = views.workflows_view(seeded, project="payments-api")
+    assert found.routing == {"simple": "simple", "standard": "standard", "critical": "critical"}
+    picks = {pick.step: pick for pick in found.picker}
+    assert (picks["perf_review"].role, picks["perf_review"].kind, picks["perf_review"].builtin) == (
+        "perf-reviewer",
+        "review",
+        False,
+    )
+    assert (picks["plan"].role, picks["plan"].builtin, picks["run_tests"].on) == (
+        "planner",
+        True,
+        False,
+    )
+    assert (picks["approve"].role, picks["approve"].kind) == ("", "approve")
