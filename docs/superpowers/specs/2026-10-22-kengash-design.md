@@ -306,6 +306,10 @@ workflows:
 # review_code; `harness agent new` writes the agent, the step and the workflow entries
 # steps.perf_review: {role: perf-reviewer, kind: review, does: Flag N+1 queries.}
 
+# routing (SP10): the workflow a new ticket of each importance runs; an importance left out
+# runs the workflow of its own name; any other workflow is picked per ticket
+# routing: {simple: simple, standard: standard, critical: hotfix}
+
 # sub-status shown while a step runs
 status.names: {plan: under_planning, review_plan: under_plan_review, implement: under_implementation,
                review_code: under_review, security: under_security_review, run_tests: under_test,
@@ -316,6 +320,8 @@ merge.mode: ask
 ```
 
 ## 5. Loop semantics
+
+Workflow names match `[a-z][a-z0-9_-]{0,30}`; a workflow holds each step once, and an `on_fail` edge sends a review step back to an earlier step. A built-in role's skill is fixed (`planner: plan`, `plan-reviewer: review-plan`, `implementer: implement`, `code-reviewer: review-code`, `security-reviewer: review-security`, `test-runner: run-tests`, `doc-writer: sync-docs`); copying the agent is how its behaviour changes (SP10 spec §4).
 
 Steps map to roles: `plan` → planner, `review_plan` → plan-reviewer, `implement` → implementer, `review_code` → code-reviewer, `security` → security-reviewer, `run_tests` → test-runner (shell, no model), `docs` → doc-writer, `approve` → the user. A step whose role is switched off is skipped; if that role is `blocking`, the ticket fails with a message instead.
 

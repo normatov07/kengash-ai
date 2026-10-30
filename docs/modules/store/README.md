@@ -29,6 +29,7 @@ Everything under `~/.kengash`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
+- 2026-10-30: `defaults/SETTINGS.md` explains `routing` in a comment (SP10 M2).
 - 2026-10-26: the seeded MEMORY.md, DECISIONS.md and SETTINGS.md name `kengash` (SP8).
 - 2026-10-26: `StorePaths.worktree` is `worktrees/<slug>/kg-<id>`, or the ticket's existing 0.1.0 `hrn-<id>` folder (SP8).
 - 2026-10-26: the repo link is `.kengash` (`links.LINK`, exclude `/.kengash`); `links.real_folder` finds a real `.kengash/` or 0.1.0 `.harness/`; `links.legacy_link` names a 0.1.0 `.harness` symlink to the same project (SP8).
