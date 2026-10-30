@@ -20,7 +20,7 @@ from kengash_ai.model import Doc, Plan, Ticket
 from kengash_ai.ops import projects, records
 from kengash_ai.store import StorePaths
 
-pytestmark = pytest.mark.live
+pytestmark = [pytest.mark.live, pytest.mark.timeout(0)]  # real CLIs take minutes
 runner = CliRunner()
 PROVIDERS = ("claude", "codex", "antigravity")
 CHEAPEST = {"claude": "haiku", "codex": None, "antigravity": "gemini-3.8-flash-low"}

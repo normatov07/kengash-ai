@@ -167,14 +167,18 @@ def test_an_interrupted_wait_ends_the_cli_group(
     def interrupt(signum: int, frame: object) -> None:
         raise KeyboardInterrupt
 
-    signal.signal(signal.SIGALRM, interrupt)
+    previous = signal.signal(signal.SIGALRM, interrupt)
     signal.alarm(1)
-    with pytest.raises(KeyboardInterrupt):
-        run_process(
-            ["sh", "-c", f"echo $$ > {pid_file}; sleep 30"],
-            cwd=tmp_path,
-            env=dict(os.environ),
-            timeout_s=30,
-            log=tmp_path / "i.out",
-        )
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            run_process(
+                ["sh", "-c", f"echo $$ > {pid_file}; sleep 30"],
+                cwd=tmp_path,
+                env=dict(os.environ),
+                timeout_s=30,
+                log=tmp_path / "i.out",
+            )
+    finally:  # no later test may meet this handler or a pending alarm
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
     assert _gone(int(pid_file.read_text()))

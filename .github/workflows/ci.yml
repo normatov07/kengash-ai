@@ -31,7 +31,17 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: uv sync --locked
-      - name: make check
+      # make check, one stage per step: a stage that stalls names itself and stops early
+      - name: lint
+        run: make lint
+        timeout-minutes: 5
+      - name: type
+        run: make type
+        timeout-minutes: 5
+      - name: test
+        run: make test
+        timeout-minutes: 12
+      - name: docs
         shell: bash
         env:
           EVENT: ${{ github.event_name }}
@@ -45,7 +55,8 @@ jobs:
           else
             base="$(git rev-list --max-parents=0 HEAD | tail -n 1)"
           fi
-          make check DOCS_BASE="$base"
+          make docs DOCS_BASE="$base"
+        timeout-minutes: 2
 
   package:
     runs-on: ubuntu-latest

@@ -59,6 +59,7 @@ dev = [
     "mypy>=1.13",
     "pre-commit>=4",
     "pytest>=8",
+    "pytest-timeout>=2.3",
     "ruff>=0.8",
     "uvicorn>=0.32",
 ]
@@ -122,6 +123,9 @@ files = ["src", "scripts", "tests"]
 
 [tool.pytest.ini_options]
 addopts = "-q -m 'not live'"
+# a hung test fails with every thread's stack instead of sitting silent until CI's job limit
+timeout = 300
+timeout_method = "thread"
 markers = ["live: runs the real provider CLIs; opt in with -m live"]
 testpaths = ["tests"]
 pythonpath = ["."]

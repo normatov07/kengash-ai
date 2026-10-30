@@ -9,7 +9,7 @@ from kengash_ai import adapters
 from kengash_ai.model import EvalScenario
 from kengash_ai.ops import evals
 
-pytestmark = pytest.mark.live
+pytestmark = [pytest.mark.live, pytest.mark.timeout(0)]  # real CLIs take minutes
 SKILL = """\
 ---
 name: probe-plan
