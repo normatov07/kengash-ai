@@ -121,6 +121,13 @@ def doctor(
         notice = providers.trust_notice(paths, slug, entry.path) if entry.path.is_dir() else None
         if notice is not None:
             problems.append(Problem(notice, slug, warning=True))
+    copies: dict[Path, list[str]] = {}
+    for copy in skills.ignored_copies(paths):
+        copies.setdefault(copy.parent, []).append(copy.name)
+    for folder, names in copies.items():
+        message = f"ignored built-in skill copies in {folder} ({', '.join(names)}): "
+        fixed = "built-in skills are fixed; copy the agent to change one"
+        problems.append(Problem(message + fixed, warning=True))
     repos = [entry.path for _, entry in sorted(registry.projects.items()) if entry.path.is_dir()]
     for folder, agent in skills.old_installs([*repos, skills.home_folder()]):
         message = f"old kengash skill names installed in {folder}; "

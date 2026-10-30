@@ -66,5 +66,5 @@ Skills are built like code, test first (superpowers `writing-skills`):
 Role skills are never installed into agents: `kengash` injects them into worker sessions.
 
 - Format: `src/kengash_ai/roles/<role>/SKILL.md` with `name` and `description`; workers get the body without the frontmatter.
-- Lookup: `projects/<slug>/roles/<role>/SKILL.md`, then `defaults/roles/` (seeded by `kengash init`, never overwritten), then the package.
+- Lookup: a built-in role skill always comes from the package, so it cannot drift or be edited (copy the agent to change what it does); a user's skill comes from `projects/<slug>/roles/<role>/SKILL.md`, then `defaults/roles/`.
 - Install folders: the claude plugin in `.claude/skills/kengash/`, codex copies (and agy's fallback) in `.agents/skills/` in a repo; with `--global`, `~/.claude/skills/kengash/`, `~/.agents/skills/` and `~/.gemini/config/skills/`. Antigravity reads its plugin manifest from `.antigravity-plugin/plugin.json`.

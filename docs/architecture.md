@@ -33,7 +33,7 @@ UI: kengash ui → FastAPI + SSE on 127.0.0.1, through the same `ops` layer as t
 | `adapters` | One driver per provider CLI behind the `Provider` protocol | `model` | built (SP3 M2): claude, codex, antigravity, shell |
 | `gitops` | Worktrees, commits with trailers, diffs, rebase, merge | `model` | built (SP3 M2) |
 | `worker` | Runs one job through `ops`; heartbeats; handles signals | `ops`, `model` | built (SP3 M3–M4): `ticket`, `plan-review` and `compact` jobs |
-| `roles` | Packaged role skill files (data only) | — | built (SP4 M1): seven role skills, seeded into `defaults/roles/` |
+| `roles` | Packaged role skill files (data only) | — | built (SP4 M1): seven role skills, always read from the package (SP10) |
 | `ui` | FastAPI app, SSE, static assets | `ops`, `model` | built (SP5 M1–M2, canvas parity): token auth, Host, Origin and `X-Harness` checks, journal SSE, the seven screens matching the canvas, settings saves; New agent (SP6) |
 
 `adapters` and `gitops` never touch the store. Import-linter (`make lint`) enforces the layers `cli | worker | ui > ops > memory > journal | settings > store > model` (`journal` and `settings` independent of each other) and keeps `cli`, `worker` and `ui` from importing `store`, `settings`, `memory` or `journal` directly; `workflow`, `scheduler`, `adapters` and `gitops` import only `model`; each new module adds its contract.
@@ -44,7 +44,7 @@ UI: kengash ui → FastAPI + SSE on 127.0.0.1, through the same `ops` layer as t
 ~/.kengash/                      canonical store, a git repo (mode 0700)
 ├── registry.yaml                slug → repo path, base branch
 ├── memory/                      MEMORY.md, DECISIONS.md (global), archive/
-├── defaults/                    SETTINGS.md, PROCESS.md, roles/ (seeds)
+├── defaults/                    SETTINGS.md, PROCESS.md, roles/ (users' skills)
 ├── projects/<slug>/             SETTINGS.md, PROCESS.md, memory -> ../../memory,
 │                                plans/, tasks/{in_queue,in_process,done}/
 ├── journal/YYYY-MM-DD.jsonl     events

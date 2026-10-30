@@ -308,3 +308,18 @@ def test_doctor_warns_about_old_skill_names(store_paths: StorePaths, repo: Path)
             True,
         ),
     ]
+
+
+def test_doctor_lists_ignored_builtin_copies(store_paths: StorePaths, repo: Path) -> None:
+    projects.init_project(repo)
+    for name in ("review-code", "plan"):
+        folder = store_paths.defaults / "roles" / name
+        folder.mkdir(parents=True)
+        (folder / "SKILL.md").write_text(f"---\nname: {name}\ndescription: x\n---\nMine.\n")
+    found = [(p.message, p.warning) for p in projects.doctor().problems]
+    message = (
+        f"ignored built-in skill copies in {store_paths.defaults / 'roles'} (plan, review-code): "
+        "built-in skills are fixed; copy the agent to change one"
+    )
+    assert found == [(message, True)]
+    assert (store_paths.defaults / "roles" / "plan" / "SKILL.md").is_file()  # never deleted

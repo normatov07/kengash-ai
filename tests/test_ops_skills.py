@@ -27,26 +27,42 @@ def test_every_role_has_a_skill() -> None:
         assert SkillMeta.model_validate(meta).name == name and body.strip()
 
 
-def test_role_text_prefers_project_then_defaults_then_package(store_paths: StorePaths) -> None:
+def test_builtin_skills_ignore_store_copies(store_paths: StorePaths) -> None:
     ensure_store(store_paths)
     project = ensure_project(store_paths, "payments-api")
-    packaged = split_frontmatter((skills.roles_dir() / "plan" / "SKILL.md").read_text())[1]
-    assert skills.role_text(store_paths, "payments-api", "plan") == packaged
-    role(store_paths.defaults / "roles", "plan", "Defaults plan.\n")
-    assert skills.role_text(store_paths, "payments-api", "plan") == "Defaults plan.\n"
-    role(project.root / "roles", "plan", "Project plan.\n")
-    assert skills.role_text(store_paths, "payments-api", "plan") == "Project plan.\n"
+    role(store_paths.defaults / "roles", "review-code", "Defaults review.\n")
+    role(project.root / "roles", "review-code", "Project review.\n")
+    packaged = skills.roles_dir() / "review-code" / "SKILL.md"
+    assert skills.role_file(store_paths, "payments-api", "review-code") == packaged
+    body = split_frontmatter(packaged.read_text())[1]
+    assert skills.role_text(store_paths, "payments-api", "review-code") == body
+
+
+def test_custom_skills_prefer_project_then_defaults(store_paths: StorePaths) -> None:
+    ensure_store(store_paths)
+    project = ensure_project(store_paths, "payments-api")
+    role(store_paths.defaults / "roles", "perf-reviewer", "Defaults perf.\n")
+    assert skills.role_text(store_paths, "payments-api", "perf-reviewer") == "Defaults perf.\n"
+    role(project.root / "roles", "perf-reviewer", "Project perf.\n")
+    assert skills.role_text(store_paths, "payments-api", "perf-reviewer") == "Project perf.\n"
     assert skills.role_text(store_paths, "payments-api", "no-such-role") is None
 
 
-def test_init_seeds_role_skills_and_keeps_edits(store_paths: StorePaths) -> None:
+def test_init_seeds_no_role_skills(store_paths: StorePaths) -> None:
     ensure_store(store_paths)
-    seeded = sorted(path.name for path in (store_paths.defaults / "roles").iterdir())
-    assert seeded == sorted(skills.ROLES)
-    edited = store_paths.defaults / "roles" / "implement" / "SKILL.md"
-    edited.write_text("---\nname: implement\ndescription: Use when mine.\n---\nMine.\n")
+    assert not (store_paths.defaults / "roles").exists()
+
+
+def test_ignored_copies_lists_builtin_skills_in_the_store(store_paths: StorePaths) -> None:
     ensure_store(store_paths)
-    assert edited.read_text().endswith("Mine.\n")
+    project = ensure_project(store_paths, "payments-api")
+    role(store_paths.defaults / "roles", "plan", "Mine.\n")
+    role(project.root / "roles", "review-code", "Mine.\n")
+    role(project.root / "roles", "perf-reviewer", "Mine.\n")  # a user's skill: not ignored
+    assert skills.ignored_copies(store_paths) == [
+        store_paths.defaults / "roles" / "plan",
+        project.root / "roles" / "review-code",
+    ]
 
 
 COMMANDS = {"init", "wait", "plan", "plan new", "plan review", "memory", "memory add"}

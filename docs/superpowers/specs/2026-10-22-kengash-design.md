@@ -93,11 +93,11 @@ $HARNESS_HOME (default ~/.harness, mode 0700, a git repo)
 ├── defaults/
 │   ├── SETTINGS.md                  seed for new projects; the UI's "Defaults" scope
 │   ├── PROCESS.md                   seed
-│   └── roles/<role>/SKILL.md        user-editable role skills, seeded from the package
+│   └── roles/<role>/SKILL.md        the user's own role skills (SP10: built-ins stay in the package)
 ├── projects/<slug>/
 │   ├── SETTINGS.md                  copied from defaults once, never overwritten
 │   ├── PROCESS.md
-│   ├── roles/<role>/SKILL.md        optional per-project role override
+│   ├── roles/<role>/SKILL.md        the user's role skills for this project
 │   ├── memory -> ../../memory       directory symlink
 │   ├── plans/<id8>.md
 │   └── tasks/{in_queue,in_process,done}/<id8>.md
@@ -446,7 +446,7 @@ Every skill's step 0 runs `harness --version`. If the command is missing or is n
 
 ### 8.2 Role skills
 
-`plan`, `review-plan`, `implement`, `review-code`, `review-security`, `run-tests`, `sync-docs`. They ship in `super_harness/roles/`, are seeded to `defaults/roles/`, may be overridden per project, and are injected by the worker, never installed into agents. An agent created in the UI points at a role skill file.
+`plan`, `review-plan`, `implement`, `review-code`, `review-security`, `run-tests`, `sync-docs`. They ship in `kengash_ai/roles/` and always load from there: a built-in agent's behaviour is fixed, and copying the agent (`kengash agent copy`) gives an agent of the user's own whose skill lives in the store's `roles/` (defaults, or per project). Workers get the body injected; role skills are never installed into agents (SP10 spec §4.1–4.2).
 
 ### 8.3 Writing standard
 

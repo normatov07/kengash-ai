@@ -42,8 +42,11 @@ def roles_dir() -> Path:
 
 
 def role_file(paths: StorePaths, slug: str | None, skill: str) -> Path | None:
-    """A role skill's file: the project's, else the defaults', else the package's."""
-    folders = [paths.defaults / "roles", roles_dir()]
+    """A role skill's file: a built-in skill always the package's, so it cannot be changed or
+    go stale (SP10 spec §4.1); a user's skill the project's, else the defaults'."""
+    if skill in ROLES:
+        return roles_dir() / skill / "SKILL.md"
+    folders = [paths.defaults / "roles"]
     if slug is not None:
         folders.insert(0, paths.project(slug).root / "roles")
     for folder in folders:
@@ -53,8 +56,19 @@ def role_file(paths: StorePaths, slug: str | None, skill: str) -> Path | None:
     return None
 
 
+def ignored_copies(paths: StorePaths) -> list[Path]:
+    """Store copies of built-in skills, which `role_file` never reads: the ones `kengash
+    init` seeded before SP10, and any the user wrote by hand."""
+    folders = [paths.defaults / "roles"]
+    if paths.projects.is_dir():
+        folders += [project / "roles" for project in sorted(paths.projects.iterdir())]
+    return [
+        folder / skill for folder in folders for skill in sorted(ROLES) if (folder / skill).is_dir()
+    ]
+
+
 def role_text(paths: StorePaths, slug: str, skill: str) -> str | None:
-    """The body of a role skill: the project's, else the defaults', else the package's."""
+    """The body of a role skill, found by `role_file`."""
     path = role_file(paths, slug, skill)
     if path is None:
         return None
