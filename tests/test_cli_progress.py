@@ -1,46 +1,21 @@
 """kengash wait progress, ps and logs (SP12 spec §4.3, §4.4)."""
 
 import json
-import os
-from datetime import timedelta
 
 import pytest
-from conftest import FAKES, Engine
+from conftest import Engine
 from typer.testing import CliRunner
 
-from kengash_ai import journal
 from kengash_ai.cli import app
-from kengash_ai.model import Event, Running, TicketState, WorkerRecord, utc_now
-from kengash_ai.ops import progress
-from kengash_ai.store import documents, runtime
+from kengash_ai.store import documents
 
 runner = CliRunner()
 
 
 @pytest.fixture
-def busy(engine: Engine, monkeypatch: pytest.MonkeyPatch) -> Engine:
-    """The ticket implementing on agy for 12 minutes, its worker alive."""
-    monkeypatch.chdir(engine.repo)
-    progress.forget()
-    now = utc_now()
-    log = engine.paths.logs / f"{engine.ticket_id}-3.out"
-    log.parent.mkdir(parents=True, exist_ok=True)
-    text = (FAKES / "fixtures" / "agy" / "stream-ok.jsonl").read_text(encoding="utf-8")
-    log.write_text(text, encoding="utf-8")
-    stamps = [(now - timedelta(seconds=30)).isoformat()] * len(text.splitlines())
-    log.with_suffix(".ts").write_text("\n".join(stamps) + "\n", encoding="utf-8")
-    running = Running(role="implementer", provider="antigravity", model="flash", log=log)
-    runtime.save_ticket_state(engine.paths, engine.ticket_id, TicketState(running=running))
-    doc = engine.ticket()
-    doc.meta.status, doc.meta.step = "in_process/under_implementation", "implement"
-    documents.save_ticket(engine.paths.project(engine.slug), doc)
-    runtime.save_worker(
-        engine.paths, WorkerRecord(id=engine.ticket_id, project=engine.slug, pid=os.getpid())
-    )
-    start = {"type": "step.start", "project": engine.slug, "ticket": engine.ticket_id}
-    started = {**start, "ts": now - timedelta(minutes=12), "step": "implement"}
-    journal.append(engine.paths, Event.model_validate({**started, "provider": "antigravity"}))
-    return engine
+def busy(busy_ticket: Engine, monkeypatch: pytest.MonkeyPatch) -> Engine:
+    monkeypatch.chdir(busy_ticket.repo)
+    return busy_ticket
 
 
 def test_wait_timeout_prints_progress(busy: Engine) -> None:

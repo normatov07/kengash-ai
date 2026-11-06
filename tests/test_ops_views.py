@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from conftest import Engine
 
 from kengash_ai import journal
 from kengash_ai.model import (
@@ -558,3 +559,15 @@ def test_the_overview_lists_live_loops_and_auto_mode(seeded: StorePaths) -> None
         (os.getpid(), "all projects", False)
     ]
     assert (found.auto_default, found.auto) == (False, {"payments-api": True})
+
+
+def test_sessions_carry_activity(busy_ticket: Engine) -> None:
+    (session,) = views.overview(busy_ticket.paths, window="today").sessions
+    assert session.action == "reply: Rebrand core package and UI to Chess Samurai"
+    assert (session.changed, session.quiet) == (1, False) and session.active_s is not None
+
+
+def test_ticket_view_lists_in_progress_files(busy_ticket: Engine) -> None:
+    found = views.ticket_view(busy_ticket.paths, busy_ticket.ticket_id, project=None)
+    assert found.in_progress == ["lib/main.dart"]
+    assert found.running is not None and found.running.provider == "antigravity"

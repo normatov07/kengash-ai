@@ -30,6 +30,7 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 
 ## Changes
 
+- 2026-11-06: `GET /api/tickets/{id}/live` streams the ticket's worker activity as `event: activity` (history, then live, from `activity.watch`) and ends with `event: done` (SP12 M2).
 - 2026-11-06: the Agents screen's fallback switch writes `fallback_on_error` and names connection failures too (SP12 M1).
 - 2026-11-06 (SP11 review): Overview's loop line counts only the loops covering the selected project (`format.loopsIn`); its Auto mode switch on a project removes the project's key when the new value equals the defaults' (`overview.autoChange`); node tests cover the switch reverting on a failed save.
 - 2026-11-06: Overview's subtitle names the running loop (`format.loopSummary`: `loop running (<agent> · <scope>)`, `N loops running (…)`, or `no loop running: run /kengash:loop in your agent`) instead of the conductor count, and its header holds an Auto mode switch for the selected project (the defaults under all projects) that saves `loop_start` at once; Overview reads again every 30 s while shown; Settings' Planning and merging gains the Auto mode switch (`loop_start`) (SP11 M3).
@@ -49,15 +50,3 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 - 2026-10-26: accessibility: axe-core reports no serious or critical issue on any screen; `--faint` is the canvas's grey lifted to 4.5:1, text never uses `--dim`, off roles and pending chain steps show their state by colour instead of opacity, the SETTINGS.md view is keyboard-scrollable (SP7).
 - 2026-10-26: every response carries a CSP (`script-src 'self'`, `frame-ancestors 'none'`, styles `'self' 'unsafe-inline'` for the markup's style attributes), `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` (the first URL holds the token), COOP, CORP and a Permissions-Policy, refusals included; a favicon (SP7).
 - 2026-10-26: a not-supported provider card shows the server's reason (SP6).
-- 2026-10-26: canvas follow-ups: narrow board columns float their "more" button so titles fit at 1440 px, the queue footer stays on one line, the end node is numbered ("6 · Done"), critical routing names its loop cap (SP6 §6).
-- 2026-10-26: New agent dialog, Remove agent, status flow "+ add", custom steps in the Workflow editor (SP6).
-- 2026-10-24: board columns shrink to 156 px, so seven fit at 1440 px without scrolling sideways.
-- 2026-10-24: the top-bar search hands its text to the board's filter.
-- 2026-10-24: canvas parity on all seven screens; per-server cookie name; the stream closes with the page; narrow-screen layout.
-- 2026-10-24: canvas parity foundation: bundled fonts, icons, tokens, per-screen top bar and sidebar card slots.
-- 2026-10-24: M2 Chrome pass: table headers in one type, memory lines without their bullet, project commands on Settings.
-- 2026-10-23: Memory store, Ticket detail, Settings, Agents and Workflow screens, scope tabs and settings saves (SP5 M2).
-- 2026-10-23: requests with a foreign `Origin` are refused (SP5 M2).
-- 2026-10-23: link health on the Memory screen, link banner on the Overview (system spec §4.2).
-- 2026-10-23: app shell, Overview and Task board (SP5 M1).
-- 2026-10-23: the `ui` unit and its layer contract (SP5 M1).
