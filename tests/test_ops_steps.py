@@ -173,7 +173,7 @@ def test_quota_waits_without_a_fallback(
     naps: list[float] = []
     monkeypatch.setattr(steps, "sleep", naps.append)
     monkeypatch.setattr(steps, "utc_now", lambda: now)  # the fixture's reset time is fixed
-    write_settings(store_paths, "fallback_on_rate_limit: false\n")
+    write_settings(store_paths, "fallback_on_error: false\n")
     fake_clis.queue("claude", fixture="claude/usage_limit.json")
     fake_clis.queue("claude", fixture="claude/work_resume.json")
     steps.run_job("7b55e0c1", steps=1)

@@ -29,6 +29,7 @@ Everything under `~/.kengash`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
+- 2026-11-06: the seeded SETTINGS.md names `fallback_on_error` (SP12 M1).
 - 2026-11-06: `load_leases` and `load_lease` skip a lease file they cannot read (damaged or newer), so it blocks no loop command (SP11 review).
 - 2026-11-06: `StorePaths.loops` and the loop lease files; the seeded SETTINGS.md gains `loop_start: ask` (SP11 M1).
 - 2026-10-30: `ensure_store` no longer seeds `defaults/roles/` (SP10 M2).

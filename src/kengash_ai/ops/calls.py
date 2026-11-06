@@ -1,6 +1,7 @@
 """Retry rules every CLI call shares: ticket steps, plan reviews and compaction (SP3 spec §5
 item 5). A timeout retries once; a schema error, and an empty turn whose actions were
-denied, each get one repair turn on the session."""
+denied, each get one repair turn on the session; a network error gets one resumed turn
+(SP12 spec §3.4)."""
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -33,10 +34,14 @@ def call(
 ) -> Called:
     """Run `request`; a timeout, a schema error and denied actions each get one more attempt."""
     usage = Usage()
-    timed_out = repaired = unblocked = False
+    timed_out = repaired = unblocked = reconnected = False
     while True:
         result = adapters.get(provider, runtime=paths.runtime).run(request)
         usage = plus(usage, result.usage)
+        if result.error == "network" and not reconnected:
+            reconnected = True
+            request = resume(request, result, prompts.NETWORK_PROMPT, next_log())
+            continue
         if result.error == "timeout" and not timed_out:
             timed_out = True
             request = again(request, result, next_log())
@@ -80,12 +85,17 @@ def again(request: StepRequest, result: StepResult | None, log: Path) -> StepReq
 
 def repair(request: StepRequest, result: StepResult, problem: str, log: Path) -> StepRequest:
     """A resumed turn that asks the session to fix `problem`; without a session, a retry."""
+    return resume(request, result, prompts.repair_prompt(problem), log)
+
+
+def resume(request: StepRequest, result: StepResult, prompt: str, log: Path) -> StepRequest:
+    """A resumed turn on the call's session saying `prompt`; without a session, a retry."""
     session = result.session_id or request.session_id
     if session is None:
         return again(request, None, log)
     return request.model_copy(
         update={
-            "prompt": prompts.repair_prompt(problem),
+            "prompt": prompt,
             "resume": True,
             "session_id": session,
             "skill": None,

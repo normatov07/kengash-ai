@@ -273,7 +273,7 @@ class AgentsView:
     instruction_caps: list[int] = field(default_factory=list)  # lines, words
     sessions_max: int = 0
     tokens_per_ticket: int = 0
-    fallback_on_rate_limit: bool = True
+    fallback_on_error: bool = True
     per_provider: dict[str, int] = field(default_factory=dict)
     set_here: list[str] = field(default_factory=list)
     problem: str = ""
@@ -773,7 +773,7 @@ def agents_view(
     found.instruction_caps = list(agent_config.instruction_caps("role", resolved.skill))
     found.sessions_max = resolved.sessions.max
     found.tokens_per_ticket = resolved.tokens.per_ticket_max
-    found.fallback_on_rate_limit = resolved.fallback_on_rate_limit
+    found.fallback_on_error = resolved.fallback_on_error
     found.per_provider = dict(resolved.sessions.per_provider)
     return found
 

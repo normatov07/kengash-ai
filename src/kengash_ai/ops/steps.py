@@ -321,7 +321,7 @@ def _repair(job: _Job, request: StepRequest, result: StepResult, problem: str) -
 
 
 def _fallback(job: _Job, ready: _Ready, pick: agents.Pick, tried: set[str]) -> agents.Pick | None:
-    if not ready.resolved.fallback_on_rate_limit:
+    if not ready.resolved.fallback_on_error:
         return None
     try:
         return agents.pick(ready.resolved, pick.role, job.detect, skip=tried)

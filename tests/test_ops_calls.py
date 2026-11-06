@@ -9,7 +9,7 @@ import pytest
 
 from kengash_ai import adapters
 from kengash_ai.model import StepRequest, StepResult, Usage, WorkOutput
-from kengash_ai.ops import calls
+from kengash_ai.ops import calls, prompts
 from kengash_ai.store import StorePaths
 
 OK = StepResult(
@@ -120,3 +120,27 @@ def test_an_empty_turn_without_denials_returns_at_once(
     provider = scripted(StepResult(error="empty", detail="no output"))
     assert calls.call(store_paths, "claude", request_, logs(tmp_path)).result.error == "empty"
     assert len(provider.requests) == 1
+
+
+def test_a_network_error_resumes_once_with_the_network_prompt(
+    scripted: Any, request_: StepRequest, tmp_path: Path, store_paths: StorePaths
+) -> None:
+    cut = StepResult(session_id="s1", error="network", detail="connection reset by peer")
+    provider = scripted(cut, OK)
+    called = calls.call(store_paths, "claude", request_, logs(tmp_path))
+    resumed = provider.requests[1]
+    assert called.result.ok
+    assert (resumed.resume, resumed.session_id, resumed.prompt) == (
+        True,
+        "s1",
+        prompts.NETWORK_PROMPT,
+    )
+
+
+def test_a_second_network_error_is_returned(
+    scripted: Any, request_: StepRequest, tmp_path: Path, store_paths: StorePaths
+) -> None:
+    cut = StepResult(session_id="s1", error="network", detail="connection reset by peer")
+    provider = scripted(cut, cut)
+    called = calls.call(store_paths, "claude", request_, logs(tmp_path))
+    assert called.result.error == "network" and len(provider.requests) == 2

@@ -20,6 +20,8 @@ from kengash_ai.store.seed import package_default
 from kengash_ai.store.yamlio import load_yaml
 
 ATOMIC = frozenset({"workflows"})
+# keys renamed in a later version: old → new; each layer reads the old one (SP12)
+RENAMED = {"fallback_on_rate_limit": "fallback_on_error"}
 
 
 def unflatten(data: Mapping[str, Any]) -> dict[str, Any]:
@@ -113,7 +115,9 @@ def set_values(paths: StorePaths, slug: str | None, changes: Mapping[str, Any]) 
     path, source = _scope_file(paths, slug)
     before = path.read_bytes().decode("utf-8") if path.is_file() else ""  # keeps CRLF
     text, done = before, []
-    for key, value in changes.items():
+    # setting a renamed key's new name drops its old name from the same file
+    stale = {old: None for old, new in RENAMED.items() if new in changes and old not in changes}
+    for key, value in {**changes, **stale}.items():
         head, _, rest = key.partition(".")
         if head in ATOMIC and "." in rest:
             raise UserError(f"settings: set {head}.{rest.split('.')[0]} whole, not {key}")
@@ -248,7 +252,13 @@ def _parse(text: str, source: str) -> dict[str, Any]:
         data = load_yaml(text, source) or {}
         if not isinstance(data, Mapping):
             raise UserError(f"{source}: expected key: value lines")
-        return unflatten(data)
+        nested = unflatten(data)
+        for old, new in RENAMED.items():
+            if old in nested:
+                if new in nested:
+                    raise UserError(f"{source}: use {new} only, not {old}")
+                nested[new] = nested.pop(old)
+        return nested
 
     return copy.deepcopy(_layers.get_or_make(digest(text.encode()), make))
 

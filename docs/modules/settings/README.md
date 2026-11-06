@@ -21,6 +21,7 @@ Resolve SETTINGS.md into a validated `Settings` model so agents never parse the 
 
 ## Changes
 
+- 2026-11-06: `RENAMED` (`fallback_on_rate_limit` → `fallback_on_error`): each layer reads the old key under the new name and refuses both in one file; `set_values` setting the new key drops the old one from that file (SP12 M1).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-26: content-keyed layer and resolve caches (SP7).
 - 2026-10-24: writes keep a CRLF file's line endings.

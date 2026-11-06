@@ -242,7 +242,7 @@ class Settings(_Section):
     sessions: Sessions = Field(default_factory=Sessions)
     tokens: Tokens = Field(default_factory=Tokens)
     step_timeout_min: int = Field(30, ge=1)
-    fallback_on_rate_limit: bool = True
+    fallback_on_error: bool = True  # rate limits and network errors use the fallback (SP12)
     skill: SkillCaps = Field(default_factory=SkillCaps)
     memory: MemoryCaps = Field(default_factory=MemoryCaps)
     review: ReviewPolicy = Field(default_factory=ReviewPolicy)

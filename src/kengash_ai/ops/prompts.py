@@ -163,6 +163,11 @@ def compact_prompt(text: str, *, cap: int) -> str:
     )
 
 
+NETWORK_PROMPT = (
+    "Your last turn was cut off by a network error. Your edits are kept; finish the step and reply."
+)
+
+
 def repair_prompt(problem: str) -> str:
     return (
         f"Your last reply failed: {problem}\n"

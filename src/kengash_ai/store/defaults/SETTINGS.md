@@ -26,7 +26,7 @@ sessions.max: 8
 sessions.per_provider: {claude: 3, codex: 3, antigravity: 2}
 tokens.per_ticket_max: 250000
 step_timeout_min: 30          # a step running longer is killed and retried once
-fallback_on_rate_limit: true
+fallback_on_error: true
 
 # token discipline
 skill.max_lines: 80

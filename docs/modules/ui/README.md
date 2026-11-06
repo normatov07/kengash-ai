@@ -30,6 +30,7 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 
 ## Changes
 
+- 2026-11-06: the Agents screen's fallback switch writes `fallback_on_error` and names connection failures too (SP12 M1).
 - 2026-11-06 (SP11 review): Overview's loop line counts only the loops covering the selected project (`format.loopsIn`); its Auto mode switch on a project removes the project's key when the new value equals the defaults' (`overview.autoChange`); node tests cover the switch reverting on a failed save.
 - 2026-11-06: Overview's subtitle names the running loop (`format.loopSummary`: `loop running (<agent> · <scope>)`, `N loops running (…)`, or `no loop running: run /kengash:loop in your agent`) instead of the conductor count, and its header holds an Auto mode switch for the selected project (the defaults under all projects) that saves `loop_start` at once; Overview reads again every 30 s while shown; Settings' Planning and merging gains the Auto mode switch (`loop_start`) (SP11 M3).
 - 2026-10-30 (final review): the new-agent form refuses a built-in skill's name and offers only steps before the insertion point as send-back targets; an emptied "Other…" model means the CLI's default.
