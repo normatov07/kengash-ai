@@ -7,7 +7,7 @@ from typing import Any
 def lines(text: str) -> list[dict[str, Any]]:
     """The JSON objects in `text`, one per line; other lines are skipped."""
     found: list[dict[str, Any]] = []
-    for line in text.splitlines():
+    for line in text.split("\n"):  # not splitlines(): JSON keeps U+2028 and U+0085 raw
         line = line.strip()
         if not line.startswith("{"):
             continue

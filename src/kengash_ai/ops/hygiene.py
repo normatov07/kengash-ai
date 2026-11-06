@@ -54,9 +54,9 @@ def detect_commands(repo: Path) -> tuple[str, str]:
             scripts = json.loads(package.read_text(encoding="utf-8")).get("scripts") or {}
         except (json.JSONDecodeError, AttributeError):
             scripts = {}
-        return ("npm test" if "test" in scripts else ""), (
-            "npm run lint" if "lint" in scripts else ""
-        )
+        test = str(scripts.get("test") or "")
+        real = bool(test) and "no test specified" not in test  # npm init's placeholder fails
+        return ("npm test" if real else ""), ("npm run lint" if "lint" in scripts else "")
     if (repo / "go.mod").is_file():
         return "go test ./...", "go vet ./..."
     if (repo / "Cargo.toml").is_file():
@@ -107,8 +107,11 @@ def old_defaults(paths: StorePaths, slug: str | None) -> list[str]:
     if "fallback_on_rate_limit" in own:
         found.append("fallback_on_rate_limit")
     writer = (own.get("agents") or {}).get("doc-writer")
-    if isinstance(writer, dict) and "fallback" not in writer:
-        found.append("agents.doc-writer.fallback")
+    if not isinstance(writer, dict):
+        return found
+    seeded = writer.get("cli") == "antigravity" and writer.get("skill") == "sync-docs"
+    if seeded and "fallback" not in writer:
+        found.append("agents.doc-writer.fallback")  # the old seed line, not a user's agent
     return found
 
 

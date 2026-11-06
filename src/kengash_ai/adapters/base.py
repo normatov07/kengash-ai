@@ -37,6 +37,9 @@ _NETWORK = re.compile(
     r"(?i)connection reset|connection refused|broken pipe|econnreset|\bEOF\b|tls handshake"
     r"|no such host|temporary failure in name resolution|network is unreachable|stream error"
     r"|\b50[0234]\b|unavailable|\binternal\b|overloaded"
+    # claude (Node): its API client's and the runtime's wording
+    r"|connection error|request timed out|econnrefused|enotfound|etimedout|eai_again"
+    r"|fetch failed|socket hang up"
 )
 _VERSION = re.compile(r"\d+\.\d+(?:\.\d+)?")
 

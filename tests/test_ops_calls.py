@@ -159,3 +159,14 @@ def test_failure_line_is_short_and_names_the_worktree(
     assert "second line" not in line
     plain = calls.failure("codex", request_, StepResult(error="crash", detail="boom"))
     assert plain == f"crash: boom; log: {request_.log}"
+
+
+def test_a_fresh_session_cut_before_it_began_is_run_again_not_resumed(
+    scripted: Any, request_: StepRequest, tmp_path: Path, store_paths: StorePaths
+) -> None:
+    fresh = request_.model_copy(update={"session_id": "u-1", "resume": False})
+    cut = StepResult(error="network", detail="connect ECONNREFUSED")
+    provider = scripted(cut, OK)
+    calls.call(store_paths, "claude", fresh, logs(tmp_path))
+    again = provider.requests[1]
+    assert (again.resume, again.session_id, again.prompt) == (False, "u-1", fresh.prompt)

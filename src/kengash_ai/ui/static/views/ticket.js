@@ -4,7 +4,7 @@
 // was opened (× or Escape).
 import { get } from "../api.js";
 import { STEPS, activityRow, clock, elapsed, shortTime, span, tokens } from "../format.js";
-import { html } from "../html.js";
+import { html, raw } from "../html.js";
 import { icon } from "../icons.js";
 import { armed } from "../scope.js";
 
@@ -14,13 +14,25 @@ const SEVERITY = { high: ["HIGH", "red"], critical: ["CRIT", "red"], medium: ["M
 const GATED = ["needs_approval", "stalled", "failed", "awaiting_merge"];
 
 // The Live tab's stream; closed on every render and when the user leaves the ticket.
-let source = null;
+// The Live tab's rows and stream outlive a render: the sheet re-renders on every journal
+// event, and the stream would otherwise replay its history and lose the scroll each time.
+const live = { id: "", rows: [], source: null, done: false, follow: true };
 function closeLive() {
-  source?.close();
-  source = null;
+  live.source?.close();
+  live.source = null;
+}
+export function liveAppend(id, item) {
+  if (live.id !== id) Object.assign(live, { id, rows: [], done: false, follow: true });
+  live.rows.push(activityRow(item).text);
+  return live.rows.length;
+}
+export function liveRows(id) {
+  return live.id === id ? live.rows.join("") : "";
 }
 globalThis.addEventListener?.("hashchange", () => {
-  if (!location.hash.startsWith("#/ticket/")) closeLive();
+  if (location.hash.startsWith("#/ticket/")) return;
+  closeLive();
+  Object.assign(live, { id: "", rows: [], done: false, follow: true });
 });
 
 export async function load(app, id) {
@@ -124,7 +136,7 @@ function liveTab(data) {
   const head = run
     ? html`<div class="live-head"><span class="pulse" aria-hidden="true"></span><span><strong>${STEPS[run.step]?.label ?? run.step}</strong> → <span class="mono">${run.provider}/${run.model}</span></span><span class="muted">${span(run.elapsed_s)} · ${run.changed} ${run.changed === 1 ? "file" : "files"} changed</span>${run.quiet ? html`<span class="cchip red">quiet</span>` : ""}${run.alive ? "" : html`<span class="cchip red">worker gone</span>`}</div>`
     : html`<div class="live-head"><span class="muted">No worker is running this ticket; its last activity:</span></div>`;
-  return html`${head}<div class="live-rows box" id="live-rows" role="log" aria-live="polite" aria-label="Worker activity"></div>`;
+  return html`${head}<div class="live-rows box" id="live-rows" role="log" aria-live="polite" aria-label="Worker activity">${raw(liveRows(data.meta.id))}</div>`;
 }
 
 function changesTab(data) {
@@ -270,17 +282,35 @@ export function view(data) {
 let onKey = null; // the Escape listener of the open sheet, replaced on each render
 export function bind(root, app, data) {
   const id = data.meta.id;
-  closeLive();
   const rows = root.querySelector("#live-rows");
-  if (rows) {
-    source = new EventSource(`/api/tickets/${encodeURIComponent(id)}/live`);
-    source.addEventListener("activity", (event) => {
-      if (!rows.isConnected) return closeLive();
-      const follow = rows.scrollHeight - rows.scrollTop - rows.clientHeight < 40;
-      rows.insertAdjacentHTML("beforeend", activityRow(JSON.parse(event.data)).text);
-      if (follow) rows.scrollTop = rows.scrollHeight;
-    });
-    source.addEventListener("done", () => closeLive());
+  if (!rows) closeLive();
+  else {
+    if (live.follow) rows.scrollTop = rows.scrollHeight;
+    rows.addEventListener("scroll", () => (live.follow = rows.scrollHeight - rows.scrollTop - rows.clientHeight < 40));
+    const fresh = live.id !== id;
+    if (fresh || (!live.source && !live.done)) {
+      closeLive();
+      if (fresh) Object.assign(live, { id, rows: [], done: false, follow: true });
+      const source = new EventSource(`/api/tickets/${encodeURIComponent(id)}/live`);
+      live.source = source;
+      source.addEventListener("open", () => {
+        // the stream starts with the whole history, a reconnect too: start the rows over
+        live.rows = [];
+        const box = document.getElementById("live-rows");
+        if (box) box.textContent = "";
+      });
+      source.addEventListener("activity", (event) => {
+        liveAppend(id, JSON.parse(event.data));
+        const box = document.getElementById("live-rows");
+        if (!box) return;
+        box.insertAdjacentHTML("beforeend", live.rows.at(-1));
+        if (live.follow) box.scrollTop = box.scrollHeight;
+      });
+      source.addEventListener("done", () => {
+        live.done = true;
+        closeLive();
+      });
+    }
   }
   const close = () => (location.hash = app.from || "#/board");
   const why = () => root.querySelector("#why")?.value.trim() ?? "";

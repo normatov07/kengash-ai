@@ -70,7 +70,8 @@ def run_process(
             pump.join(INTERRUPT_GRACE_S)
             raise
         _end_group(process, grace_s)
-        pump.join()
+        # a child that left the group may hold stdout open: never wait on it for long
+        pump.join(grace_s)
     return ProcessResult(
         exit_code=process.returncode,
         stdout=log.read_text(encoding="utf-8", errors="replace"),
@@ -81,13 +82,18 @@ def run_process(
 
 
 def _pump(source: IO[bytes], out: IO[bytes], stamps: IO[str]) -> None:
-    """Copy the CLI's stdout to the log as it comes, stamping each line."""
+    """Copy the CLI's stdout to the log as it comes, each line's stamp first, so a reader
+    never sees a line without its time; stops quietly once the log is closed (a call that
+    gave up on a child holding stdout)."""
     with source:
         for line in iter(source.readline, b""):
-            out.write(line)
-            out.flush()
-            stamps.write(datetime.now(UTC).isoformat() + "\n")
-            stamps.flush()
+            try:
+                stamps.write(datetime.now(UTC).isoformat() + "\n")
+                stamps.flush()
+                out.write(line)
+                out.flush()
+            except (ValueError, OSError):
+                return
 
 
 def _end_group(process: subprocess.Popen[bytes], grace_s: float) -> None:

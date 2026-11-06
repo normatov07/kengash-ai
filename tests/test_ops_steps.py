@@ -483,3 +483,27 @@ def test_a_retry_over_changes_gets_the_note(engine: Engine, fake_clis: FakeClis)
     fake_clis.queue("codex", fixture="codex/work_resume.jsonl")
     steps.run_job("7b55e0c1", steps=1)
     assert prompts.RETRY_NOTE in fake_clis.calls("codex")[1]["argv"][-1]
+
+
+def test_a_new_claude_session_cut_before_it_began_retries_fresh(
+    engine: Engine, fake_clis: FakeClis
+) -> None:
+    fake_clis.queue("claude", stderr="connect ECONNREFUSED 160.79.104.10:443\n", exit=1)
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    steps.run_job("7b55e0c1", steps=1)
+    first, second = (call["argv"] for call in fake_clis.calls("claude")[:2])
+    assert "--resume" not in second
+    assert second[second.index("--session-id") + 1] == first[first.index("--session-id") + 1]
+    assert engine.ticket().meta.step == "implement"
+
+
+def test_a_late_warning_is_journaled_and_logged(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events
+) -> None:
+    late = json.loads(fake_clis.fixture("claude/work_resume.json"))
+    late["is_error"], late["result"] = True, "API Error: Connection error. (ECONNRESET)"
+    fake_clis.queue("claude", stdout=json.dumps(late), exit=1)
+    steps.run_job("7b55e0c1", steps=1)
+    (end,) = [e for e in journal_events() if e["type"] == "step.end"]
+    assert "ECONNRESET" in end["warning"]
+    assert "warning: API Error: Connection error. (ECONNRESET)" in engine.ticket().sections["Log"]

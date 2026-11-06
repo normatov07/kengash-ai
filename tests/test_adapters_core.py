@@ -1,6 +1,7 @@
 """Adapter core: process runner, worker environment, shell provider, registry (SP3 spec §8)."""
 
 import os
+import shutil
 import signal
 import time
 from pathlib import Path
@@ -254,3 +255,51 @@ def test_failing_tests_skip_lint(tmp_path: Path) -> None:
 def test_only_lint_set(tmp_path: Path) -> None:
     result = Shell().run(_request(tmp_path, lint_cmd="echo l"))
     assert isinstance(result.output, ReviewOutput) and result.output.summary == "lint passed"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "API Error: Connection error.",
+        "API Error: Request timed out.",
+        "connect ECONNREFUSED 160.79.104.10:443",
+        "getaddrinfo ENOTFOUND api.anthropic.com",
+        "connect ETIMEDOUT 160.79.104.10:443",
+        "TypeError: fetch failed",
+        "socket hang up",
+    ],
+)
+def test_classify_claude_network_wording(message: str) -> None:
+    assert classify(message) == "network"
+
+
+@pytest.mark.skipif(shutil.which("setsid") is None, reason="setsid is not installed")
+def test_an_escaped_child_holding_stdout_does_not_hang_the_call(tmp_path: Path) -> None:
+    started = time.monotonic()
+    result = run_process(
+        ["sh", "-c", "setsid sleep 8 & echo hi; sleep 30"],
+        cwd=tmp_path,
+        env=dict(os.environ),
+        timeout_s=1,
+        log=tmp_path / "logs" / "t-1.out",
+        grace_s=1,
+    )
+    assert result.timed_out and time.monotonic() - started < 5
+
+
+def test_the_pump_stamps_before_it_writes() -> None:
+    from io import BytesIO
+
+    from kengash_ai.adapters.process import _pump
+
+    order: list[str] = []
+
+    class Out:
+        def write(self, data: object) -> None:
+            order.append("stamp" if isinstance(data, str) else "line")
+
+        def flush(self) -> None:
+            pass
+
+    _pump(BytesIO(b"a\nb\n"), Out(), Out())  # type: ignore[arg-type]
+    assert order == ["stamp", "line", "stamp", "line"]

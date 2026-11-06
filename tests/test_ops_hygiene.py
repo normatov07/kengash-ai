@@ -107,3 +107,17 @@ def test_agents_without_fallback_are_info(store_paths: StorePaths) -> None:
         "defaults: agents without a fallback: "
         "code-reviewer, plan-reviewer, planner, security-reviewer"
     ]
+
+
+def test_the_npm_init_placeholder_is_no_test_command(tmp_path: Path) -> None:
+    scripts = {"test": 'echo "Error: no test specified" && exit 1', "lint": "eslint ."}
+    (tmp_path / "package.json").write_text(json.dumps({"scripts": scripts}), encoding="utf-8")
+    assert hygiene.detect_commands(tmp_path) == ("", "npm run lint")
+
+
+def test_a_users_doc_writer_is_not_an_old_default(store_paths: StorePaths) -> None:
+    ensure_store(store_paths)
+    defaults = store_paths.defaults / "SETTINGS.md"
+    mine = "version: 1\nagents:\n  doc-writer: {on: true, cli: claude/sonnet, skill: sync-docs}\n"
+    defaults.write_text(mine, encoding="utf-8")
+    assert hygiene.old_defaults(store_paths, None) == []

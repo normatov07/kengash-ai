@@ -89,8 +89,10 @@ def repair(request: StepRequest, result: StepResult, problem: str, log: Path) ->
 
 
 def resume(request: StepRequest, result: StepResult, prompt: str, log: Path) -> StepRequest:
-    """A resumed turn on the call's session saying `prompt`; without a session, a retry."""
-    session = result.session_id or request.session_id
+    """A resumed turn on the call's session saying `prompt`; without a session, a retry. A
+    new session the CLI never reported (claude's id is made before the call) is not resumed:
+    it may not exist, so the request runs again (SP12 final review)."""
+    session = result.session_id or (request.session_id if request.resume else None)
     if session is None:
         return again(request, None, log)
     return request.model_copy(

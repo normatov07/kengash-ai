@@ -4,6 +4,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
 from conftest import FAKES, Engine
 
 from kengash_ai import journal
@@ -118,3 +119,27 @@ def test_follow_heartbeats_while_quiet(engine: Engine) -> None:
     first = next(beats)
     assert first is not None and first.text == "implement → antigravity"
     assert next(beats) is None  # nothing new: a heartbeat, so a stream can check its client
+
+
+def test_a_line_separator_inside_json_keeps_the_event() -> None:
+    from kengash_ai.adapters import stream
+
+    event = {"type": "result", "result": "a\u2028b", "is_error": False}
+    text = json.dumps({"type": "system"}) + "\n" + json.dumps(event, ensure_ascii=False) + "\n"
+    found = stream.result(text, key="type", value="result")
+    assert found is not None and found["result"] == "a\u2028b"
+
+
+def test_ticket_reads_the_journal_from_the_tickets_day(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[object] = []
+    real = journal.read
+
+    def spy(paths: object, since: object = None) -> object:
+        seen.append(since)
+        return real(paths, since)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(journal, "read", spy)
+    activity.ticket(engine.paths, engine.slug, engine.ticket_id)
+    assert seen == [engine.ticket().meta.created.date()]

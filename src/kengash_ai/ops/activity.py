@@ -5,7 +5,7 @@ import json
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -64,7 +64,7 @@ def parse(
     """One Activity per worker action in a claude, agy or codex stream; `stamps` (one per
     line of `text`) time them."""
     found: list[Activity] = []
-    for number, line in enumerate(text.splitlines()):
+    for number, line in enumerate(text.split("\n")):  # JSON keeps U+2028 raw
         events = stream.lines(line)
         if not events:
             continue
@@ -80,7 +80,10 @@ def ticket(
     """The ticket's journal steps and statuses with every worker action of its logs, in
     time order."""
     root = root or paths.worktree(slug, ticket_id)
-    found = [item for event in _journal(paths, slug, ticket_id) if (item := _from_event(event))]
+    doc = records.project_tickets(paths, slug).get(ticket_id)
+    since = doc.meta.created.date() if doc is not None else None
+    events = _journal(paths, slug, ticket_id, since)
+    found = [item for event in events if (item := _from_event(event))]
     for log in _logs(paths, ticket_id):
         text, stamps = _read(log)
         found += parse(text, stamps, root=root)
@@ -148,8 +151,9 @@ def _state(paths: StorePaths, slug: str, ticket_id: str) -> tuple[str, bool]:
     return status, running_status(status)
 
 
-def _journal(paths: StorePaths, slug: str, ticket_id: str) -> list[Event]:
-    return [e for e in journal.read(paths) if e.project == slug and e.ticket == ticket_id]
+def _journal(paths: StorePaths, slug: str, ticket_id: str, since: date | None) -> list[Event]:
+    """The ticket's events, read from the day it was made (not every day, every poll)."""
+    return [e for e in journal.read(paths, since) if e.project == slug and e.ticket == ticket_id]
 
 
 def _from_event(event: Event) -> Activity | None:
@@ -194,7 +198,7 @@ def _read(log: Path) -> tuple[str, list[datetime] | None]:
         lines = stamps_file.read_text(encoding="utf-8").split()[skipped:]
         return text, [datetime.fromisoformat(stamp) for stamp in lines]
     mtime = datetime.fromtimestamp(log.stat().st_mtime, UTC)
-    return text, [mtime] * len(text.splitlines())
+    return text, [mtime] * len(text.split("\n"))
 
 
 def _actions(event: dict[str, Any], root: Path | None) -> list[tuple[Kind, str]]:

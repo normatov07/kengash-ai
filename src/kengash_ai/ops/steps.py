@@ -522,6 +522,8 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
         line = prompts.log_line(
             utc_now(), step, pick.role, pick.provider, pick.model, verdict, tokens
         )
+        if result.warning:  # the CLI's error after a valid output (SP12 spec §3.1)
+            line += f" · warning: {result.warning.strip().splitlines()[0][:160]}"
         doc.sections["Log"] = "\n".join(filter(None, [doc.sections.get("Log", "").strip(), line]))
         if pick.provider != "shell" and result.session_id:
             ticket.sessions[pick.role] = SessionRef(
@@ -660,6 +662,7 @@ def _step_end(
         "session": ran.result.session_id,
         "loop": ran.loop,
         "verdict": verdict,
+        **({"warning": ran.result.warning} if ran.result.warning else {}),
         "tokens": {
             "in": usage.input,
             "out": usage.output,

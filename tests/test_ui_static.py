@@ -462,3 +462,18 @@ def test_span_reads_like_progress_lines() -> None:
         f"import {{ span }} from '{fmt}';console.log(JSON.stringify([13, 324, 3900].map(span)));"
     )
     assert json.loads(out) == ["13s", "5m", "1h05m"]
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_the_live_rows_outlive_a_render() -> None:
+    ticket = (STATIC / "views" / "ticket.js").as_uri()
+    out = _node(
+        f"import {{ liveAppend, liveRows }} from '{ticket}';"
+        "liveAppend('a', {ts: null, kind: 'read', text: 'read x'});"
+        "liveAppend('a', {ts: null, kind: 'edit', text: 'edit y'});"
+        "console.log(JSON.stringify({a: liveRows('a'), b: liveRows('b')}));"
+    )
+    found = json.loads(out)
+    assert "read x" in found["a"] and "edit y" in found["a"] and found["b"] == ""
+    source = (STATIC / "views" / "ticket.js").read_text()
+    assert 'addEventListener("open"' in source  # a reconnect replays history: start over
