@@ -30,6 +30,7 @@ export const app = {
   version: "",
   overview: null,
   from: "#/board", // where the ticket sheet closes back to
+  ticketTab: "", // the tab the next ticket opens on: "live" from a running session or card
   refresh: () => show(),
   toast,
   post: async (path, body) => {

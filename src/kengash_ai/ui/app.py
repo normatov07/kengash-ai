@@ -380,7 +380,7 @@ def create_app(*, token: str, port: int) -> FastAPI:
 
     @app.get("/api/tickets/{ticket_id}/live")
     def ticket_live(request: Request, ticket_id: str) -> StreamingResponse:
-        stream = live_stream(request, activity.watch(ticket_id, None))
+        stream = live_stream(request, activity.watch(ticket_id, None, heartbeat=True))
         return StreamingResponse(stream, media_type="text/event-stream")
 
     @app.get("/api/events")
@@ -392,16 +392,26 @@ def create_app(*, token: str, port: int) -> FastAPI:
 
 
 async def live_stream(
-    request: Connection, items: Iterator[activity.Activity]
+    request: Connection, items: Iterator[activity.Activity | None]
 ) -> AsyncIterator[str]:
     """A ticket's worker activity as `event: activity` messages, history first, then live,
-    ending with `event: done` once the ticket stops running (SP12 spec §4.5)."""
+    ending with `event: done` once the ticket stops running (SP12 spec §4.5). Heartbeats
+    (None) let the stream notice a closed tab within a poll, and keep proxies awake."""
+    end = object()
+    quiet = 0
     while not await request.is_disconnected():
-        item = await asyncio.to_thread(next, items, None)
-        if item is None:
+        item = await asyncio.to_thread(next, items, end)
+        if item is end:
             yield "event: done\ndata: {}\n\n"
             return
-        yield f"event: activity\ndata: {json.dumps(dataclasses.asdict(item), default=str)}\n\n"
+        if not isinstance(item, activity.Activity):  # a heartbeat
+            quiet += 1
+            if quiet % 15 == 0:
+                yield ": ping\n\n"
+            continue
+        quiet = 0
+        data = json.dumps(dataclasses.asdict(item), default=str)
+        yield f"event: activity\ndata: {data}\n\n"
 
 
 async def event_stream(

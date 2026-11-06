@@ -60,6 +60,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-06: `activity.follow(…, heartbeat=)` yields None on a quiet poll (the live stream checks its client); `views.Card.running` (SP12 M2).
 - 2026-11-06: `views.Session` gains `active_s`, `action`, `changed`, `quiet` (from `progress`); `TicketView` gains `running` (its `Progress`) and `in_progress` (uncommitted worktree files) (SP12 M2).
 - 2026-11-06: `WaitResult.progress` on a timeout; `progress.snapshot`, `progress.short`; `activity.history`, `activity.watch` (SP12 M2).
 - 2026-11-06: `progress` (SP12 M2).
@@ -79,4 +80,3 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - 2026-10-30: `workflows`: create, copy, rename, remove, route and set workflows (SP10 M2).
 - 2026-10-30: `agent_config.edit_agent`, `copy_agent`, `describe`, `instruction_caps`; `new_agent` takes `fallback`, `skill` or `instructions` (SP10 M2).
 - 2026-10-30: `tickets.add_tickets` gives a new ticket `Settings.workflow_for(importance)`, the routed workflow; its loop cap stays the importance's (SP10 M2).
-- 2026-10-30: built-in role skills always load from the package (`role_file`); `ignored_copies`; doctor warns `ignored built-in skill copies in <folder> (<names>): built-in skills are fixed; copy the agent to change one` (SP10 M2).

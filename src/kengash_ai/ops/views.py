@@ -30,7 +30,7 @@ from kengash_ai.model import (
     utc_now,
 )
 from kengash_ai.model import Gate as TicketGate
-from kengash_ai.ops import agent_config, agents, jobs, records
+from kengash_ai.ops import activity, agent_config, agents, jobs, records
 from kengash_ai.ops import changes as changes_ops
 from kengash_ai.ops import loops as loop_ops
 from kengash_ai.ops import progress as progress_ops
@@ -170,6 +170,7 @@ class Card:
     rejected: int = 0  # failed plan reviews
     done_at: datetime | None = None
     tags: list[str] = field(default_factory=list)
+    running: bool = False  # SP12: a worker is busy with it; the UI pulses it
 
 
 @dataclass
@@ -562,6 +563,7 @@ def board(paths: StorePaths | None = None, *, project: str | None = None) -> Boa
                 rejected.get(ticket.id, 0),
                 done_at.get(ticket.id) if ticket.folder is Folder.done else None,
                 list(ticket.tags),
+                activity.running_status(ticket.status),
             )
         )
     try:

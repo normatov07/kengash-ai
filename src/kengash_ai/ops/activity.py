@@ -96,21 +96,27 @@ def follow(
     *,
     poll_s: float = 1.0,
     root: Path | None = None,
+    heartbeat: bool = False,
     sleep: Callable[[float], None] = time.sleep,
-) -> Iterator[Activity]:
+) -> Iterator[Activity | None]:
     """Every activity so far, then each new one as it happens, until the ticket stops
-    running; the last line is its status."""
+    running; the last line is its status. With `heartbeat`, a poll that finds nothing new
+    yields None, so a stream can check that its client is still there."""
     seen: set[tuple[datetime | None, str, str]] = set()
     while True:
         status, running = _state(paths, slug, ticket_id)
+        fresh = False
         for item in ticket(paths, slug, ticket_id, root=root):
             key = (item.ts, item.kind, item.text)
             if key not in seen:
                 seen.add(key)
+                fresh = True
                 yield item
         if not running:
             yield Activity(datetime.now(UTC), "status", status)
             return
+        if heartbeat and not fresh:
+            yield None
         sleep(poll_s)
 
 
@@ -121,11 +127,13 @@ def history(ticket_id: str, project: str | None) -> list[Activity]:
     return ticket(paths, slug, ticket_id)
 
 
-def watch(ticket_id: str, project: str | None, *, poll_s: float = 1.0) -> Iterator[Activity]:
+def watch(
+    ticket_id: str, project: str | None, *, poll_s: float = 1.0, heartbeat: bool = False
+) -> Iterator[Activity | None]:
     """`follow` for a ticket of the user's store, found by id."""
     paths = StorePaths.default()
     slug, _ = records.locate_ticket(paths, ticket_id, project)
-    return follow(paths, slug, ticket_id, poll_s=poll_s)
+    return follow(paths, slug, ticket_id, poll_s=poll_s, heartbeat=heartbeat)
 
 
 def running_status(status: str) -> bool:

@@ -2,7 +2,7 @@
 // and the loop journal, newest first; the running loop and the Auto mode switch (SP11 §5.3).
 import { get } from "../api.js";
 import { toggle } from "../controls.js";
-import { STEPS, clock, elapsed, loopSummary, loopsIn, stepColor, tokens } from "../format.js";
+import { STEPS, clock, elapsed, loopSummary, loopsIn, span, stepColor, tokens } from "../format.js";
 import { html } from "../html.js";
 import { icon } from "../icons.js";
 import { armed } from "../scope.js";
@@ -49,8 +49,8 @@ function sessions(data, app) {
           ${rows.map(
             (s) => html`<div class="trow">
               <div class="c-step"><span class="dot" style="background: ${stepColor(s.step)}"></span><span style="color: ${stepColor(s.step)}; font-weight: 500">${STEPS[s.step]?.label ?? s.step}</span></div>
-              <div class="c-id"><a class="mono" href="#/ticket/${s.ticket}" title="${s.title}">${s.ticket}</a></div>
-              <div class="c-grow ellipsis muted" title="${s.title}">${s.project}</div>
+              <div class="c-id"><a class="mono" data-live href="#/ticket/${s.ticket}" title="${s.title}">${s.ticket}</a></div>
+              <div class="c-grow ellipsis muted" title="${s.title}">${s.project}${s.action || s.active_s !== null ? html`<div class="act mono ${s.quiet ? "danger" : "faint"}" title="${s.action}">${s.active_s !== null ? `active ${span(s.active_s)} ago · ` : ""}${s.changed} ${s.changed === 1 ? "file" : "files"}${s.action ? ` · ${s.action}` : ""}</div>` : ""}</div>
               <div class="c-agent mono muted ellipsis">${s.provider || "—"} · ${s.model || "default"}</div>
               <div class="c-loop mono ${s.loop >= s.loop_max ? "at-cap" : ""}">${s.loop}/${s.loop_max}</div>
               <div class="c-time mono muted">${elapsed(s.since)}</div>
@@ -215,6 +215,7 @@ export function bind(root, app) {
     else event.target.checked = !auto;
   });
   root.addEventListener("click", async (event) => {
+    if (event.target.closest("[data-live]")) app.ticketTab = "live"; // open the worker's live view
     const win = event.target.closest("[data-window]");
     if (win) {
       app.window = win.dataset.window;

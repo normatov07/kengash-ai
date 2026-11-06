@@ -106,3 +106,16 @@ def test_follow_ends_with_the_ticket(engine: Engine) -> None:
     assert found[0].text == "plan → claude" and found[-1].kind == "status"
     assert found[-1].text == "done/merged"
     assert json.dumps([item.text for item in found])  # plain strings all the way
+
+
+def test_follow_heartbeats_while_quiet(engine: Engine) -> None:
+    doc = engine.ticket()
+    doc.meta.status, doc.meta.step = "in_process/under_implementation", "implement"
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    _event(engine, T0, "step.start", step="implement", provider="antigravity")
+    beats = activity.follow(
+        engine.paths, engine.slug, engine.ticket_id, heartbeat=True, sleep=lambda s: None
+    )
+    first = next(beats)
+    assert first is not None and first.text == "implement → antigravity"
+    assert next(beats) is None  # nothing new: a heartbeat, so a stream can check its client

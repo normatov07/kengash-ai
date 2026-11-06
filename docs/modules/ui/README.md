@@ -30,6 +30,7 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 
 ## Changes
 
+- 2026-11-06: the ticket sheet's Live tab (while a worker runs, or opened from a running session or card through `app.ticketTab`) streams `/api/tickets/{id}/live` into rows (`format.activityRow`: time, kind, text), follows the newest unless scrolled up, and closes its `EventSource` on every render and on leaving; a pulsing header names step, CLI/model, elapsed (`format.span`), files and quiet or gone workers; Changes lists `in_progress` files; Overview's session rows add an activity line and open Live; running board cards pulse (`.pulse`, still under `prefers-reduced-motion`); checked headless at 360 and 1440 px (SP12 M2).
 - 2026-11-06: `GET /api/tickets/{id}/live` streams the ticket's worker activity as `event: activity` (history, then live, from `activity.watch`) and ends with `event: done` (SP12 M2).
 - 2026-11-06: the Agents screen's fallback switch writes `fallback_on_error` and names connection failures too (SP12 M1).
 - 2026-11-06 (SP11 review): Overview's loop line counts only the loops covering the selected project (`format.loopsIn`); its Auto mode switch on a project removes the project's key when the new value equals the defaults' (`overview.autoChange`); node tests cover the switch reverting on a failed save.
@@ -49,4 +50,3 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 - 2026-10-26: three provider cards (claude, codex, antigravity); the not-supported card is gone (SP7).
 - 2026-10-26: accessibility: axe-core reports no serious or critical issue on any screen; `--faint` is the canvas's grey lifted to 4.5:1, text never uses `--dim`, off roles and pending chain steps show their state by colour instead of opacity, the SETTINGS.md view is keyboard-scrollable (SP7).
 - 2026-10-26: every response carries a CSP (`script-src 'self'`, `frame-ancestors 'none'`, styles `'self' 'unsafe-inline'` for the markup's style attributes), `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` (the first URL holds the token), COOP, CORP and a Permissions-Policy, refusals included; a favicon (SP7).
-- 2026-10-26: a not-supported provider card shows the server's reason (SP6).

@@ -571,3 +571,13 @@ def test_ticket_view_lists_in_progress_files(busy_ticket: Engine) -> None:
     found = views.ticket_view(busy_ticket.paths, busy_ticket.ticket_id, project=None)
     assert found.in_progress == ["lib/main.dart"]
     assert found.running is not None and found.running.provider == "antigravity"
+
+
+def test_running_cards_are_marked(busy_ticket: Engine) -> None:
+    cards = [
+        card
+        for column in views.board(busy_ticket.paths, project=None).columns
+        for card in column.cards
+    ]
+    (card,) = [card for card in cards if card.id == busy_ticket.ticket_id]
+    assert card.running is True

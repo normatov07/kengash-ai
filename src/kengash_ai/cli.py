@@ -905,6 +905,8 @@ def show_logs(
             else iter(activity.history(ticket_id, project))
         )
         for item in items:
+            if item is None:
+                continue
             if as_json:
                 typer.echo(json.dumps(dataclasses.asdict(item), default=str))
             else:
