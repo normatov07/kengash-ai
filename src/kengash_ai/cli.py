@@ -17,6 +17,7 @@ from kengash_ai.ops import (
     agent_config,
     changes,
     compaction,
+    conductors,
     controls,
     evals,
     loops,
@@ -1195,8 +1196,26 @@ def workflow_set(
     _emit(change, as_json, f"set workflow {name}: {' → '.join(order)}")
 
 
-skills_app = typer.Typer(help="Skills: lint, install and eval.", no_args_is_help=True)
+skills_app = typer.Typer(help="Skills: lint, install, eval and show.", no_args_is_help=True)
 app.add_typer(skills_app, name="skills")
+
+
+@skills_app.command("show")
+def skills_show(
+    name: Annotated[str, typer.Argument(help="The skill, e.g. ticket.")],
+    agent: Annotated[
+        str | None,
+        typer.Option("--agent", help="claude, codex or antigravity; default: the calling agent."),
+    ] = None,
+) -> None:
+    """Print a skill as installed for the calling agent: how one skill hands over to the next."""
+    with _errors():
+        text = skills.show(
+            name,
+            agent=agent or conductors.conductor().agent,
+            cli_name=skills.invoked_name(sys.argv[0]),
+        )
+    typer.echo(text, nl=False)
 
 
 def _command_tree() -> set[str]:

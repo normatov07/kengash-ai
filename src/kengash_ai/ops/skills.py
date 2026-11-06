@@ -118,6 +118,40 @@ class Problem:
     message: str
 
 
+def show(name: str, *, agent: str, cli_name: str) -> str:
+    """A packaged skill rendered as `install` renders it for `agent` (SP11 spec §3.1): the
+    body without frontmatter, commands named `cli_name`, other skills spelled as `agent`
+    types them, then each `references/<file>` as its own `## references/<file>` section,
+    so one skill can hand over to the next whatever agent runs it."""
+    source = packaged()
+    known = sorted(path.name for path in source.iterdir() if (path / "SKILL.md").is_file())
+    if name not in known:
+        raise UserError(f"unknown skill: {name}; known: {', '.join(known)}")
+    files = _render(source / name, cli_name, spelling_for(agent))
+    _, body = split_frontmatter(files["SKILL.md"].decode("utf-8"))
+    parts = [body.lstrip()]
+    for path in sorted(files):
+        if path.startswith("references/"):
+            parts.append(f"\n## {path}\n\n{files[path].decode('utf-8', errors='replace')}")
+    return "".join(parts)
+
+
+def spelling_for(agent: str) -> str | None:
+    """How `agent` types another kengash skill: Codex `$kengash-<name>`; claude and agy
+    load the plugin, so None keeps `/kengash:<name>`."""
+    return SPELLING["codex"] if agent == "codex" else None
+
+
+def invoked_name(argv0: str) -> str:
+    """The command skills should run to reach this CLI: `kengash` when it is the first
+    `kengash` on PATH, else its full path (the rule `--cli-name` follows)."""
+    if Path(argv0).name != CLI or os.sep not in argv0:
+        return CLI  # `python -m`, a test runner, or a bare name found on PATH
+    here = Path(argv0).resolve()
+    found = shutil.which(CLI)
+    return CLI if found is not None and Path(found).resolve() == here else str(here)
+
+
 def packaged() -> Path:
     """The installed skills: the package's `skills/` (wheel), else the checkout's."""
     inside = Path(str(resources.files("kengash_ai") / "skills"))
