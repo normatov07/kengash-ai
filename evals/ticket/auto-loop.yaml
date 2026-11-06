@@ -1,0 +1,42 @@
+skill: ticket
+description: with Auto mode on, tickets cut from an approved plan start the loop with no question (SP11)
+notes: >-
+  RED 2026-11-06: before SP11 the ticket skill ended by naming /kengash:loop; nothing claimed
+  a ticket until the user typed it.
+files:
+  calc.py: "\"\"\"Small arithmetic helpers.\"\"\"\n\n\ndef sub(a: int, b: int) -> int:\n    return a - b\n"
+settings: |
+  merge.mode: ask
+  step_timeout_min: 10
+  plan.reviewer: {cli}
+  project.test_cmd: "python3 -c 'import calc; assert calc.add(2, 3) == 5'"
+  agents:
+    planner: {cli: {cli}, skill: plan, fallback: []}
+    plan-reviewer: {cli: {cli}, skill: review-plan, fallback: []}
+    implementer: {cli: {cli}, skill: implement, fallback: []}
+    code-reviewer: {cli: {cli}, skill: review-code, fallback: []}
+    security-reviewer: {cli: {cli}, skill: review-security, fallback: []}
+  loop_start: auto
+setup:
+  - args: [plan, new, --mode, direct, --title, "Add add()"]
+    stdin: "Add add(a, b) to calc.py."
+    save: plan
+  - args: [plan, save, "{plan}"]
+    stdin: |
+      ## Goal
+      calc.py gains add(a, b).
+      ## Scope
+      One function in calc.py.
+      ## Design
+      A pure function beside sub.
+      ## Acceptance
+      - [ ] calc.add(2, 3) == 5
+  - args: [plan, approve, "{plan}", --skip-review]
+turns:
+  - "{kg}ticket {plan}"
+  - "Yes, merge it."
+expect:
+  journal: [ticket.created, loop.started, ticket.claimed, ticket.merged]
+  tickets: {min: 1}
+  clean: true
+timeout_s: 2400

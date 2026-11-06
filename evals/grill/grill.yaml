@@ -13,8 +13,10 @@ turns:
   - "Take your recommended answers."
   - "Yes, that is what I want."
   - "Approve it."
+  - "Not now."
 expect:
-  journal: [plan.created, plan.saved, plan.reviewed, plan.approved]
-  plans: {count: 1, fields: {mode: grill, status: approved}}
+  journal: [plan.created, plan.saved, plan.reviewed, plan.approved, ticket.created]
+  absent: [loop.started]
+  plans: {count: 1, fields: {mode: grill, status: ticketed}}
   clean: true
 timeout_s: 900
