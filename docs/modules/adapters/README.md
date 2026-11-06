@@ -26,9 +26,17 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 - A prompt plus skill over 120 KiB fails as `crash` before any CLI starts; a missing binary is a `crash` naming it.
 - One call per `run`: retries, fallbacks and quota waits belong to `ops`.
 - Never used: claude `--bare` and `--no-session-persistence`, codex `--ephemeral`; token files are never read.
+- agy editing steps may read any file the user can (`--settings` allow `read_file(*)`, SP12 spec §5.3): agy 1.5.2 already read outside the worktree without it, and the rule only stops a denied read from ending the turn. Workers never get API keys, but whatever a model reads reaches its provider; keep secrets out of reach of the user account that runs kengash, as with any coding agent.
 
 ## Changes
 
+- 2026-11-06 (final review): the stdout pump stamps each line before writing it and is waited on for at most `grace_s` after the group ends, so a child that left the group holding stdout cannot hang a call; `classify` knows claude's and Node's network wording (`Connection error`, `Request timed out`, `ECONNREFUSED`, `ENOTFOUND`, `ETIMEDOUT`, `EAI_AGAIN`, `fetch failed`, `socket hang up`); `stream.lines` splits on `\n` only, keeping JSON with U+2028 whole.
+- 2026-11-06: agy editing steps pass `--settings` allowing `read_file(*)`, the allow-rule agy's own denial names, so a read it cannot prompt for no longer ends the turn (SP12 M3).
+- 2026-11-06: `Shell` runs `project.test_cmd`, then `project.lint_cmd` (an empty one skipped; lint logs to `<log>-lint.out`); the first failure is the verdict, its finding naming `make project.<x>_cmd pass`; summaries `tests passed`, `tests and lint passed`, `lint failed (exit N)` (SP12 M3).
+- 2026-11-06: `run_process` pumps stdout through a thread into the log line by line, stamping each line in `<log>.ts` (ISO UTC), so a running worker can be watched (SP12 M2).
+- 2026-11-06: claude runs `--output-format stream-json --verbose`; parse reads the last `result` event (or a single object), the session comes from `system/init` when the result lacks one, `recover_session` reads it from the log, and `is_error` with a schema-valid output is a success with `warning` (SP12 M1).
+- 2026-11-06: `stream` (`lines`, `result`, `first`) reads stream-json; agy runs `--output-format stream-json`: its session comes from `init`, `recover_session` reads it from the log, a fresh schema-valid output wins over a late `ERROR` (kept as `warning`), and an error is classified from agy's `error` field and stderr (the response only when both are empty) (SP12 M1).
+- 2026-11-06: `classify` knows `network` (connection resets and refusals, broken pipes, EOF, TLS and DNS failures, stream errors, HTTP 500/502/503/504, `UNAVAILABLE`, `INTERNAL`, overloaded), after `auth` and `rate_limit` (SP12 M1).
 - 2026-10-30: `known_models(name)`: Claude Code's aliases without running the CLI (SP10 M4).
 - 2026-10-30: `ProviderStatus.models` from `detect()` once signed in: claude's `MODELS` aliases (fable, opus, sonnet, haiku), agy's from the `agy models` sign-in check (`antigravity.parse_models`), none for codex (SP10 M3).
 - 2026-10-26: workers get `KENGASH_AGENT` (SP8).
@@ -42,4 +50,3 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 - 2026-10-23: antigravity provider (SP3 M2).
 - 2026-10-23: codex provider (SP3 M2).
 - 2026-10-23: claude provider (SP3 M2).
-- 2026-10-23: process runner, worker environment, shell provider, registry (SP3 M2).

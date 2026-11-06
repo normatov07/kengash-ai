@@ -7,6 +7,7 @@ reviewer and the compactor run on the provider's cheapest model.
 
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -182,6 +183,10 @@ def test_a_ticket_runs_end_to_end(scratch: Path, store_paths: StorePaths, provid
     found = git(scratch, "log", "--format=%H", f"--grep=Kengash-Ticket: {doc.meta.uuid}", "main")
     assert found.strip()
     assert {"planner", "implementer", "code-reviewer"} <= set(doc.meta.sessions)
+    # SP12: the workers streamed, so `kengash logs` shows what they read and edited
+    assert list(store_paths.logs.glob(f"{ticket_id}-*.ts"))
+    activity = runner.invoke(app, ["logs", ticket_id]).stdout
+    assert re.search(r"^\d\d:\d\d:\d\d (read|edit) ", activity, re.M), activity
     ends = [e for e in journal(store_paths) if e["type"] == "step.end"]
     assert len(ends) >= 3
     for end in ends:

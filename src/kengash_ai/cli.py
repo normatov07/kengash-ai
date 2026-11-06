@@ -14,6 +14,7 @@ import typer
 from kengash_ai import __version__
 from kengash_ai.model import Folder, KengashError, PlanMode, UserError
 from kengash_ai.ops import (
+    activity,
     agent_config,
     changes,
     compaction,
@@ -23,6 +24,7 @@ from kengash_ai.ops import (
     loops,
     merging,
     plans,
+    progress,
     projects,
     queue,
     reviews,
@@ -150,6 +152,8 @@ def doctor(
         for problem in report.problems:
             prefix = f"{problem.slug}: " if problem.slug else ""
             typer.echo(prefix + ("warning: " if problem.warning else "") + problem.message)
+        for note in [] if quiet else report.notes:
+            typer.echo(f"note: {note.message}")
         if not report.problems and not quiet:
             plural = "" if report.projects == 1 else "s"
             typer.echo(f"ok: {report.projects} project{plural}")
@@ -832,11 +836,13 @@ def loop_status(project: Every = None, as_json: AsJson = False) -> None:
 def wait(
     project: Every = None,
     timeout: Annotated[
-        float, typer.Option("--timeout", min=0, help="Seconds before giving up (exit 3).")
-    ] = 540,
+        float,
+        typer.Option("--timeout", min=0, help="Seconds before giving up (exit 3) with progress."),
+    ] = 300,
     as_json: AsJson = False,
 ) -> None:
-    """Block until a ticket or a plan review needs the conductor; `idle` when nothing runs."""
+    """Block until a ticket or a plan review needs the conductor; `idle` when nothing runs;
+    on a timeout, one progress line per running ticket."""
     with _errors():
         result = waiting.wait(project, timeout=timeout)
     if as_json:
@@ -855,8 +861,59 @@ def wait(
     elif result.idle:
         typer.echo("idle")
     if result.timed_out:
+        if not as_json:
+            lines = [progress.line(item) for item in result.progress]
+            for line in _capped(lines, "kengash ps"):
+                typer.echo(line)
         typer.echo(f"wait timed out after {timeout:g} s", err=True)
         raise typer.Exit(3)
+
+
+@app.command("ps")
+def show_running(
+    project: Every = None,
+    one_line: Annotated[
+        bool, typer.Option("--line", help="One short line, for a status bar.")
+    ] = False,
+    as_json: AsJson = False,
+) -> None:
+    """What every running worker is doing: step, CLI, elapsed, activity, changed files."""
+    with _errors():
+        found = progress.snapshot(project)
+    if as_json:
+        typer.echo(json.dumps([dataclasses.asdict(item) for item in found], indent=2))
+    elif one_line:
+        typer.echo(progress.short(found))
+    else:
+        lines = [progress.line(item) for item in found] or ["nothing running"]
+        for line in _capped(lines, "kengash ps --json"):
+            typer.echo(line)
+
+
+@app.command("logs")
+def show_logs(
+    ticket_id: TicketId,
+    follow: Annotated[
+        bool, typer.Option("--follow", "-f", help="Keep printing until the ticket stops.")
+    ] = False,
+    project: Only = None,
+    as_json: AsJson = False,
+) -> None:
+    """What the ticket's workers did, one line per action; -f follows it live."""
+    with _errors():
+        items = (
+            activity.watch(ticket_id, project)
+            if follow
+            else iter(activity.history(ticket_id, project))
+        )
+        for item in items:
+            if item is None:
+                continue
+            if as_json:
+                typer.echo(json.dumps(dataclasses.asdict(item), default=str))
+            else:
+                clock = item.ts.astimezone().strftime("%H:%M:%S") if item.ts else "--:--:--"
+                typer.echo(f"{clock} {item.text}")
 
 
 def _wait_line(event: waiting.WaitEvent) -> str:

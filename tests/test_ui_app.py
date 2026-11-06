@@ -7,6 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from conftest import Engine
 from fastapi.testclient import TestClient
 
 from kengash_ai import journal
@@ -394,3 +395,16 @@ def test_the_overview_carries_loops_and_auto_mode(client: TestClient) -> None:
     )
     assert saved.status_code == 200 and saved.json()["values"]["loop_start"] == "auto"
     assert client.get("/api/overview").json()["auto"] == {"payments-api": True}
+
+
+def test_live_streams_history_then_done(client: TestClient, busy_ticket: Engine) -> None:
+    signed_in(client)
+    doc = busy_ticket.ticket()
+    doc.meta.status, doc.meta.step = "done/merged", None
+    documents.save_ticket(busy_ticket.paths.project(busy_ticket.slug), doc)
+    with client.stream("GET", f"/api/tickets/{busy_ticket.ticket_id}/live") as response:
+        body = response.read().decode()
+    chunks = [chunk for chunk in body.split("\n\n") if chunk.strip()]
+    assert chunks[0].startswith("event: activity\ndata: ")
+    assert '"text": "read /work/pubspec.yaml"' in body
+    assert chunks[-1] == "event: done\ndata: {}"

@@ -1,6 +1,7 @@
 """Adapter core: process runner, worker environment, shell provider, registry (SP3 spec §8)."""
 
 import os
+import shutil
 import signal
 import time
 from pathlib import Path
@@ -182,3 +183,123 @@ def test_an_interrupted_wait_ends_the_cli_group(
         signal.alarm(0)
         signal.signal(signal.SIGALRM, previous)
     assert _gone(int(pid_file.read_text()))
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        'request failed: Post "https://x/v1": read tcp 10.0.0.1:47416->172.217.115.4:443: '
+        "read: connection reset by peer",
+        "dial tcp: lookup api.example.com: no such host",
+        "stream error: stream ID 7; INTERNAL_ERROR",
+        "upstream returned 503 Service Unavailable",
+        "rpc error: code = UNAVAILABLE desc = overloaded",
+        "write: broken pipe",
+    ],
+)
+def test_classify_network(message: str) -> None:
+    assert classify(message) == "network"
+
+
+def test_auth_and_rate_limit_win_over_network() -> None:
+    assert classify("429 Too Many Requests; connection reset by peer") == "rate_limit"
+    assert classify("401 unauthorized after EOF") == "auth"
+    assert classify("the tests failed") == "crash"
+
+
+def test_step_results_carry_a_warning() -> None:
+    from kengash_ai.model import StepResult
+
+    assert StepResult(warning="connection reset").warning == "connection reset"
+
+
+def test_stdout_lines_get_stamps(tmp_path: Path) -> None:
+    from datetime import datetime
+
+    log = tmp_path / "logs" / "t-1.out"
+    result = run_process(
+        ["sh", "-c", "echo a; sleep 0.3; echo b"],
+        cwd=tmp_path,
+        env=dict(os.environ),
+        timeout_s=10,
+        log=log,
+    )
+    assert result.stdout == "a\nb\n" and log.read_text() == "a\nb\n"
+    stamps = [datetime.fromisoformat(line) for line in log.with_suffix(".ts").read_text().split()]
+    assert len(stamps) == 2 and (stamps[1] - stamps[0]).total_seconds() >= 0.25
+
+
+def test_lint_runs_after_tests(tmp_path: Path) -> None:
+    result = Shell().run(_request(tmp_path, test_cmd="echo t", lint_cmd="echo l"))
+    assert isinstance(result.output, ReviewOutput) and result.output.verdict == "pass"
+    assert result.output.summary == "tests and lint passed"
+
+
+def test_lint_failure_fails_the_step(tmp_path: Path) -> None:
+    result = Shell().run(_request(tmp_path, test_cmd="echo t", lint_cmd="echo bad; exit 3"))
+    assert isinstance(result.output, ReviewOutput) and result.output.verdict == "fail"
+    assert result.output.summary == "lint failed (exit 3)"
+    (finding,) = result.output.findings
+    assert "bad" in finding.issue and finding.fix == "make project.lint_cmd pass"
+
+
+def test_failing_tests_skip_lint(tmp_path: Path) -> None:
+    marker = tmp_path / "linted"
+    result = Shell().run(_request(tmp_path, test_cmd="exit 1", lint_cmd=f"touch {marker}"))
+    assert (
+        isinstance(result.output, ReviewOutput) and result.output.summary == "tests failed (exit 1)"
+    )
+    assert not marker.exists()
+
+
+def test_only_lint_set(tmp_path: Path) -> None:
+    result = Shell().run(_request(tmp_path, lint_cmd="echo l"))
+    assert isinstance(result.output, ReviewOutput) and result.output.summary == "lint passed"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "API Error: Connection error.",
+        "API Error: Request timed out.",
+        "connect ECONNREFUSED 160.79.104.10:443",
+        "getaddrinfo ENOTFOUND api.anthropic.com",
+        "connect ETIMEDOUT 160.79.104.10:443",
+        "TypeError: fetch failed",
+        "socket hang up",
+    ],
+)
+def test_classify_claude_network_wording(message: str) -> None:
+    assert classify(message) == "network"
+
+
+@pytest.mark.skipif(shutil.which("setsid") is None, reason="setsid is not installed")
+def test_an_escaped_child_holding_stdout_does_not_hang_the_call(tmp_path: Path) -> None:
+    started = time.monotonic()
+    result = run_process(
+        ["sh", "-c", "setsid sleep 8 & echo hi; sleep 30"],
+        cwd=tmp_path,
+        env=dict(os.environ),
+        timeout_s=1,
+        log=tmp_path / "logs" / "t-1.out",
+        grace_s=1,
+    )
+    assert result.timed_out and time.monotonic() - started < 5
+
+
+def test_the_pump_stamps_before_it_writes() -> None:
+    from io import BytesIO
+
+    from kengash_ai.adapters.process import _pump
+
+    order: list[str] = []
+
+    class Out:
+        def write(self, data: object) -> None:
+            order.append("stamp" if isinstance(data, str) else "line")
+
+        def flush(self) -> None:
+            pass
+
+    _pump(BytesIO(b"a\nb\n"), Out(), Out())  # type: ignore[arg-type]
+    assert order == ["stamp", "line", "stamp", "line"]

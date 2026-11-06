@@ -1,3 +1,4 @@
+import { html } from "./html.js";
 // Small display helpers shared by the screens.
 export function tokens(count) {
   if (count >= 1e6) return `${(count / 1e6).toFixed(1)}M`;
@@ -63,4 +64,20 @@ export function loopSummary(loops) {
   if (!loops.length) return "no loop running: run /kengash:loop in your agent";
   if (loops.length === 1) return `loop running (${loops[0].agent} · ${loops[0].scope})`;
   return `${loops.length} loops running (${[...new Set(loops.map((loop) => loop.agent))].join(", ")})`;
+}
+
+// One row of a worker's live activity (SP12): its local time, kind and text, escaped.
+const KIND_LABELS = { step: "step", read: "read", edit: "edit", run: "run", reply: "reply", error: "error", status: "status" };
+export function activityRow(item) {
+  const time = item.ts ? new Date(item.ts).toTimeString().slice(0, 8) : "--:--:--";
+  const label = KIND_LABELS[item.kind] ?? "run";
+  return html`<div class="live-row kind-${label}"><span class="live-time mono">${time}</span><span class="live-kind">${label}</span><span class="live-text mono">${item.text}</span></div>`;
+}
+
+// Seconds as progress lines print them (SP12): 13s, 5m, 1h05m.
+export function span(seconds) {
+  const s = Math.max(0, Math.floor(seconds ?? 0));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  return `${Math.floor(s / 3600)}h${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`;
 }

@@ -1,9 +1,12 @@
-"""Antigravity driver: `agy -p` with JSON output (SP3 spec §8.1, live runs of 2026-10-23)."""
+"""Antigravity driver: `agy -p` with stream-json output (SP3 spec §8.1, live runs of
+2026-10-23; SP12: streaming, a valid output wins over a late error, agy's own error field)."""
 
 import json
 import re
+from pathlib import Path
 from typing import Any
 
+from kengash_ai.adapters import stream
 from kengash_ai.adapters.base import (
     CliProvider,
     checked,
@@ -28,6 +31,9 @@ EDIT_LINE = (
     "file tools only, and do not run tests; review steps check the result."
 )
 MODE = {"read_only": "plan", "edit_worktree": "accept-edits"}
+# Headless agy auto-denies a read it cannot prompt for and ends the turn (chess-samurai run of
+# 2026-11-06, call 3); its own message names this allow-rule. Reads only (SP12 spec §5.3).
+READ_ALLOW = '{"permissions":{"allow":["read_file(*)"]}}'
 
 _MODEL = re.compile(r"[A-Za-z0-9][\w.:-]*")
 
@@ -53,42 +59,55 @@ class Antigravity(CliProvider):
         if req.resume:
             argv += ["--conversation", str(req.session_id)]
         # Every turn passes the schema: without it agy repeats the previous output.
-        argv += ["--output-format", "json", "--json-schema", schema_json(req.output)]
+        argv += ["--output-format", "stream-json", "--json-schema", schema_json(req.output)]
         if req.model:
             argv += ["--model", req.model]
         argv += ["--mode", MODE[req.profile]]
+        if req.profile == "edit_worktree":
+            argv += ["--settings", READ_ALLOW]
         return argv + (["--dangerously-skip-permissions"] if req.bypass else [])
 
     def parse(self, req: StepRequest, proc: ProcessResult) -> StepResult:
         stdout = proc.stdout.strip()
         if not stdout and proc.exit_code == 0:
             return StepResult(session_id=req.session_id, error="empty", detail="no output")
-        try:
-            data = json.loads(stdout)
-        except json.JSONDecodeError:
-            data = None
-        if not isinstance(data, dict):
+        init = stream.first(stdout, key="event", value="init")
+        started = (init or {}).get("conversation_id") or req.session_id
+        event = stream.result(stdout, key="event", value="result")
+        data = (
+            event.get("result") if event is not None and event.get("event") == "result" else event
+        )
+        if not isinstance(data, dict) or "status" not in data:
+            # no result: the CLI died mid-stream; classify what it said, never `empty`
             message = tail(proc.stderr or proc.stdout) or f"exit {proc.exit_code}"
-            return StepResult(session_id=req.session_id, error=classify(message), detail=message)
+            return StepResult(session_id=started, error=classify(message), detail=message)
         text = str(data.get("response") or "")
         totals = _totals(data.get("usage") or {})
 
         def result(**fields: Any) -> StepResult:
             return StepResult(
-                session_id=data.get("conversation_id") or req.session_id,
+                session_id=data.get("conversation_id") or started,
                 text=text,
                 usage=totals.minus(req.prior_usage),
                 total_usage=totals,
                 **fields,
             )
 
-        if data.get("status") != "SUCCESS" or proc.exit_code != 0:
-            message = "\n".join(part for part in (text, proc.stderr) if part.strip())
-            return result(
-                error=classify(message),
-                detail=tail(text or proc.stderr) or f"exit {proc.exit_code}",
-            )
+        failed = data.get("status") != "SUCCESS" or proc.exit_code != 0
         structured = data.get("structured_output")
+        if structured is not None and _fresh(text, structured):
+            output, problem = checked(req.output, structured)
+            if output is not None:  # the work is done: a late error is only a warning
+                warning = str(data.get("error") or proc.stderr.strip()) if failed else ""
+                return result(output=output, warning=tail(warning, 3))
+            if not failed:
+                return result(error="schema", detail=problem)
+        if failed:
+            # agy's own error and stderr; the response is the model's text (agy 1.4 put its
+            # error there, so it is read only when nothing else says why)
+            said = "\n".join(str(part) for part in (data.get("error"), proc.stderr) if part)
+            message = said.strip() or text
+            return result(error=classify(message), detail=tail(message) or f"exit {proc.exit_code}")
         if structured is None:
             denied = [
                 str(action.get("display_name") or action.get("action"))
@@ -97,12 +116,7 @@ class Antigravity(CliProvider):
             ]
             detail = f"no output; denied: {', '.join(denied)}" if denied else "no output"
             return result(error="empty", detail=detail)
-        if not _fresh(text, structured):
-            return result(error="schema", detail="agy repeated the previous turn's output")
-        output, problem = checked(req.output, structured)
-        if output is None:
-            return result(error="schema", detail=problem)
-        return result(output=output)
+        return result(error="schema", detail="agy repeated the previous turn's output")
 
     def signed_in(self) -> tuple[bool, str | None]:
         result = probe([self.binary, "models"])
@@ -115,6 +129,16 @@ class Antigravity(CliProvider):
 
     def attach_command(self, session_id: str) -> list[str]:
         return [self.binary, "--conversation", session_id]
+
+    def recover_session(self, log: Path) -> str | None:
+        """The conversation id from the stream's `init` event (SP12 spec §3.5)."""
+        if not log.is_file():
+            return None
+        init = stream.first(
+            log.read_text(encoding="utf-8", errors="replace"), key="event", value="init"
+        )
+        conversation = (init or {}).get("conversation_id")
+        return str(conversation) if conversation else None
 
 
 def parse_models(stdout: str) -> list[str]:

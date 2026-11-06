@@ -426,3 +426,54 @@ def test_the_overview_switch_reverts_on_a_failed_save() -> None:
     found = json.loads(out)
     assert (found["failed"], found["saved"], found["toasts"]) == (False, True, 1)
     assert found["bodies"][0] == ["/api/settings?project=a", {"changes": {"loop_start": "auto"}}]
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_activity_row_formats() -> None:
+    fmt = (STATIC / "format.js").as_uri()
+    found = json.loads(
+        _node(
+            f"import {{ activityRow }} from '{fmt}';"
+            "const row = activityRow({ts: '2026-11-06T06:05:51+00:00', kind: 'edit',"
+            " text: 'edit lib/<x>.dart'}).text;"
+            "const none = activityRow({ts: null, kind: 'reply', text: 'reply: ok'}).text;"
+            "console.log(JSON.stringify({row, none}));"
+        )
+    )
+    assert "kind-edit" in found["row"] and "edit lib/&lt;x&gt;.dart" in found["row"]
+    assert re.search(r">\d\d:\d\d:\d\d<", found["row"])
+    assert "--:--:--" in found["none"] and "kind-reply" in found["none"]
+
+
+def test_the_live_tab_streams_and_closes() -> None:
+    ticket = (STATIC / "views" / "ticket.js").read_text()
+    assert "new EventSource(" in ticket and ".close()" in ticket and '"live"' in ticket
+    assert "in_progress" in ticket
+    css = (STATIC / "app.css").read_text()
+    assert "@keyframes pulse" in css and "prefers-reduced-motion" in css
+    assert "pulse" in (STATIC / "views" / "board.js").read_text()
+    assert "ticketTab" in (STATIC / "views" / "overview.js").read_text()
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_span_reads_like_progress_lines() -> None:
+    fmt = (STATIC / "format.js").as_uri()
+    out = _node(
+        f"import {{ span }} from '{fmt}';console.log(JSON.stringify([13, 324, 3900].map(span)));"
+    )
+    assert json.loads(out) == ["13s", "5m", "1h05m"]
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_the_live_rows_outlive_a_render() -> None:
+    ticket = (STATIC / "views" / "ticket.js").as_uri()
+    out = _node(
+        f"import {{ liveAppend, liveRows }} from '{ticket}';"
+        "liveAppend('a', {ts: null, kind: 'read', text: 'read x'});"
+        "liveAppend('a', {ts: null, kind: 'edit', text: 'edit y'});"
+        "console.log(JSON.stringify({a: liveRows('a'), b: liveRows('b')}));"
+    )
+    found = json.loads(out)
+    assert "read x" in found["a"] and "edit y" in found["a"] and found["b"] == ""
+    source = (STATIC / "views" / "ticket.js").read_text()
+    assert 'addEventListener("open"' in source  # a reconnect replays history: start over

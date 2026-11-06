@@ -1,6 +1,7 @@
 """Retry rules every CLI call shares: ticket steps, plan reviews and compaction (SP3 spec §5
 item 5). A timeout retries once; a schema error, and an empty turn whose actions were
-denied, each get one repair turn on the session."""
+denied, each get one repair turn on the session; a network error gets one resumed turn
+(SP12 spec §3.4)."""
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -33,10 +34,14 @@ def call(
 ) -> Called:
     """Run `request`; a timeout, a schema error and denied actions each get one more attempt."""
     usage = Usage()
-    timed_out = repaired = unblocked = False
+    timed_out = repaired = unblocked = reconnected = False
     while True:
         result = adapters.get(provider, runtime=paths.runtime).run(request)
         usage = plus(usage, result.usage)
+        if result.error == "network" and not reconnected:
+            reconnected = True
+            request = resume(request, result, prompts.NETWORK_PROMPT, next_log())
+            continue
         if result.error == "timeout" and not timed_out:
             timed_out = True
             request = again(request, result, next_log())
@@ -80,12 +85,19 @@ def again(request: StepRequest, result: StepResult | None, log: Path) -> StepReq
 
 def repair(request: StepRequest, result: StepResult, problem: str, log: Path) -> StepRequest:
     """A resumed turn that asks the session to fix `problem`; without a session, a retry."""
-    session = result.session_id or request.session_id
+    return resume(request, result, prompts.repair_prompt(problem), log)
+
+
+def resume(request: StepRequest, result: StepResult, prompt: str, log: Path) -> StepRequest:
+    """A resumed turn on the call's session saying `prompt`; without a session, a retry. A
+    new session the CLI never reported (claude's id is made before the call) is not resumed:
+    it may not exist, so the request runs again (SP12 final review)."""
+    session = result.session_id or (request.session_id if request.resume else None)
     if session is None:
         return again(request, None, log)
     return request.model_copy(
         update={
-            "prompt": prompts.repair_prompt(problem),
+            "prompt": prompt,
             "resume": True,
             "session_id": session,
             "skill": None,
@@ -95,13 +107,34 @@ def repair(request: StepRequest, result: StepResult, problem: str, log: Path) ->
     )
 
 
-def failure(provider: str, request: StepRequest, result: StepResult) -> str:
-    """One line naming why a call failed, and where its output went."""
-    if result.error == "timeout":
-        return f"timeout: killed after {request.timeout_s} s twice; log: {request.log}"
+FAILURE_MAX = 300
+DETAIL_MIN = 120  # the reason never shrinks below this: long paths may lengthen the line
+
+
+def failure(
+    provider: str,
+    request: StepRequest,
+    result: StepResult,
+    *,
+    worktree: Path | None = None,
+    changed: int = 0,
+) -> str:
+    """One line naming why a call failed, where its output went and, for an editing step,
+    where its changes are kept (SP12 spec §3.6): at most FAILURE_MAX characters, the
+    reason shortened first, but never below DETAIL_MIN; only long paths exceed the cap."""
     if result.error == "auth":
         return f"sign in to {BINARIES.get(provider, provider)} interactively"
-    return f"{result.error}: {result.detail}; log: {request.log}"
+    kept = f"; work kept in {worktree} ({changed} files changed)" if worktree and changed else ""
+    if result.error == "timeout":
+        return f"timeout: killed after {request.timeout_s} s twice; log: {request.log}{kept}"
+    lines = result.detail.strip().splitlines()
+    detail = lines[0].strip() if lines else ""
+    tail_part = f"; log: {request.log}{kept}"
+    head = f"{result.error}: "
+    room = max(FAILURE_MAX - len(head) - len(tail_part), DETAIL_MIN)
+    if len(detail) > room:
+        detail = detail[: max(room - 1, 0)] + "…"
+    return f"{head}{detail}{tail_part}"
 
 
 def plus(a: Usage, b: Usage) -> Usage:

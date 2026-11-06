@@ -13,8 +13,16 @@ All notable changes to this project are written here. The format follows [Keep a
 - `kengash skills show <name>` prints a skill as installed for the calling agent; skills hand over to each other through it.
 - Overview names the running loop and reads again every 30 s.
 
+- Finished work survives a dropped connection: a worker CLI that returned a valid result and then lost its connection counts as done; a network error resumes the session once ("your edits are kept"), then hands the step to the agent's fallback.
+- Watch your workers: `kengash wait` prints a progress line per running worker every 5 minutes (step, CLI and model, elapsed, last activity, changed files, last action); `kengash ps [--line]`; `kengash logs <id> [-f]` follows a worker's reads, edits, commands and replies — in Claude Code the loop runs it as a background task you open like a subagent; the UI's ticket sheet has a Live tab, Overview rows show the last activity and running cards pulse.
+- `kengash init` detects test and lint commands (Flutter, Dart, uv, Node, Go, Rust) and adds a `run_tests` step that runs both after `implement`; `kengash doctor` names projects without them, settings still at an old default, and agents without a fallback, and `doctor --fix` repairs the first two.
+
 ### Changed
 
+- `fallback_on_rate_limit` is now `fallback_on_error` (rate limits and network errors); the old key is still read, and `kengash doctor --fix` renames it.
+- The default token cap per ticket is 1,000,000 (was 250,000); `kengash doctor --fix` updates a store still at the old value.
+- Failures are one line naming the log and, for an editing step, the worktree and its changed files; a failed call keeps its session, so a retry resumes it.
+- Claude and Antigravity workers run with `--output-format stream-json`.
 - The loop skill's event table moved to `loop/references/events.md`. Run `kengash skills install --agent … [--global]` again to get the new skills.
 
 ## [0.3.0] - 2026-10-30

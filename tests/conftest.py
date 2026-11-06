@@ -322,3 +322,37 @@ def long_memory(store_paths: StorePaths) -> Path:
     path = store_paths.memory / "MEMORY.md"
     path.write_text("\n".join(LONG_MEMORY) + "\n", encoding="utf-8")
     return path
+
+
+@pytest.fixture
+def busy_ticket(engine: Engine) -> Engine:
+    """Ticket 7b55e0c1 implementing on agy for 12 minutes: worker alive, a stream log with a
+    read, an edit and a reply 30 s ago, `lib/main.dart` changed in its worktree (SP12)."""
+    from datetime import timedelta
+
+    from kengash_ai import journal
+    from kengash_ai.model import Event, Running, WorkerRecord, utc_now
+    from kengash_ai.ops import progress
+
+    progress.forget()
+    now = utc_now()
+    log = engine.paths.logs / f"{engine.ticket_id}-3.out"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    text = (FAKES / "fixtures" / "agy" / "stream-ok.jsonl").read_text(encoding="utf-8")
+    log.write_text(text, encoding="utf-8")
+    stamps = [(now - timedelta(seconds=30)).isoformat()] * len(text.splitlines())
+    log.with_suffix(".ts").write_text("\n".join(stamps) + "\n", encoding="utf-8")
+    running = Running(role="implementer", provider="antigravity", model="flash", log=log)
+    runtime.save_ticket_state(engine.paths, engine.ticket_id, TicketState(running=running))
+    doc = engine.ticket()
+    doc.meta.status, doc.meta.step = "in_process/under_implementation", "implement"
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    worker = WorkerRecord(id=engine.ticket_id, project=engine.slug, pid=os.getpid())
+    runtime.save_worker(engine.paths, worker)
+    start = {"type": "step.start", "project": engine.slug, "ticket": engine.ticket_id}
+    started = {**start, "ts": now - timedelta(minutes=12), "step": "implement"}
+    journal.append(engine.paths, Event.model_validate({**started, "provider": "antigravity"}))
+    changed = engine.worktree / "lib" / "main.dart"
+    changed.parent.mkdir(parents=True, exist_ok=True)
+    changed.write_text("void main() {}\n", encoding="utf-8")
+    return engine

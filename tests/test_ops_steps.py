@@ -1,5 +1,6 @@
 """The step loop: one ticket through its workflow with fake CLIs (SP3 spec §5)."""
 
+import json
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -8,7 +9,7 @@ import pytest
 from conftest import Engine, Events, FakeClis, write_settings
 
 from kengash_ai.model import Running, TicketState
-from kengash_ai.ops import calls, steps
+from kengash_ai.ops import calls, prompts, steps
 from kengash_ai.ops.steps import JobEnd
 from kengash_ai.store import StorePaths, documents, runtime
 from kengash_ai.workflow import fingerprint
@@ -173,7 +174,7 @@ def test_quota_waits_without_a_fallback(
     naps: list[float] = []
     monkeypatch.setattr(steps, "sleep", naps.append)
     monkeypatch.setattr(steps, "utc_now", lambda: now)  # the fixture's reset time is fixed
-    write_settings(store_paths, "fallback_on_rate_limit: false\n")
+    write_settings(store_paths, "fallback_on_error: false\n")
     fake_clis.queue("claude", fixture="claude/usage_limit.json")
     fake_clis.queue("claude", fixture="claude/work_resume.json")
     steps.run_job("7b55e0c1", steps=1)
@@ -352,3 +353,157 @@ def test_a_custom_step_between_built_ins_runs_in_order(
         "Polish the change." not in planner and "Polish the change. Do not edit files." in advisor
     )
     assert len(fake_clis.calls("codex")) == 1
+
+
+def _codex_cut(thread: str | None = "th-1") -> str:
+    """A codex turn that a connection reset ended; `thread` None: before the session began."""
+    events: list[dict[str, object]] = (
+        [{"type": "thread.started", "thread_id": thread}] if thread else []
+    )
+    events.append(
+        {"type": "turn.failed", "error": {"message": "stream error: connection reset by peer"}}
+    )
+    return "".join(json.dumps(event) + "\n" for event in events)
+
+
+def test_network_error_resumes_once_then_passes(engine: Engine, fake_clis: FakeClis) -> None:
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", stdout=_codex_cut(), exit=1)
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"x.py": "x = 1\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    resumed = fake_clis.calls("codex")[1]["argv"]
+    assert "resume" in resumed and "th-1" in resumed and resumed[-1] == prompts.NETWORK_PROMPT
+    assert engine.ticket().meta.step == "review_code"
+
+
+def test_network_error_without_a_session_retries_fresh(engine: Engine, fake_clis: FakeClis) -> None:
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", stdout=_codex_cut(None), exit=1)
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"x.py": "x = 1\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    assert "resume" not in fake_clis.calls("codex")[1]["argv"]
+    assert engine.ticket().meta.step == "review_code"
+
+
+def test_network_then_fallback_then_failure(engine: Engine, fake_clis: FakeClis) -> None:
+    cut = json.dumps(
+        {"type": "result", "is_error": True, "session_id": "c-9", "result": "API Error: ECONNRESET"}
+    )
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", stdout=_codex_cut(), exit=1)
+    fake_clis.queue("codex", stdout=_codex_cut(), exit=1)
+    fake_clis.queue("claude", stdout=cut + "\n", exit=1)  # the fallback, claude/sonnet
+    fake_clis.queue("claude", stdout=cut + "\n", exit=1)
+    end = steps.run_job("7b55e0c1", steps=2)
+    assert end.status == "in_process/failed" and end.reason.startswith("network: ")
+    assert len(fake_clis.calls("codex")) == 2 and len(fake_clis.calls("claude")) == 3
+
+
+def test_auth_is_never_retried(engine: Engine, fake_clis: FakeClis) -> None:
+    fake_clis.queue("claude", fixture="claude/auth_error.json")
+    steps.run_job("7b55e0c1")
+    assert len(fake_clis.calls("claude")) == 1
+
+
+def test_a_failed_call_keeps_its_session(engine: Engine, fake_clis: FakeClis) -> None:
+    failed = [
+        {"type": "thread.started", "thread_id": "th-9"},
+        {"type": "turn.failed", "error": {"message": "the model gave up"}},
+    ]
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", stdout="".join(json.dumps(e) + "\n" for e in failed), exit=1)
+    end = steps.run_job("7b55e0c1", steps=2)
+    assert end.status == "in_process/failed"
+    session = engine.ticket().meta.sessions["implementer"]
+    assert (session.provider, session.id) == ("codex", "th-9")
+
+
+def test_commit_hook_turn_survives_a_network_error(engine: Engine, fake_clis: FakeClis) -> None:
+    hook = engine.repo / ".git" / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\ntest -f fixed || { echo 'lint: add fixed'; exit 1; }\n")
+    hook.chmod(0o755)
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "x = 1\n"})
+    fake_clis.queue("codex", stdout=_codex_cut(), exit=1)
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"fixed": "yes\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    assert fake_clis.calls("codex")[2]["argv"][-1] == prompts.NETWORK_PROMPT
+    assert engine.ticket().meta.step == "review_code"
+
+
+def test_running_log_follows_each_attempt_and_clears(engine: Engine, fake_clis: FakeClis) -> None:
+    seen: list[str] = []
+    real = steps._next_log
+
+    def spy(job: steps._Job) -> Path:
+        path = real(job)
+        running = runtime.load_ticket_state(engine.paths, engine.ticket_id).running
+        seen.append(running.log.name if running else "")
+        return path
+
+    steps._next_log = spy
+    try:
+        fake_clis.queue("claude", fixture="claude/work_resume.json")
+        fake_clis.queue("codex", stdout=_codex_cut(), exit=1)
+        fake_clis.queue("codex", stdout=_codex_cut(), exit=1)
+        fake_clis.queue("claude", fixture="claude/auth_error.json")
+        steps.run_job("7b55e0c1", steps=2)
+    finally:
+        steps._next_log = real
+    assert seen[-1] == f"{engine.ticket_id}-{len(seen)}.out"
+    assert runtime.load_ticket_state(engine.paths, engine.ticket_id).running is None
+
+
+def test_a_failure_on_an_editing_step_names_the_worktree(
+    engine: Engine, fake_clis: FakeClis
+) -> None:
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    failed = [
+        {"type": "thread.started", "thread_id": "th-9"},
+        {"type": "turn.failed", "error": {"message": "gave up"}},
+    ]
+    fake_clis.queue(
+        "codex",
+        stdout="".join(json.dumps(e) + "\n" for e in failed),
+        exit=1,
+        edits={"x.py": "x = 1\n"},
+    )
+    end = steps.run_job("7b55e0c1", steps=2)
+    assert end.reason.endswith(f"; work kept in {engine.worktree} (1 files changed)")
+
+
+def test_a_retry_over_changes_gets_the_note(engine: Engine, fake_clis: FakeClis) -> None:
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    failed = {"type": "turn.failed", "error": {"message": "gave up"}}
+    fake_clis.queue("codex", stdout=json.dumps(failed) + "\n", exit=1, edits={"x.py": "x = 1\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    doc = engine.ticket()
+    doc.meta.status = "in_process/under_implementation"  # what `kengash run` does on a retry
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl")
+    steps.run_job("7b55e0c1", steps=1)
+    assert prompts.RETRY_NOTE in fake_clis.calls("codex")[1]["argv"][-1]
+
+
+def test_a_new_claude_session_cut_before_it_began_retries_fresh(
+    engine: Engine, fake_clis: FakeClis
+) -> None:
+    fake_clis.queue("claude", stderr="connect ECONNREFUSED 160.79.104.10:443\n", exit=1)
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    steps.run_job("7b55e0c1", steps=1)
+    first, second = (call["argv"] for call in fake_clis.calls("claude")[:2])
+    assert "--resume" not in second
+    assert second[second.index("--session-id") + 1] == first[first.index("--session-id") + 1]
+    assert engine.ticket().meta.step == "implement"
+
+
+def test_a_late_warning_is_journaled_and_logged(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events
+) -> None:
+    late = json.loads(fake_clis.fixture("claude/work_resume.json"))
+    late["is_error"], late["result"] = True, "API Error: Connection error. (ECONNRESET)"
+    fake_clis.queue("claude", stdout=json.dumps(late), exit=1)
+    steps.run_job("7b55e0c1", steps=1)
+    (end,) = [e for e in journal_events() if e["type"] == "step.end"]
+    assert "ECONNRESET" in end["warning"]
+    assert "warning: API Error: Connection error. (ECONNRESET)" in engine.ticket().sections["Log"]

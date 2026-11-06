@@ -10,7 +10,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from kengash_ai.model import NeedsSetup, Plan, ProjectEntry, Ticket, UserError, utc_now
-from kengash_ai.ops import jobs, providers, skills, waiting
+from kengash_ai.ops import hygiene, jobs, providers, skills, waiting
 from kengash_ai.ops.records import repo_root
 from kengash_ai.store import documents, links, migrate, seed, storegit
 from kengash_ai.store.locks import locked
@@ -57,6 +57,7 @@ class Problem:
 class DoctorReport:
     projects: int
     problems: list[Problem]
+    notes: list[Problem] = field(default_factory=list)  # SP12: worth knowing, not problems
 
 
 @dataclass
@@ -76,6 +77,8 @@ def init_project(path: Path, paths: StorePaths | None = None) -> InitResult:
     slug, created = _register(paths, repo)
     project = ensure_project(paths, slug)
     warnings = _attach(repo, project)
+    if created:  # a new project gets its detected test and lint commands and a checks step
+        hygiene.apply_checks(paths, slug, *hygiene.detect_commands(repo))
     storegit.commit_store(paths, f"kengash: init {slug}")
     return InitResult(slug, repo, project.root, created, warnings)
 
@@ -170,7 +173,10 @@ def doctor(
     clash = providers.cli_clash()
     if clash is not None:
         problems.append(Problem(clash, warning=True))
-    return DoctorReport(len(registry.projects), problems)
+    checked = hygiene.checks(paths, fix=fix)  # each message names its scope
+    problems += [Problem(n.message, None, n.fixed, n.warning) for n in checked if not n.info]
+    notes = [Problem(n.message, None, n.fixed, False) for n in checked if n.info]
+    return DoctorReport(len(registry.projects), problems, notes)
 
 
 def adopt(path: Path, paths: StorePaths | None = None) -> AdoptResult:

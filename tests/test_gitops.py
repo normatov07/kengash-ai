@@ -172,3 +172,13 @@ def test_ticket_commits_read_the_0_1_trailer_names(repo: Path, tmp_path: Path) -
     assert [c.subject.split(":")[0] for c in found] == ["hrn(7b55e0c1)", "kg(7b55e0c1)"]
     assert [c.trailers["Kengash-Loop"] for c in found] == ["2", "2"]  # old keys read as new
     assert all("Harness-Loop" not in c.trailers for c in found)
+
+
+def test_changed_files_lists_uncommitted_paths(repo: Path) -> None:
+    from kengash_ai.gitops import changed_files
+
+    assert changed_files(repo) == []
+    (repo / "README.md").write_text("changed\n", encoding="utf-8")
+    (repo / "new dir").mkdir()
+    (repo / "new dir" / "a.py").write_text("x = 1\n", encoding="utf-8")
+    assert changed_files(repo) == ["README.md", "new dir/a.py"]

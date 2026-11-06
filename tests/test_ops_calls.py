@@ -9,7 +9,7 @@ import pytest
 
 from kengash_ai import adapters
 from kengash_ai.model import StepRequest, StepResult, Usage, WorkOutput
-from kengash_ai.ops import calls
+from kengash_ai.ops import calls, prompts
 from kengash_ai.store import StorePaths
 
 OK = StepResult(
@@ -120,3 +120,60 @@ def test_an_empty_turn_without_denials_returns_at_once(
     provider = scripted(StepResult(error="empty", detail="no output"))
     assert calls.call(store_paths, "claude", request_, logs(tmp_path)).result.error == "empty"
     assert len(provider.requests) == 1
+
+
+def test_a_network_error_resumes_once_with_the_network_prompt(
+    scripted: Any, request_: StepRequest, tmp_path: Path, store_paths: StorePaths
+) -> None:
+    cut = StepResult(session_id="s1", error="network", detail="connection reset by peer")
+    provider = scripted(cut, OK)
+    called = calls.call(store_paths, "claude", request_, logs(tmp_path))
+    resumed = provider.requests[1]
+    assert called.result.ok
+    assert (resumed.resume, resumed.session_id, resumed.prompt) == (
+        True,
+        "s1",
+        prompts.NETWORK_PROMPT,
+    )
+
+
+def test_a_second_network_error_is_returned(
+    scripted: Any, request_: StepRequest, tmp_path: Path, store_paths: StorePaths
+) -> None:
+    cut = StepResult(session_id="s1", error="network", detail="connection reset by peer")
+    provider = scripted(cut, cut)
+    called = calls.call(store_paths, "claude", request_, logs(tmp_path))
+    assert called.result.error == "network" and len(provider.requests) == 2
+
+
+def test_failure_line_is_short_and_names_the_worktree(request_: StepRequest) -> None:
+    detail = '{"handoff": "' + "x" * 2000 + '"}\nsecond line'
+    result = StepResult(error="crash", detail=detail)
+    short = request_.model_copy(update={"log": Path("/s/logs/t-1.out")})  # paths fixed: CI's
+    line = calls.failure("antigravity", short, result, worktree=Path("/s/kg-1"), changed=3)
+    assert len(line) == 300 and line.startswith('crash: {"handoff": "xxx')
+    assert line.endswith("; log: /s/logs/t-1.out; work kept in /s/kg-1 (3 files changed)")
+    assert "second line" not in line
+    plain = calls.failure("codex", short, StepResult(error="crash", detail="boom"))
+    assert plain == "crash: boom; log: /s/logs/t-1.out"
+
+
+def test_long_paths_never_crowd_out_the_reason(request_: StepRequest) -> None:
+    deep = Path("/" + "/".join(["folder"] * 40))  # macOS runners' temp paths are this long
+    long = request_.model_copy(update={"log": deep / "t-1.out"})
+    result = StepResult(error="network", detail="read: connection reset by peer " + "y" * 500)
+    line = calls.failure("antigravity", long, result, worktree=deep / "kg-1", changed=1)
+    reason = line.split("; log: ")[0]
+    assert reason.startswith("network: read: connection reset by peer")
+    assert len(reason) >= len("network: ") + calls.DETAIL_MIN
+
+
+def test_a_fresh_session_cut_before_it_began_is_run_again_not_resumed(
+    scripted: Any, request_: StepRequest, tmp_path: Path, store_paths: StorePaths
+) -> None:
+    fresh = request_.model_copy(update={"session_id": "u-1", "resume": False})
+    cut = StepResult(error="network", detail="connect ECONNREFUSED")
+    provider = scripted(cut, OK)
+    calls.call(store_paths, "claude", fresh, logs(tmp_path))
+    again = provider.requests[1]
+    assert (again.resume, again.session_id, again.prompt) == (False, "u-1", fresh.prompt)

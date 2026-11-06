@@ -137,3 +137,88 @@ def test_detect(fake_clis: FakeClis) -> None:
     assert Antigravity().detect().hint == "run `agy` and sign in"
     assert Antigravity().detect().models == []
     assert Antigravity().attach_command("c-1") == ["agy", "--conversation", "c-1"]
+
+
+CONV = "00ece9a5-c212-489d-96a6-e940bb74edc0"
+RESET = "read tcp 10.0.0.1:47416->172.217.115.4:443: read: connection reset by peer"
+
+
+def _stream(*events: dict[str, Any]) -> str:
+    return "".join(json.dumps(event) + "\n" for event in events)
+
+
+def _result(**fields: Any) -> dict[str, Any]:
+    return {"event": "result", "result": {"conversation_id": CONV, **fields}}
+
+
+INIT = {"event": "init", "conversation_id": CONV, "init": {"model": "m"}}
+
+
+def test_editing_steps_stream(tmp_path: Path) -> None:
+    argv = Antigravity().command(_request(tmp_path, prompt="p", output="work"))
+    assert argv[argv.index("--output-format") + 1] == "stream-json"
+
+
+def test_stream_ok_parses_the_result(fake_clis: FakeClis, tmp_path: Path) -> None:
+    fake_clis.queue("agy", fixture="agy/stream-ok.jsonl")
+    result = Antigravity().run(_request(tmp_path, prompt="p", output="work"))
+    assert (result.error, result.session_id) == (None, CONV)
+    assert isinstance(result.output, WorkOutput)
+    assert result.output.summary == "Rebrand core package and UI to Chess Samurai"
+
+
+def test_error_with_a_valid_output_is_a_success_with_a_warning(
+    fake_clis: FakeClis, tmp_path: Path
+) -> None:
+    fake_clis.queue("agy", fixture="agy/stream-error-valid.jsonl", exit=1)
+    result = Antigravity().run(_request(tmp_path, prompt="p", output="work"))
+    assert result.error is None and isinstance(result.output, WorkOutput)
+    assert result.output.summary == "Rebrand core package and UI to Chess Samurai"
+    assert "connection reset by peer" in result.warning
+
+
+def test_an_invalid_output_with_an_error_stays_an_error(
+    fake_clis: FakeClis, tmp_path: Path
+) -> None:
+    broken = {"summary": 1}
+    stdout = _stream(
+        INIT,
+        _result(status="ERROR", error=RESET, response=json.dumps(broken), structured_output=broken),
+    )
+    fake_clis.queue("agy", stdout=stdout, exit=1)
+    result = Antigravity().run(_request(tmp_path, prompt="p", output="work"))
+    assert (result.error, result.session_id) == ("network", CONV)
+
+
+def test_the_error_field_is_classified_not_the_response(
+    fake_clis: FakeClis, tmp_path: Path
+) -> None:
+    said = "I checked the quota exceeded handler and the 401 page."
+    fake_clis.queue(
+        "agy", stdout=_stream(INIT, _result(status="ERROR", error=RESET, response=said))
+    )
+    assert Antigravity().run(_request(tmp_path, prompt="p", output="work")).error == "network"
+
+
+def test_recover_session_reads_init(tmp_path: Path) -> None:
+    log = tmp_path / "t-1.out"
+    log.write_text(_stream(INIT, {"event": "step_update", "step_update": {}}), encoding="utf-8")
+    assert Antigravity().recover_session(log) == CONV
+    log.write_text("not json\n", encoding="utf-8")
+    assert Antigravity().recover_session(log) is None
+
+
+def test_no_result_classifies_stderr(fake_clis: FakeClis, tmp_path: Path) -> None:
+    fake_clis.queue("agy", stdout=_stream(INIT), stderr=f"fatal: {RESET}\n", exit=1)
+    result = Antigravity().run(_request(tmp_path, prompt="p", output="work"))
+    assert (result.error, result.session_id) == ("network", CONV)
+
+
+def test_edit_steps_allow_reads(tmp_path: Path) -> None:
+    argv = Antigravity().command(
+        _request(tmp_path, prompt="p", output="work", profile="edit_worktree")
+    )
+    allow = json.loads(argv[argv.index("--settings") + 1])
+    assert allow == {"permissions": {"allow": ["read_file(*)"]}}
+    read_only = Antigravity().command(_request(tmp_path, prompt="p"))
+    assert "--settings" not in read_only

@@ -8,7 +8,7 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 
 
 - `kengash --version` prints `kengash-ai <version>` and exits 0. Skills use this line to confirm the right binary is on PATH; `doctor` also accepts an older install's `super-harness <version>`.
 - `kengash --help` lists commands and options.
-- `run ID... [--steps N]` (`started <id> <step>→<provider>` / `skipped <id>: <reason>`; exit 1 when none started, 4 when a provider needs setup), `approve ID [--loops N] [--tokens N]`, `park ID --why W`, `stop ID`, `pause` and `resume` (`--project`), `ticket changes ID [--diff]` (`<path> +a -r  loop n <step> <provider>/<model>`), `ticket attach ID [--role R]` (the resume command), `wait [--timeout 540]` (`<id> <status> loop n/max: <detail>`, `plan <id> round r/max: <verdict>, <summary>` for plan reviews, `<id> queued loop n/max: <title>` for a ticket that became ready, `idle`, exit 3 on timeout, exit 6 under another conductor's loop), `merge ID` (`merged <id>: N commits into <base>`; exit 1 when the main tree is dirty or off base, or on a conflict), each with `--json` (SP3 spec §10).
+- `run ID... [--steps N]` (`started <id> <step>→<provider>` / `skipped <id>: <reason>`; exit 1 when none started, 4 when a provider needs setup), `approve ID [--loops N] [--tokens N]`, `park ID --why W`, `stop ID`, `pause` and `resume` (`--project`), `ticket changes ID [--diff]` (`<path> +a -r  loop n <step> <provider>/<model>`), `ticket attach ID [--role R]` (the resume command), `wait [--timeout 300]` (`<id> <status> loop n/max: <detail>`, `plan <id> round r/max: <verdict>, <summary>` for plan reviews, `<id> queued loop n/max: <title>` for a ticket that became ready, `idle`, exit 3 on timeout after one `progress.line` per running ticket, exit 6 under another conductor's loop); `ps [-p] [--line]` (progress lines or `nothing running`; `--line`: `kg: N running · <id> <step>→<provider> <elapsed> <action>` for a status bar), `logs ID [-f]` (`HH:MM:SS <activity>` per worker action; `-f` follows until the ticket stops), `merge ID` (`merged <id>: N commits into <base>`; exit 1 when the main tree is dirty or off base, or on a conflict), each with `--json` (SP3 spec §10).
 - `kengash init [PATH]`, `doctor [--fix] [--quiet] [--scan DIR]`, `link SLUG NEW_PATH`, `adopt PATH`, each with `--json` (SP2 spec §3). `doctor` prints warnings as `[<slug>: ]warning: <message>`; it exits 1 only for problems that are neither fixed nor warnings.
 - `kengash settings show|get KEY|check`, `memory add TEXT --why WHY [--section S|--decision [--rejected R]] [--by NAME]`, `memory show [--decisions]`, `memory compact [--timeout 540]` (`MEMORY.md N → M lines`; exit 1 with the reason when the result is kept out, 3 on timeout), `context`; all take `--project/-p` (default: the project containing the current folder) and `--json`. `settings get` prints strings plain and other values as JSON; `settings check` prints problems only.
 - `kengash plan new --title T --mode grill|direct|quick` (prompt on stdin), `plan save ID` (`## Section` Markdown on stdin), `plan show ID`, `plan review ID [--timeout 540]` (`plan <id> round r: pass|fail, N findings`, a `warning:` line when the review ran on the conductor's provider, then the findings; exit 3 on timeout, 5 once the rounds are used up), `plan approve ID [--skip-review]`, `plan reject ID --why W`; id commands take `--project/-p` to narrow the search.
@@ -30,6 +30,9 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 
 
 ## Changes
 
+- 2026-11-06: `doctor` prints `note: …` information lines (not with `--quiet`); they never fail it (SP12 M3).
+- 2026-11-06: `logs -f` skips the activity stream's heartbeats (SP12 M2).
+- 2026-11-06: `wait` defaults to 300 s and prints progress on a timeout; `ps`, `logs` (SP12 M2).
 - 2026-11-06 (final review): `wait` folds queued events into `queued: N tickets ready; run: kengash next` and points capped lines at `kengash status`.
 - 2026-11-06: `loop claim|release|status`; exit 6; `wait` prints `queued` lines; `skills show` (SP11 M1).
 - 2026-10-30: 0.3.0 drops the `harness` and `hrn` console scripts and `cli.legacy`, as 0.2.0 announced.
@@ -47,17 +50,3 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 
 - 2026-10-23: `ui open`, `ui stop` (SP5 M1).
 - 2026-10-23: `skills eval` (SP4 M2).
 - 2026-10-23: `skills lint`, `skills install` (SP4 M1).
-- 2026-10-23: `memory compact`; `memory add` reports a background compaction (SP3 M4).
-- 2026-10-23: `plan review`; plan reviews in `wait` (SP3 M4).
-- 2026-10-23: `ticket changes`, `ticket attach` (SP3 M3).
-- 2026-10-23: `wait`; `doctor` reports dead workers (SP3 M3).
-- 2026-10-23: `merge` (SP3 M3).
-- 2026-10-23: `run`, `approve`, `park`, `stop`, `pause`, `resume` (SP3 M3).
-- 2026-10-23: `doctor` warning lines and exit code (SP3 M2).
-- 2026-10-22: `next` command (SP3 M1).
-- 2026-10-22: `ticket` and `status` commands (SP2 M3).
-- 2026-10-22: `plan` commands (SP2 M3).
-- 2026-10-22: `--json` for `settings`, `memory` and `context`; `context` text is formatted here (SP2 M2 review).
-- 2026-10-22: `settings`, `memory` and `context` commands (SP2 M2).
-- 2026-10-22: `init`, `doctor`, `link`, `adopt` commands; errors print one stderr line with the spec exit code (SP2 M1).
-- 2026-10-22: skeleton with `--version` and `--help`; console scripts `harness` and `hrn`.

@@ -244,7 +244,7 @@ function limits(data) {
   return html`<section class="panel ag-limits" data-limits><div class="panel-body">
     <h2 class="section-title">Parallelism and limits</h2><p class="section-note">How many CLI sessions run at once, and how many tokens a ticket may spend before it asks you.</p>
     <div class="lim-fields">${field("sessions.max", "Concurrent CLI sessions", data.sessions_max)}${field("tokens.per_ticket_max", "Token ceiling per ticket", data.tokens_per_ticket, 'step="1000"')}${Object.entries(data.per_provider).map(([name, total]) => field(`sessions.per_provider.${name}`, `${name} sessions`, total))}</div>
-    <div class="checks"><label class="check"><input type="checkbox" data-key="fallback_on_rate_limit" data-kind="bool" data-initial="${data.fallback_on_rate_limit ? "1" : ""}" ${data.fallback_on_rate_limit ? "checked" : ""}>Fall back to the next CLI when one is rate limited</label></div>
+    <div class="checks"><label class="check"><input type="checkbox" data-key="fallback_on_error" data-kind="bool" data-initial="${data.fallback_on_error ? "1" : ""}" ${data.fallback_on_error ? "checked" : ""}>Fall back to the next CLI when one is rate limited or its connection fails</label></div>
   </div></section>`;
 }
 

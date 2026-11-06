@@ -1,9 +1,10 @@
 // Ticket detail (canvas board Ticket): a sheet over the dimmed page with the ticket's header
-// and gate action, tabs Overview · Changes · Timeline · Memory file, and a rail with the
-// agent chain, metadata and actions. Closes back to where it was opened (× or Escape).
+// and gate action, tabs Live (while a worker runs, SP12) · Overview · Changes · Timeline ·
+// Memory file, and a rail with the agent chain, metadata and actions. Closes back to where it
+// was opened (× or Escape).
 import { get } from "../api.js";
-import { STEPS, clock, elapsed, shortTime, tokens } from "../format.js";
-import { html } from "../html.js";
+import { STEPS, activityRow, clock, elapsed, shortTime, span, tokens } from "../format.js";
+import { html, raw } from "../html.js";
 import { icon } from "../icons.js";
 import { armed } from "../scope.js";
 
@@ -12,8 +13,31 @@ const IMPORTANCE = { critical: ["#3A2024", "#EF7A72"], standard: ["#2A2320", "#D
 const SEVERITY = { high: ["HIGH", "red"], critical: ["CRIT", "red"], medium: ["MED", "warn"], med: ["MED", "warn"], low: ["LOW", "info"] };
 const GATED = ["needs_approval", "stalled", "failed", "awaiting_merge"];
 
+// The Live tab's stream; closed on every render and when the user leaves the ticket.
+// The Live tab's rows and stream outlive a render: the sheet re-renders on every journal
+// event, and the stream would otherwise replay its history and lose the scroll each time.
+const live = { id: "", rows: [], source: null, done: false, follow: true };
+function closeLive() {
+  live.source?.close();
+  live.source = null;
+}
+export function liveAppend(id, item) {
+  if (live.id !== id) Object.assign(live, { id, rows: [], done: false, follow: true });
+  live.rows.push(activityRow(item).text);
+  return live.rows.length;
+}
+export function liveRows(id) {
+  return live.id === id ? live.rows.join("") : "";
+}
+globalThis.addEventListener?.("hashchange", () => {
+  if (location.hash.startsWith("#/ticket/")) return;
+  closeLive();
+  Object.assign(live, { id: "", rows: [], done: false, follow: true });
+});
+
 export async function load(app, id) {
-  if (state.id !== id) Object.assign(state, { id, tab: "overview", diff: null, file: "", plan: null, park: false, paths: false });
+  if (state.id !== id) Object.assign(state, { id, tab: app.ticketTab || "overview", diff: null, file: "", plan: null, park: false, paths: false });
+  app.ticketTab = "";
   const data = await get(`/api/tickets/${encodeURIComponent(id)}`);
   if (state.tab === "changes" && state.diff === null && data.changes.length) state.diff = await loadDiff(id);
   return data;
@@ -106,6 +130,15 @@ function overviewTab(data) {
     </div>`;
 }
 
+// What the worker is doing right now, streamed from /api/tickets/<id>/live (SP12 §4.5).
+function liveTab(data) {
+  const run = data.running;
+  const head = run
+    ? html`<div class="live-head"><span class="pulse" aria-hidden="true"></span><span><strong>${STEPS[run.step]?.label ?? run.step}</strong> → <span class="mono">${run.provider}/${run.model}</span></span><span class="muted">${span(run.elapsed_s)} · ${run.changed} ${run.changed === 1 ? "file" : "files"} changed</span>${run.quiet ? html`<span class="cchip red">quiet</span>` : ""}${run.alive ? "" : html`<span class="cchip red">worker gone</span>`}</div>`
+    : html`<div class="live-head"><span class="muted">No worker is running this ticket; its last activity:</span></div>`;
+  return html`${head}<div class="live-rows box" id="live-rows" role="log" aria-live="polite" aria-label="Worker activity">${raw(liveRows(data.meta.id))}</div>`;
+}
+
 function changesTab(data) {
   const added = data.changes.reduce((sum, c) => sum + (c.added ?? 0), 0);
   const removed = data.changes.reduce((sum, c) => sum + (c.removed ?? 0), 0);
@@ -114,7 +147,10 @@ function changesTab(data) {
   const list = findings(data.sections.Findings);
   const who = data.timeline.filter((r) => r.kind === "step.end").at(-1)?.role;
   const shown = state.file === "*" ? Object.keys(files) : [chosen];
-  return html`
+  const working = data.in_progress.length
+    ? html`<h2 class="t-h">In progress <span class="faint">· uncommitted in the worktree while the step runs</span></h2><div class="box">${data.in_progress.map((path) => html`<div class="box-row"><div class="f-file mono ellipsis" title="${path}">${path}</div></div>`)}</div>`
+    : "";
+  return html`${working}
     <div class="t-row"><h2 class="t-h" style="margin: 0">Changes made under this ticket</h2>${data.changes.length ? html`<span class="mono" style="font-size: 12px"><span class="add">+${added}</span> <span class="del">−${removed}</span></span><button class="btn small end" type="button" data-fulldiff>${state.file === "*" ? "Show one file" : "Open full diff"}</button>` : ""}</div>
     ${data.changes.length
       ? html`<div class="box"><div class="box-head"><div class="f-file">FILE</div><div class="f-diff">DIFF</div><div class="f-who">WRITTEN BY</div><div class="f-loop">LOOP</div></div>
@@ -220,8 +256,11 @@ export function view(data) {
   const meta = data.meta;
   const imp = IMPORTANCE[meta.importance] ?? IMPORTANCE.standard;
   const atCap = meta.loop >= meta.loop_max;
-  const counts = { changes: data.changes.length, timeline: data.timeline.length };
-  const body = { overview: overviewTab, changes: changesTab, timeline: timelineTab, file: fileTab }[state.tab](data);
+  const counts = { changes: data.changes.length + data.in_progress.length, timeline: data.timeline.length };
+  const live = data.running || state.tab === "live";
+  if (!live && state.tab === "live") state.tab = "overview";
+  const body = { live: liveTab, overview: overviewTab, changes: changesTab, timeline: timelineTab, file: fileTab }[state.tab](data);
+  const tabs = [...(live ? [["live", "Live"]] : []), ["overview", "Overview"], ["changes", "Changes"], ["timeline", "Timeline"], ["file", "Memory file"]];
   return html`<div class="sheet-stage">
     <div class="sheet-ghost" aria-hidden="true"><div></div><div></div><div></div><div></div></div>
     <div class="sheet-dim" aria-hidden="true" data-close></div>
@@ -232,7 +271,7 @@ export function view(data) {
         <div class="sheet-title"><h1 id="sheet-title">${meta.title}</h1><div class="sheet-gate"><span class="loop-pill ${atCap ? "cap" : ""}">loop ${meta.loop}/${meta.loop_max}${atCap ? " · cap hit" : ""}</span>${gateAction(meta, data)}</div></div>
         <div class="sheet-meta mono"><span>${data.project}</span>${meta.touches.length ? html`<span title="${meta.touches.join(", ")}">${meta.touches[0]}${meta.touches.length > 1 ? ` +${meta.touches.length - 1}` : ""}</span>` : ""}${meta.branch ? html`<span>${meta.branch}</span>` : ""}<span>opened ${clock(meta.created).slice(0, 5)} · ${elapsed(meta.created)} ago</span></div>
       </header>
-      <div class="tabs-line sheet-tabs" role="tablist">${[["overview", "Overview"], ["changes", "Changes"], ["timeline", "Timeline"], ["file", "Memory file"]].map(
+      <div class="tabs-line sheet-tabs" role="tablist">${tabs.map(
         ([key, label]) => html`<button type="button" role="tab" data-tab="${key}" aria-selected="${state.tab === key ? "true" : "false"}">${label}${counts[key] ? html`<span class="count mono">${counts[key]}</span>` : ""}</button>`,
       )}</div>
       <div class="sheet-body"><div class="sheet-main">${body}</div>${rail(data)}</div>
@@ -243,6 +282,36 @@ export function view(data) {
 let onKey = null; // the Escape listener of the open sheet, replaced on each render
 export function bind(root, app, data) {
   const id = data.meta.id;
+  const rows = root.querySelector("#live-rows");
+  if (!rows) closeLive();
+  else {
+    if (live.follow) rows.scrollTop = rows.scrollHeight;
+    rows.addEventListener("scroll", () => (live.follow = rows.scrollHeight - rows.scrollTop - rows.clientHeight < 40));
+    const fresh = live.id !== id;
+    if (fresh || (!live.source && !live.done)) {
+      closeLive();
+      if (fresh) Object.assign(live, { id, rows: [], done: false, follow: true });
+      const source = new EventSource(`/api/tickets/${encodeURIComponent(id)}/live`);
+      live.source = source;
+      source.addEventListener("open", () => {
+        // the stream starts with the whole history, a reconnect too: start the rows over
+        live.rows = [];
+        const box = document.getElementById("live-rows");
+        if (box) box.textContent = "";
+      });
+      source.addEventListener("activity", (event) => {
+        liveAppend(id, JSON.parse(event.data));
+        const box = document.getElementById("live-rows");
+        if (!box) return;
+        box.insertAdjacentHTML("beforeend", live.rows.at(-1));
+        if (live.follow) box.scrollTop = box.scrollHeight;
+      });
+      source.addEventListener("done", () => {
+        live.done = true;
+        closeLive();
+      });
+    }
+  }
   const close = () => (location.hash = app.from || "#/board");
   const why = () => root.querySelector("#why")?.value.trim() ?? "";
   if (state.focused !== id) {

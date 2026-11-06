@@ -2,9 +2,10 @@
 `ops`, and the journal as server-sent events, behind the run's token."""
 
 import asyncio
+import dataclasses
 import hmac
 import json
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
@@ -22,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from kengash_ai.model import JournalCursor, KengashError, NeedsSetup, NeedsUser
 from kengash_ai.ops import (
+    activity,
     agent_config,
     changes,
     compaction,
@@ -376,12 +378,40 @@ def create_app(*, token: str, port: int) -> FastAPI:
         configure.save_settings(body.changes, project=project or None, by=BY)
         return views.settings_view(project=project or None)
 
+    @app.get("/api/tickets/{ticket_id}/live")
+    def ticket_live(request: Request, ticket_id: str) -> StreamingResponse:
+        stream = live_stream(request, activity.watch(ticket_id, None, heartbeat=True))
+        return StreamingResponse(stream, media_type="text/event-stream")
+
     @app.get("/api/events")
     def events(request: Request) -> StreamingResponse:
         stream = event_stream(request, views.journal_end())
         return StreamingResponse(stream, media_type="text/event-stream")
 
     return app
+
+
+async def live_stream(
+    request: Connection, items: Iterator[activity.Activity | None]
+) -> AsyncIterator[str]:
+    """A ticket's worker activity as `event: activity` messages, history first, then live,
+    ending with `event: done` once the ticket stops running (SP12 spec §4.5). Heartbeats
+    (None) let the stream notice a closed tab within a poll, and keep proxies awake."""
+    end = object()
+    quiet = 0
+    while not await request.is_disconnected():
+        item = await asyncio.to_thread(next, items, end)
+        if item is end:
+            yield "event: done\ndata: {}\n\n"
+            return
+        if not isinstance(item, activity.Activity):  # a heartbeat
+            quiet += 1
+            if quiet % 15 == 0:
+                yield ": ping\n\n"
+            continue
+        quiet = 0
+        data = json.dumps(dataclasses.asdict(item), default=str)
+        yield f"event: activity\ndata: {data}\n\n"
 
 
 async def event_stream(

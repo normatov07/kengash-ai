@@ -84,7 +84,9 @@ def test_effective_steps_skip_off_roles_and_add_approval() -> None:
 def test_before_runs_the_step_or_halts_at_a_gate() -> None:
     assert before(settings(), progress()).decision == Run("review_code", 1)
     capped = before(settings(), progress(tokens=250_000)).decision
-    assert capped == Halt(NEEDS_APPROVAL, "token cap: 250000 of 250000", "token_cap")
+    assert capped == Halt(
+        NEEDS_APPROVAL, "token cap: 250,000 of 250,000 used; approve with --tokens N", "token_cap"
+    )
     gate = before(settings(), progress("approve", hitl=True)).decision
     assert gate == Halt(NEEDS_APPROVAL, "waiting for the user's approval", "approve_step")
 
@@ -161,7 +163,9 @@ def test_approvals_grant_loops_tokens_or_pass_the_approval_step() -> None:
     assert (looped.decision, looped.progress.loop_max) == (Run("implement", 5), 6)
     assert approve(settings(), capped, "loop_cap", loops=5).progress.loop_max == 9
     spent = progress(tokens=260_000)
-    assert approve(settings(), spent, "token_cap").progress.tokens_max == 510_000
+    assert (
+        approve(settings(), spent, "token_cap").progress.tokens_max == 1_260_000
+    )  # spent 260,000 + the 1,000,000 default grant (SP12)
     assert approve(settings(), spent, "token_cap", tokens=1000).progress.tokens_max == 261_000
     passed = approve(settings(), progress("approve", hitl=True), "approve_step")
     assert passed.decision == Run("review_plan", 1)

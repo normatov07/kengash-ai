@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, computed_fiel
 
 Profile = Literal["read_only", "edit_worktree"]
 OutputKind = Literal["work", "review", "compact"]
-ErrorKind = Literal["auth", "rate_limit", "timeout", "empty", "schema", "crash"]
+ErrorKind = Literal["auth", "rate_limit", "network", "timeout", "empty", "schema", "crash"]
 
 
 class _Step(BaseModel):
@@ -157,6 +157,7 @@ class StepResult(_Step):
     error: ErrorKind | None = None
     retry_after: datetime | None = None
     detail: str = ""
+    warning: str = ""  # an error the CLI reported after a valid output (SP12 spec §3.1)
 
     @computed_field  # type: ignore[prop-decorator]
     @property

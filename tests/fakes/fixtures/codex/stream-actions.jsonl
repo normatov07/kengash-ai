@@ -1,0 +1,6 @@
+{"type": "thread.started", "thread_id": "th-1"}
+{"type": "turn.started"}
+{"type": "item.completed", "item": {"id": "i1", "type": "command_execution", "command": "bash -lc 'cat retry.py'", "exit_code": 0, "status": "completed"}}
+{"type": "item.completed", "item": {"id": "i2", "type": "file_change", "changes": [{"path": "/work/retry.py", "kind": "update"}], "status": "completed"}}
+{"type": "item.completed", "item": {"id": "i3", "type": "agent_message", "text": "{\"summary\": \"Added retry with backoff.\", \"handoff\": \"h\"}"}}
+{"type": "turn.completed", "usage": {"input_tokens": 100, "cached_input_tokens": 50, "output_tokens": 10}}

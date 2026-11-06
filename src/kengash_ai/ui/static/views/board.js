@@ -76,8 +76,8 @@ function card(item, key) {
   for (const tag of item.tags.slice(0, MAX_TAGS)) chips.push(html`<span class="cchip plain">#${tag}</span>`);
   if (item.tags.length > MAX_TAGS) chips.push(html`<span class="cchip plain" title="${item.tags.slice(MAX_TAGS).join(", ")}">+${item.tags.length - MAX_TAGS}</span>`);
   const diff = item.added || item.removed ? html`<span class="end cdiff">+${item.added} −${item.removed}</span>` : "";
-  return html`<a class="card" href="#/ticket/${item.id}" style="border-color: ${border}; border-left-color: ${done ? "#5FC08B" : imp.color}; background: ${bg}" title="${item.title}">
-    <div class="card-top">${head}</div>
+  return html`<a class="card" ${item.running ? html`data-live` : ""} href="#/ticket/${item.id}" style="border-color: ${border}; border-left-color: ${done ? "#5FC08B" : imp.color}; background: ${bg}" title="${item.title}">
+    <div class="card-top">${item.running ? html`<span class="pulse" title="a worker is running" aria-label="running"></span>` : ""}${head}</div>
     <div class="card-title">${item.title}</div>
     ${chips.length || diff ? html`<div class="card-meta">${chips}${diff}</div>` : ""}
     <div class="card-foot"><span>${item.id}</span><span class="end">${done && item.done_at ? clock(item.done_at).slice(0, 5) : item.project}</span></div>
@@ -192,6 +192,9 @@ export function foot(data) {
 }
 
 export function bind(root, app, data, bar) {
+  root.addEventListener("click", (event) => {
+    if (event.target.closest("[data-live]")) app.ticketTab = "live"; // a running card opens Live
+  });
   const body = root.querySelector(".board-body");
   const paint = () => mount(body, boardBody(data));
   const syncBar = () => bar.querySelectorAll("[data-view]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.view === state.view ? "true" : "false"));

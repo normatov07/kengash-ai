@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
-from kengash_ai import __version__, adapters, journal, settings, workflow
+from kengash_ai import __version__, adapters, gitops, journal, settings, workflow
 from kengash_ai.model import (
     BUILTIN_KINDS,
     IMPORTANCES,
@@ -30,9 +30,10 @@ from kengash_ai.model import (
     utc_now,
 )
 from kengash_ai.model import Gate as TicketGate
-from kengash_ai.ops import agent_config, agents, jobs, records
+from kengash_ai.ops import activity, agent_config, agents, jobs, records
 from kengash_ai.ops import changes as changes_ops
 from kengash_ai.ops import loops as loop_ops
+from kengash_ai.ops import progress as progress_ops
 from kengash_ai.ops import projects as project_ops
 from kengash_ai.ops import skills as skill_ops
 from kengash_ai.ops.agent_config import AgentDetail
@@ -90,6 +91,10 @@ class Session:
     loop: int
     loop_max: int
     since: datetime
+    active_s: float | None = None  # SP12: seconds since the worker last wrote
+    action: str = ""  # its last action, e.g. `edit lib/main.dart`
+    changed: int = 0  # uncommitted files in its worktree
+    quiet: bool = False
 
 
 @dataclass
@@ -165,6 +170,7 @@ class Card:
     rejected: int = 0  # failed plan reviews
     done_at: datetime | None = None
     tags: list[str] = field(default_factory=list)
+    running: bool = False  # SP12: a worker is busy with it; the UI pulses it
 
 
 @dataclass
@@ -273,7 +279,7 @@ class AgentsView:
     instruction_caps: list[int] = field(default_factory=list)  # lines, words
     sessions_max: int = 0
     tokens_per_ticket: int = 0
-    fallback_on_rate_limit: bool = True
+    fallback_on_error: bool = True
     per_provider: dict[str, int] = field(default_factory=dict)
     set_here: list[str] = field(default_factory=list)
     problem: str = ""
@@ -380,6 +386,8 @@ class TicketView:
     chain: list[ChainStep] = field(default_factory=list)
     attach: str = ""
     grant: int = 2  # loops one approval adds (`loop_grant`)
+    running: progress_ops.Progress | None = None  # SP12: the worker busy with it, if any
+    in_progress: list[str] = field(default_factory=list)  # uncommitted worktree files
 
 
 @dataclass
@@ -470,6 +478,11 @@ def overview(paths: StorePaths | None = None, *, window: Window = "today") -> Ov
                     ticket.updated,
                 )
             )
+    live = {item.id: item for item in progress_ops.running(paths, found.projects)}
+    for session in found.sessions:
+        if (now := live.get(session.ticket)) is not None:
+            session.active_s, session.action = now.active_s, now.action
+            session.changed, session.quiet = now.changed, now.quiet
     tickets = {doc.meta.id: doc.meta for _, doc in scanned}
     today, since = _since("today"), _since(window)
     done_today = {event.ticket for event in events if _done(event) and event.ts >= today}
@@ -550,6 +563,7 @@ def board(paths: StorePaths | None = None, *, project: str | None = None) -> Boa
                 rejected.get(ticket.id, 0),
                 done_at.get(ticket.id) if ticket.folder is Folder.done else None,
                 list(ticket.tags),
+                activity.running_status(ticket.status),
             )
         )
     try:
@@ -773,7 +787,7 @@ def agents_view(
     found.instruction_caps = list(agent_config.instruction_caps("role", resolved.skill))
     found.sessions_max = resolved.sessions.max
     found.tokens_per_ticket = resolved.tokens.per_ticket_max
-    found.fallback_on_rate_limit = resolved.fallback_on_rate_limit
+    found.fallback_on_error = resolved.fallback_on_error
     found.per_provider = dict(resolved.sessions.per_provider)
     return found
 
@@ -878,6 +892,12 @@ def ticket_view(
         if event.type == "memory.write"
     ]
     found.chain = _chain(paths, slug, ticket, found.timeline)
+    found.running = next(
+        (item for item in progress_ops.running(paths, [slug]) if item.id == ticket.id), None
+    )
+    worktree = paths.worktree(slug, ticket.id)
+    if ticket.folder is Folder.in_process and worktree.is_dir():
+        found.in_progress = gitops.changed_files(worktree)
     found.grant = _grant(paths, slug)
     return found
 

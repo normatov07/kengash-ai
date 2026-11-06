@@ -123,7 +123,7 @@ def before(settings: Settings, progress: Progress) -> Routed:
         step = following
     now = replace(progress, step=step)
     if now.tokens >= now.tokens_max:
-        reason = f"token cap: {now.tokens} of {now.tokens_max}"
+        reason = f"token cap: {now.tokens:,} of {now.tokens_max:,} used; approve with --tokens N"
         return Routed(Halt(NEEDS_APPROVAL, reason, "token_cap"), now)
     if step == "approve":
         return Routed(Halt(NEEDS_APPROVAL, "waiting for the user's approval", "approve_step"), now)

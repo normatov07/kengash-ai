@@ -3,9 +3,11 @@
 import json
 import re
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from kengash_ai.adapters import stream
 from kengash_ai.adapters.base import (
     CliProvider,
     checked,
@@ -42,7 +44,9 @@ class Claude(CliProvider):
         argv = [self.binary, "-p", positional(req.prompt)]
         if req.resume:
             argv += ["--resume", str(req.session_id)]
-        argv += ["--output-format", "json", "--json-schema", schema_json(req.output)]
+        # stream-json (SP12): the log grows as claude works; the last `result` event is the output
+        argv += ["--output-format", "stream-json", "--verbose"]
+        argv += ["--json-schema", schema_json(req.output)]
         if not req.resume:
             argv += ["--session-id", req.session_id or str(uuid4())]
         if req.model:
@@ -56,21 +60,28 @@ class Claude(CliProvider):
 
     def parse(self, req: StepRequest, proc: ProcessResult) -> StepResult:
         stdout = proc.stdout.strip()
-        # Without claude's JSON, only a resumed session is known to exist.
-        known = req.session_id if req.resume else None
+        init = stream.first(stdout, key="type", value="system")
+        # Without claude's output, only a resumed session, or one its stream opened, exists.
+        known = (init or {}).get("session_id") or (req.session_id if req.resume else None)
         if not stdout and proc.exit_code == 0:
             return StepResult(session_id=known, error="empty", detail="no output")
-        try:
-            data = json.loads(stdout)
-        except json.JSONDecodeError:
-            data = None
-        if not isinstance(data, dict):
+        data = stream.result(stdout, key="type", value="result")
+        if not isinstance(data, dict) or ("result" not in data and "is_error" not in data):
             message = tail(proc.stderr or proc.stdout) or f"exit {proc.exit_code}"
             return StepResult(session_id=known, error=classify(message), detail=message)
-        session = data.get("session_id") or req.session_id
+        session = data.get("session_id") or known or req.session_id
         text = str(data.get("result") or "")
         usage = _usage(data)
-        if data.get("is_error") or proc.exit_code != 0:
+        structured = data.get("structured_output")
+        failed = bool(data.get("is_error")) or proc.exit_code != 0
+        if failed and structured is not None:
+            output, _ = checked(req.output, structured)
+            if output is not None:  # the work is done: a late error is only a warning
+                warning = tail(text or proc.stderr, 3)
+                return StepResult(
+                    session_id=session, output=output, text=text, usage=usage, warning=warning
+                )
+        if failed:
             kind = _error_kind(data.get("api_error_status"), text)
             reset = _RESET.search(text) if kind == "rate_limit" else None
             return StepResult(
@@ -81,7 +92,6 @@ class Claude(CliProvider):
                 retry_after=datetime.fromtimestamp(int(reset.group(1)), UTC) if reset else None,
                 detail=tail(text) or f"exit {proc.exit_code}",
             )
-        structured = data.get("structured_output")
         if structured is None:
             return StepResult(
                 session_id=session,
@@ -110,6 +120,15 @@ class Claude(CliProvider):
 
     def attach_command(self, session_id: str) -> list[str]:
         return [self.binary, "--resume", session_id]
+
+    def recover_session(self, log: Path) -> str | None:
+        """The session id from the stream's `system/init` event (SP12 spec §3.5)."""
+        if not log.is_file():
+            return None
+        text = log.read_text(encoding="utf-8", errors="replace")
+        init = stream.first(text, key="type", value="system")
+        session = (init or {}).get("session_id")
+        return str(session) if session else None
 
 
 def _profile(req: StepRequest) -> list[str]:

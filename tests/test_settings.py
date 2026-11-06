@@ -86,3 +86,43 @@ def test_package_defaults_name_providers_and_the_compactor(store_paths: StorePat
     assert set(resolved.providers) == {"claude", "codex", "antigravity"}
     assert not resolved.provider("claude").user_config
     assert not resolved.agents["implementer"].bypass_permissions
+
+
+def test_old_fallback_key_is_read(store_paths: StorePaths) -> None:
+    ensure_store(store_paths)
+    defaults = store_paths.defaults / "SETTINGS.md"
+    text = defaults.read_text(encoding="utf-8").replace("fallback_on_error: true", "")
+    defaults.write_text(text + "fallback_on_rate_limit: false\n", encoding="utf-8")
+    assert settings.load(store_paths).fallback_on_error is False
+
+
+def test_both_fallback_keys_in_one_file_are_refused(store_paths: StorePaths) -> None:
+    ensure_store(store_paths)
+    defaults = store_paths.defaults / "SETTINGS.md"
+    defaults.write_text(
+        defaults.read_text(encoding="utf-8") + "fallback_on_rate_limit: true\n", encoding="utf-8"
+    )
+    assert settings.problems(store_paths) == [
+        "defaults/SETTINGS.md: use fallback_on_error only, not fallback_on_rate_limit"
+    ]
+
+
+def test_setting_the_new_key_drops_the_old(store_paths: StorePaths) -> None:
+    ensure_store(store_paths)
+    defaults = store_paths.defaults / "SETTINGS.md"
+    text = defaults.read_text(encoding="utf-8").replace("fallback_on_error: true", "")
+    defaults.write_text(text + "fallback_on_rate_limit: true  # mine\n", encoding="utf-8")
+    assert settings.set_values(store_paths, None, {"fallback_on_error": False}) == [
+        "fallback_on_error",
+        "fallback_on_rate_limit",
+    ]
+    after = defaults.read_text(encoding="utf-8")
+    assert "fallback_on_rate_limit" not in after and "fallback_on_error: false" in after
+    assert settings.load(store_paths).fallback_on_error is False
+
+
+def test_seed_doc_writer_fallback(store_paths: StorePaths) -> None:
+    ensure_store(store_paths)
+    resolved = settings.load(store_paths)
+    assert resolved.agents["doc-writer"].fallback == ["claude/sonnet"]
+    assert resolved.tokens.per_ticket_max == 1_000_000
