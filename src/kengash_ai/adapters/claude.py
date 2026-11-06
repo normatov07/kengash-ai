@@ -16,6 +16,7 @@ from kengash_ai.adapters.base import (
     probe,
     schema_json,
     tail,
+    unfinished,
 )
 from kengash_ai.adapters.process import ProcessResult
 from kengash_ai.model import ErrorKind, StepRequest, StepResult, Usage
@@ -67,7 +68,7 @@ class Claude(CliProvider):
             return StepResult(session_id=known, error="empty", detail="no output")
         data = stream.result(stdout, key="type", value="result")
         if not isinstance(data, dict) or ("result" not in data and "is_error" not in data):
-            message = tail(proc.stderr or proc.stdout) or f"exit {proc.exit_code}"
+            message = unfinished(proc)
             return StepResult(session_id=known, error=classify(message), detail=message)
         session = data.get("session_id") or known or req.session_id
         text = str(data.get("result") or "")

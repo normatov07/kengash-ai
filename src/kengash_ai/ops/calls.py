@@ -111,6 +111,11 @@ FAILURE_MAX = 300
 DETAIL_MIN = 120  # the reason never shrinks below this: long paths may lengthen the line
 
 
+def work_kept(worktree: Path | None, changed: int) -> str:
+    """A failure line's note on the work an editing step left in its worktree."""
+    return f"; work kept in {worktree} ({changed} files changed)" if worktree and changed else ""
+
+
 def failure(
     provider: str,
     request: StepRequest,
@@ -124,7 +129,7 @@ def failure(
     reason shortened first, but never below DETAIL_MIN; only long paths exceed the cap."""
     if result.error == "auth":
         return f"sign in to {BINARIES.get(provider, provider)} interactively"
-    kept = f"; work kept in {worktree} ({changed} files changed)" if worktree and changed else ""
+    kept = work_kept(worktree, changed)
     if result.error == "timeout":
         return f"timeout: killed after {request.timeout_s} s twice; log: {request.log}{kept}"
     lines = result.detail.strip().splitlines()

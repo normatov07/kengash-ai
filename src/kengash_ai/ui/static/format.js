@@ -81,3 +81,8 @@ export function span(seconds) {
   if (s < 3600) return `${Math.floor(s / 60)}m`;
   return `${Math.floor(s / 3600)}h${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`;
 }
+
+// Re-times every element that started at `data-since` (epoch seconds), so it counts on.
+export function tick(root, now = Date.now()) {
+  for (const el of root.querySelectorAll("[data-since]")) el.textContent = span(now / 1000 - Number(el.dataset.since));
+}

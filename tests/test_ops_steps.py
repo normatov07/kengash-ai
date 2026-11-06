@@ -507,3 +507,39 @@ def test_a_late_warning_is_journaled_and_logged(
     (end,) = [e for e in journal_events() if e["type"] == "step.end"]
     assert "ECONNRESET" in end["warning"]
     assert "warning: API Error: Connection error. (ECONNRESET)" in engine.ticket().sections["Log"]
+
+
+def _hook(engine: Engine) -> None:
+    hook = engine.repo / ".git" / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\ntest -f fixed || { echo 'lint: add fixed'; exit 1; }\n")
+    hook.chmod(0o755)
+
+
+def test_a_hook_that_fails_twice_names_the_worktree_and_keeps_the_session(
+    engine: Engine, fake_clis: FakeClis
+) -> None:
+    _hook(engine)
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "x = 1\n"})
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl")  # the repair fixes nothing
+    end = steps.run_job("7b55e0c1", steps=2)
+    assert end.reason.startswith("commit failed: lint: add fixed")
+    assert end.reason.endswith(f"; work kept in {engine.worktree} (1 files changed)")
+    session = engine.ticket().meta.sessions["implementer"]
+    assert session.provider == "codex" and session.id
+
+
+def test_a_failed_hook_repair_names_the_worktree_and_keeps_the_session(
+    engine: Engine, fake_clis: FakeClis
+) -> None:
+    _hook(engine)
+    failed = [
+        {"type": "thread.started", "thread_id": "th-9"},
+        {"type": "turn.failed", "error": {"message": "the model gave up"}},
+    ]
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "x = 1\n"})
+    fake_clis.queue("codex", stdout="".join(json.dumps(e) + "\n" for e in failed), exit=1)
+    end = steps.run_job("7b55e0c1", steps=2)
+    assert end.reason.endswith(f"; work kept in {engine.worktree} (1 files changed)")
+    assert engine.ticket().meta.sessions["implementer"].id == "th-9"

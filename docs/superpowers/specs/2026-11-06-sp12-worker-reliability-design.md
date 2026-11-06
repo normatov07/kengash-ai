@@ -95,7 +95,7 @@ agy also takes `--settings <json>` for one session. Claude Code has `--output-fo
    A step quiet for 10 minutes or more is marked `quiet` (*call*). Nothing is killed for that; `step_timeout_min` still governs.
 3. **`wait` shows progress.**
    - The default `--timeout` drops from 540 to 300 seconds (*call*: the conductor and user hear something every 5 minutes, inside every agent's tool timeout).
-   - On exit 3, `wait` prints one line per running ticket in scope, at most 5 lines: `<id> <step>→<provider>/<model> <elapsed> · active <age> ago · <N> files changed · <action>`, ending with `· quiet` when marked.
+   - On exit 3, `wait` prints one line per running ticket in scope, at most 5 lines: `<id> <step>→<provider>/<model> <elapsed> · active <age> ago · <N> files changed · <action>`, ending with `· quiet` when marked. A worker between CLI calls (committing, routing, waiting for a slot) shows `<step> (between calls)` in place of `<step>→<provider>/<model>`.
    - The loop skill shows these lines to the user and waits again.
    - `--json` gives the `Progress` list.
 4. **Each worker as a watchable "sub-agent"** (the user's request of 2026-11-06: see the worker CLIs like Claude Code's or Antigravity's subagents, and click one to see what it does).
@@ -183,5 +183,5 @@ Each milestone ends with a critical review against this spec (hard rule 9).
 ## 8. Risks
 
 - **Stream formats can change.** Parsers read only the fields they need. An event they do not know is skipped. When no `result` event is found, the step is an `empty` error, as today.
-- **Large logs.** A step that streams for 30 minutes may write megabytes. `logs.keep_days` already rotates logs; progress reads only the log's tail (*call*: the last 64 KiB).
+- **Large logs.** A step that streams for 30 minutes may write megabytes. `logs.keep_days` already rotates logs; progress reads only the log's tail (*call*: the last 64 KiB); `kengash logs` and the Live tab then say `earlier actions omitted; full log: <log>`.
 - **`git status` cost on big worktrees.** It runs only when progress is asked for: on `wait` exit 3, `ps`, and UI reloads. Worktrees with no file written for 60 s reuse the last result.

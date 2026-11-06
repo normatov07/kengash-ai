@@ -115,8 +115,13 @@ def set_values(paths: StorePaths, slug: str | None, changes: Mapping[str, Any]) 
     path, source = _scope_file(paths, slug)
     before = path.read_bytes().decode("utf-8") if path.is_file() else ""  # keeps CRLF
     text, done = before, []
-    # setting a renamed key's new name drops its old name from the same file
+    # setting a renamed key's new name renames its old one in place, else drops it
     stale = {old: None for old, new in RENAMED.items() if new in changes and old not in changes}
+    for old, new in RENAMED.items():
+        renamed = yamledit.rename_key(text, old, new, source=source) if old in stale else text
+        if renamed != text:
+            text = renamed
+            done += [new, old]
     for key, value in {**changes, **stale}.items():
         head, _, rest = key.partition(".")
         if head in ATOMIC and "." in rest:
@@ -124,7 +129,7 @@ def set_values(paths: StorePaths, slug: str | None, changes: Mapping[str, Any]) 
         after = yamledit.set_key(text, key, value, source=source)
         if after != text:
             text = after
-            done.append(key)
+            done += [] if key in done else [key]
     if not done:
         return []
     found = layers(paths, slug)

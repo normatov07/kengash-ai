@@ -25,6 +25,15 @@ All notable changes to this project are written here. The format follows [Keep a
 - Claude and Antigravity workers run with `--output-format stream-json`.
 - The loop skill's event table moved to `loop/references/events.md`. Run `kengash skills install --agent … [--global]` again to get the new skills.
 
+### Fixed
+
+- A worker CLI that stops without a result is no longer judged by its model's own words (a reply mentioning a quota or a dropped connection); only what the CLI itself said counts.
+- `kengash logs` and the Live tab say `earlier actions omitted; full log: <log>` when a long log is read from its end.
+- The Live tab's elapsed time counts on; a worker between CLI calls shows `(between calls)` there and in `kengash ps`, instead of `step→/`.
+- `kengash doctor --fix` renames `fallback_on_rate_limit` where it stands, keeping its comment.
+- A commit hook that fails twice names the work kept in the worktree and keeps the step's session, so `kengash run` resumes it.
+- Screen readers announce a running worker on board cards and the Live tab.
+
 ## [0.3.0] - 2026-10-30
 
 ### Breaking

@@ -85,8 +85,12 @@ def ticket(
     events = _journal(paths, slug, ticket_id, since)
     found = [item for event in events if (item := _from_event(event))]
     for log in _logs(paths, ticket_id):
-        text, stamps = _read(log)
-        found += parse(text, stamps, root=root)
+        tail = _read(log)
+        if tail.cut:
+            found.append(
+                Activity(tail.start, "status", f"earlier actions omitted; full log: {log}")
+            )
+        found += parse(tail.text, tail.stamps, root=root)
     order = {id(item): n for n, item in enumerate(found)}
     floor = datetime.min.replace(tzinfo=UTC)
     return sorted(found, key=lambda item: (item.ts or floor, order[id(item)]))
@@ -185,20 +189,29 @@ def _logs(paths: StorePaths, ticket_id: str) -> list[Path]:
     return sorted(paths.logs.glob(f"{ticket_id}-*.out"), key=number)
 
 
-def _read(log: Path) -> tuple[str, list[datetime] | None]:
+@dataclass(frozen=True)
+class _Tail:
+    text: str
+    stamps: list[datetime]  # one per line of `text`
+    cut: bool  # the log's earlier lines were left out
+    start: datetime | None  # the log's first stamp: a time that stays put as the log grows
+
+
+def _read(log: Path) -> _Tail:
     """The log's last TAIL_BYTES, and the stamps of those lines (else the file's mtime)."""
     data = log.read_bytes()
+    cut = len(data) > TAIL_BYTES
     skipped = data[: max(len(data) - TAIL_BYTES, 0)].count(b"\n")
     text = data[-TAIL_BYTES:].decode("utf-8", errors="replace")
-    if len(data) > TAIL_BYTES:
+    if cut:
         text = text.split("\n", 1)[-1]  # drop the cut line
         skipped += 1
     stamps_file = log.with_suffix(".ts")
     if stamps_file.is_file():
-        lines = stamps_file.read_text(encoding="utf-8").split()[skipped:]
-        return text, [datetime.fromisoformat(stamp) for stamp in lines]
+        every = [datetime.fromisoformat(stamp) for stamp in stamps_file.read_text("utf-8").split()]
+        return _Tail(text, every[skipped:], cut, every[0] if every else None)
     mtime = datetime.fromtimestamp(log.stat().st_mtime, UTC)
-    return text, [mtime] * len(text.split("\n"))
+    return _Tail(text, [mtime] * len(text.split("\n")), cut, None)
 
 
 def _actions(event: dict[str, Any], root: Path | None) -> list[tuple[Kind, str]]:

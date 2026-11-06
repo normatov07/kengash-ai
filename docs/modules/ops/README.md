@@ -61,6 +61,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-06 (SP12 minors): `activity.ticket` puts `earlier actions omitted; full log: <log>` before a log read only from its end; `progress.line` and `short` show a worker between CLI calls as `<step> (between calls)`; a commit-hook failure (twice, or a failed repair turn) names the work kept in the worktree and keeps the step's session (`steps._call_failed`, `calls.work_kept`).
 - 2026-11-06 (CI): `calls.failure` keeps at least `DETAIL_MIN` (120) characters of the reason; long log and worktree paths may lengthen the line past 300 rather than crowd the reason out (macOS temp paths left it 12).
 - 2026-11-06 (CI): `waiting` imports `progress` as `progress_ops`: `WaitResult.progress` shadowed the module in its class body on Pythons that evaluate annotations eagerly (3.12, 3.13), failing every import of the CLI.
 - 2026-11-06 (final review): `calls.resume` runs a new session the CLI never reported again rather than resuming it; a late CLI warning is journaled on `step.end` and written to the Log line; `hygiene` ignores npm init's placeholder test script and flags only the old seeded doc-writer line; `activity.ticket` reads the journal from the ticket's day.
@@ -80,4 +81,3 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - 2026-10-30 (final review): `new_agent` refuses a built-in skill's name; a review step's default send-back to `implement` only when `implement` comes before it; `skills.install` clears 0.2.0's skills from `.claude/skills` and, globally, agy's own folder once the plugin installs, and notes Claude Code's trust dialog for a project install (`InstallResult.notes`, `TRUST_NOTE`); `old_installs` no longer flags Codex's `kengash-memory` copy; doctor's old-name hint adds `--global` for the home folder, and `doctor --fix` removes ignored built-in skill copies in a store commit.
 - 2026-10-30: a provider card not detected yet lists `adapters.known_models(name)` (SP10 M4).
 - 2026-10-30: `views.workflows_view` gains `routing` and `picker` (SP10 M4).
-- 2026-10-30: `views.skill_text(project=, name=)` → `SkillText(name, source, text)`; `agent_config.body(path)` is public (SP10 M3).

@@ -11,6 +11,7 @@ from typing import Protocol
 
 from pydantic import ValidationError
 
+from kengash_ai.adapters import stream
 from kengash_ai.adapters.env import worker_env
 from kengash_ai.adapters.process import ProcessResult, run_process
 from kengash_ai.model import (
@@ -71,6 +72,12 @@ def classify(text: str) -> ErrorKind:
 
 def tail(text: str, lines: int = 20) -> str:
     return "\n".join(text.rstrip("\n").splitlines()[-lines:])
+
+
+def unfinished(proc: ProcessResult) -> str:
+    """Why a stream ended without a result: stderr, else what the CLI said on stdout."""
+    said = proc.stderr.strip() or stream.said(proc.stdout)
+    return tail(said) or f"stream ended without a result (exit {proc.exit_code})"
 
 
 def schema_json(kind: OutputKind) -> str:

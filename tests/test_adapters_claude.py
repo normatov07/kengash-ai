@@ -202,3 +202,19 @@ def test_error_with_a_valid_output_is_a_success(fake_clis: FakeClis, tmp_path: P
     fake_clis.queue("claude", stdout=json.dumps(late) + "\n", exit=1)
     result = Claude().run(_request(tmp_path, prompt="p", output="work", profile="edit_worktree"))
     assert result.error is None and result.output is not None and "ECONNRESET" in result.warning
+
+
+def test_no_result_never_classifies_the_models_text(fake_clis: FakeClis, tmp_path: Path) -> None:
+    init = {"type": "system", "subtype": "init", "session_id": SID}
+    said = {"type": "assistant", "message": {"content": [{"type": "text", "text": "rate limit"}]}}
+    fake_clis.queue("claude", stdout=json.dumps(init) + "\n" + json.dumps(said) + "\n", exit=1)
+    result = Claude().run(_request(tmp_path, prompt="p"))
+    assert (result.error, result.session_id) == ("crash", SID)
+    assert result.detail == "stream ended without a result (exit 1)"
+
+
+def test_no_result_reads_error_events(fake_clis: FakeClis, tmp_path: Path) -> None:
+    error = {"type": "error", "error": {"message": "API Error: Connection error."}}
+    fake_clis.queue("claude", stdout=json.dumps(error) + "\n", exit=1)
+    result = Claude().run(_request(tmp_path, prompt="p"))
+    assert (result.error, result.detail) == ("network", "API Error: Connection error.")

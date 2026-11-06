@@ -143,3 +143,22 @@ def test_ticket_reads_the_journal_from_the_tickets_day(
     monkeypatch.setattr(journal, "read", spy)
     activity.ticket(engine.paths, engine.slug, engine.ticket_id)
     assert seen == [engine.ticket().meta.created.date()]
+
+
+def test_a_cut_log_says_earlier_actions_are_omitted(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(activity, "TAIL_BYTES", 800)  # keeps only the last line, the reply
+    _log(engine, 1, "agy/stream-ok.jsonl", T0)
+    found = activity.ticket(engine.paths, engine.slug, engine.ticket_id)
+    log = engine.paths.logs / f"{engine.ticket_id}-1.out"
+    notes = [item for item in found if "omitted" in item.text]
+    assert _texts(notes) == [("status", f"earlier actions omitted; full log: {log}")]
+    after = found[found.index(notes[0]) + 1 :]
+    assert after and all(item.ts is not None and item.ts >= T0 for item in after)
+
+
+def test_a_whole_log_has_no_omitted_note(engine: Engine) -> None:
+    _log(engine, 1, "agy/stream-ok.jsonl", T0)
+    found = activity.ticket(engine.paths, engine.slug, engine.ticket_id)
+    assert not [item for item in found if "omitted" in item.text]

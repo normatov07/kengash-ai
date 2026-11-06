@@ -121,6 +121,19 @@ def test_setting_the_new_key_drops_the_old(store_paths: StorePaths) -> None:
     assert settings.load(store_paths).fallback_on_error is False
 
 
+def test_the_new_key_takes_the_old_keys_line(store_paths: StorePaths) -> None:
+    ensure_store(store_paths)
+    defaults = store_paths.defaults / "SETTINGS.md"
+    text = defaults.read_text(encoding="utf-8").replace("fallback_on_error: true\n", "")
+    lines = text.splitlines(keepends=True)
+    lines.insert(1, "fallback_on_rate_limit: true  # mine\n")
+    defaults.write_text("".join(lines), encoding="utf-8")
+    settings.set_values(store_paths, None, {"fallback_on_error": False})
+    after = defaults.read_text(encoding="utf-8").splitlines(keepends=True)
+    assert after[1] == "fallback_on_error: false  # mine\n"
+    assert len(after) == len(lines)
+
+
 def test_seed_doc_writer_fallback(store_paths: StorePaths) -> None:
     ensure_store(store_paths)
     resolved = settings.load(store_paths)

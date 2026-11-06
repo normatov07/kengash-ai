@@ -80,14 +80,16 @@ def short(found: list[Progress]) -> str:
     if not found:
         return "kg: nothing running"
     first = found[0]
-    head = f"{first.id} {first.step}→{first.provider} {_span(first.elapsed_s)}"
+    who = f"{first.step}→{first.provider}" if first.provider else _between(first)
+    head = f"{first.id} {who} {_span(first.elapsed_s)}"
     return f"kg: {len(found)} running · {head} {first.action}".rstrip()
 
 
 def line(p: Progress) -> str:
     """`<id> <step>→<provider>/<model> <elapsed> · active <age> ago · <N> files changed ·
     <action>`, then ` · quiet` and ` · worker gone` when they apply."""
-    parts = [f"{p.id} {p.step}→{p.provider}/{p.model} {_span(p.elapsed_s)}"]
+    who = f"{p.step}→{p.provider}/{p.model}" if p.provider else _between(p)
+    parts = [f"{p.id} {who} {_span(p.elapsed_s)}"]
     parts.append(f"active {_span(p.active_s)} ago" if p.active_s is not None else "no activity yet")
     parts.append(f"{p.changed} files changed")
     if p.action:
@@ -145,9 +147,14 @@ def _mtime(path: Path) -> float | None:
 def _action(log: Path, worktree: Path) -> str:
     if not log.is_file():
         return ""
-    text, stamps = activity._read(log)
-    found = activity.parse(text, stamps, root=worktree)
+    tail = activity._read(log)
+    found = activity.parse(tail.text, tail.stamps, root=worktree)
     return found[-1].text if found else ""
+
+
+def _between(p: Progress) -> str:
+    """The step of a worker that runs no CLI right now: committing, routing or waiting."""
+    return f"{p.step} (between calls)"
 
 
 def _span(seconds: float | None) -> str:
