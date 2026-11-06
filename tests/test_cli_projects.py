@@ -9,6 +9,13 @@ from kengash_ai.store import StorePaths
 runner = CliRunner()
 
 
+def _problems(stdout: str) -> str:
+    """Doctor's output without its `note:` lines (information, SP12)."""
+    return "".join(
+        line for line in stdout.splitlines(keepends=True) if not line.startswith("note: ")
+    )
+
+
 def test_init_then_doctor(store_paths: StorePaths, repo: Path) -> None:
     target = store_paths.project("payments-api").root
     first = runner.invoke(app, ["init", str(repo)])
@@ -19,7 +26,7 @@ def test_init_then_doctor(store_paths: StorePaths, repo: Path) -> None:
     second = runner.invoke(app, ["init", str(repo)])
     assert second.stdout == "ok payments-api: already initialized\n"
     doctor = runner.invoke(app, ["doctor"])
-    assert (doctor.exit_code, doctor.stdout) == (0, "ok: 1 project\n")
+    assert (doctor.exit_code, _problems(doctor.stdout)) == (0, "ok: 1 project\n")
     assert runner.invoke(app, ["doctor", "--quiet"]).stdout == ""
 
 
@@ -27,12 +34,15 @@ def test_doctor_exit_code_signals_problems(store_paths: StorePaths, repo: Path) 
     runner.invoke(app, ["init", str(repo)])
     (repo / ".kengash").unlink()
     result = runner.invoke(app, ["doctor"])
-    assert (result.exit_code, result.stdout) == (
+    assert (result.exit_code, _problems(result.stdout)) == (
         1,
         "payments-api: link missing; run: kengash doctor --fix\n",
     )
     fixed = runner.invoke(app, ["doctor", "--fix"])
-    assert (fixed.exit_code, fixed.stdout) == (0, "payments-api: link missing; repaired\n")
+    assert (fixed.exit_code, _problems(fixed.stdout)) == (
+        0,
+        "payments-api: link missing; repaired\n",
+    )
 
 
 def test_errors_go_to_stderr_with_spec_exit_codes(store_paths: StorePaths, repo: Path) -> None:
@@ -65,11 +75,11 @@ def test_doctor_warnings_do_not_fail(store_paths: StorePaths, repo: Path) -> Non
     runner.invoke(app, ["init", str(repo)])
     (repo / ".mcp.json").write_text("{}")
     result = runner.invoke(app, ["doctor"])
-    assert (result.exit_code, result.stdout) == (
+    assert (result.exit_code, _problems(result.stdout)) == (
         0,
         "payments-api: warning: repo ships .mcp.json; workers run them without a trust prompt\n",
     )
-    assert runner.invoke(app, ["doctor"]).stdout == "ok: 1 project\n"
+    assert _problems(runner.invoke(app, ["doctor"]).stdout) == "ok: 1 project\n"
 
 
 def test_doctor_fails_on_a_blocking_provider(

@@ -24,7 +24,7 @@ plan.reviewer: different-provider   # or provider[/model]
 sessions.reuse: true          # resume each ticket×role session across loops
 sessions.max: 8
 sessions.per_provider: {claude: 3, codex: 3, antigravity: 2}
-tokens.per_ticket_max: 250000
+tokens.per_ticket_max: 1000000
 step_timeout_min: 30          # a step running longer is killed and retried once
 fallback_on_error: true
 
@@ -52,7 +52,7 @@ agents:
   code-reviewer:     {on: true,  cli: claude/opus,   skill: review-code}
   security-reviewer: {on: true,  cli: claude/sonnet, skill: review-security, blocking: true}
   test-runner:       {on: false, cli: shell,         skill: run-tests}
-  doc-writer:        {on: false, cli: antigravity,   skill: sync-docs}
+  doc-writer:        {on: false, cli: antigravity,   skill: sync-docs, fallback: [claude/sonnet]}
 
 # workflows: steps run in order; on_fail routes a failing verdict back and adds a loop
 workflows:

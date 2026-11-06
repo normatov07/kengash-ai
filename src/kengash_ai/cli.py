@@ -152,6 +152,8 @@ def doctor(
         for problem in report.problems:
             prefix = f"{problem.slug}: " if problem.slug else ""
             typer.echo(prefix + ("warning: " if problem.warning else "") + problem.message)
+        for note in [] if quiet else report.notes:
+            typer.echo(f"note: {note.message}")
         if not report.problems and not quiet:
             plural = "" if report.projects == 1 else "s"
             typer.echo(f"ok: {report.projects} project{plural}")

@@ -119,3 +119,10 @@ def test_setting_the_new_key_drops_the_old(store_paths: StorePaths) -> None:
     after = defaults.read_text(encoding="utf-8")
     assert "fallback_on_rate_limit" not in after and "fallback_on_error: false" in after
     assert settings.load(store_paths).fallback_on_error is False
+
+
+def test_seed_doc_writer_fallback(store_paths: StorePaths) -> None:
+    ensure_store(store_paths)
+    resolved = settings.load(store_paths)
+    assert resolved.agents["doc-writer"].fallback == ["claude/sonnet"]
+    assert resolved.tokens.per_ticket_max == 1_000_000

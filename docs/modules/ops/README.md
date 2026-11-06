@@ -49,6 +49,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 - `activity` (SP12 spec §4.4): `Activity(ts, kind, text)` with kind step, read, edit, run, reply, error or status; `parse(text, stamps, root=)` reads a claude, agy or codex stream (tools mapped to read/edit/run, the structured output's summary as `reply: …`, an error keeping its end); `ticket(paths, slug, id, root=)` merges the ticket's journal steps and statuses with every `<id>-<n>.out` log (its last 64 KiB, timed by `<log>.ts`, else the file's mtime) in time order; `follow(…, poll_s=)` yields them, then each new one, until the ticket stops running, ending with its status; `running_status(status)`.
 - `progress` (SP12 spec §4.2): `running(paths, slugs)` → a `Progress(id, project, step, provider, model, elapsed_s, alive, active_s, action, changed, quiet)` per ticket a worker is busy with (elapsed since its last `step.start`; `alive`: worker pid and heartbeat; `active_s` since the running log or a changed file was written; the last activity line; uncommitted files, one `git status` per worktree per 60 s; `quiet` at `QUIET_S` = 600); `line(p)` → `<id> <step>→<provider>/<model> <elapsed> · active <age> ago · <N> files changed · <action>[ · quiet][ · worker gone]`; `forget()` drops the cache.
+- `hygiene` (SP12 spec §5): `detect_commands(repo)` → `(test_cmd, lint_cmd)` for Flutter, Dart, uv (ruff when configured), Node (`test`/`lint` scripts), Go and Rust; `check_changes`/`apply_checks(paths, slug, test, lint)` fill empty commands, switch the test-runner on and add `run_tests` after `implement` (with `on_fail: run_tests → implement`) in `standard` and `critical`, in one validated save; `old_defaults`/`fix_old_defaults(paths, scope)` (token cap 250000, `fallback_on_rate_limit`, a doc-writer without `fallback`), keeping comments; `checks(paths, fix=)` → `Note`s for doctor. `projects.init_project` applies detected checks to a new project; `projects.doctor` adds hygiene problems, and information (`DoctorReport.notes`: agents without a fallback, projects with nothing to detect).
 ## Invariants
 
 - Registry changes happen under `runtime/locks/registry.lock`; project, plan and ticket changes under `runtime/locks/<slug>.lock`, then journal events, then a store commit.
@@ -60,6 +61,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-06: `hygiene`; `init` detects test and lint commands; doctor reports and fixes old defaults and missing checks; `DoctorReport.notes` (SP12 M3).
 - 2026-11-06: `activity.follow(…, heartbeat=)` yields None on a quiet poll (the live stream checks its client); `views.Card.running` (SP12 M2).
 - 2026-11-06: `views.Session` gains `active_s`, `action`, `changed`, `quiet` (from `progress`); `TicketView` gains `running` (its `Progress`) and `in_progress` (uncommitted worktree files) (SP12 M2).
 - 2026-11-06: `WaitResult.progress` on a timeout; `progress.snapshot`, `progress.short`; `activity.history`, `activity.watch` (SP12 M2).
@@ -79,4 +81,3 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - 2026-10-30: `views.agents_view` returns full agent details, role skills and instruction caps, and providers' models; `routing` and `loop_max` leave it for the Workflow screen; `skills.role_skills` (SP10 M3).
 - 2026-10-30: `workflows`: create, copy, rename, remove, route and set workflows (SP10 M2).
 - 2026-10-30: `agent_config.edit_agent`, `copy_agent`, `describe`, `instruction_caps`; `new_agent` takes `fallback`, `skill` or `instructions` (SP10 M2).
-- 2026-10-30: `tickets.add_tickets` gives a new ticket `Settings.workflow_for(importance)`, the routed workflow; its loop cap stays the importance's (SP10 M2).

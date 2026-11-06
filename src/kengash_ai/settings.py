@@ -215,6 +215,16 @@ def _at(data: Mapping[str, Any], key: str) -> Any:
     return node
 
 
+def scope_layer(paths: StorePaths, slug: str | None) -> dict[str, Any]:
+    """One scope's own SETTINGS.md as nested keys, as written: renamed keys keep their old
+    names, so `doctor` can see them (SP12); {} without a file."""
+    path, source = _scope_file(paths, slug)
+    if not path.is_file():
+        return {}
+    data = load_yaml(path.read_text(encoding="utf-8"), source) or {}
+    return unflatten(data) if isinstance(data, Mapping) else {}
+
+
 def _scope_file(paths: StorePaths, slug: str | None) -> tuple[Path, str]:
     if slug is None:
         return paths.defaults / "SETTINGS.md", "defaults/SETTINGS.md"

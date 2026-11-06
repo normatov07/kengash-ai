@@ -28,6 +28,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Changes
 
+- 2026-11-06: `Tokens.per_ticket_max` defaults to 1,000,000 (SP12 M3).
 - 2026-11-06: `Settings.fallback_on_error` replaces `fallback_on_rate_limit` (SP12 M1).
 - 2026-11-06: `ErrorKind` gains `network`; `StepResult.warning` keeps an error a CLI reported after a valid output (SP12 M1).
 - 2026-11-06: `LoopLease`, `LoopBusy`; `Settings.loop_start: ask | auto` (SP11 M1).
@@ -47,13 +48,3 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 - 2026-10-23: `plan.reviewer` is validated (SP3 M4).
 - 2026-10-23: `WorkerRecord.job` names plan-review and compaction jobs (SP3 M4).
 - 2026-10-23: `WaitTimeout` (exit 3) (SP3 M4).
-- 2026-10-23: `WaitTimeout` (exit 3) (SP3 M4).
-- 2026-10-23: worker, ticket-state, conductor and cursor runtime models (SP3 M3).
-- 2026-10-23: `Trust` runtime file (SP3 M2).
-- 2026-10-23: step contract and provider status (SP3 M2).
-- 2026-10-22: runtime file schemas (SP3 M1).
-- 2026-10-22: provider names checked, `ProviderOptions`, `memory.compactor`, `bypass_permissions`, ticket `step` and `tokens_max`, `paused`, `Review.session` (SP3 M1).
-- 2026-10-22: `TicketInput`, `SUB_STATUSES`, one-line `Title`, `Ticket.sub_status` (SP2 M3).
-- 2026-10-22: provider slot counts must be ≥ 0; event times are kept in UTC (SP2 M2).
-- 2026-10-22: `Settings` and `Event` schemas (SP2 M2).
-- 2026-10-22: plan, ticket and registry schemas, error types (SP2 M1).

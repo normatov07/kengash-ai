@@ -29,6 +29,7 @@ Everything under `~/.kengash`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
+- 2026-11-06: the seeded SETTINGS.md: `tokens.per_ticket_max: 1000000`, the doc-writer with `fallback: [claude/sonnet]` (SP12 M3).
 - 2026-11-06: the seeded SETTINGS.md names `fallback_on_error` (SP12 M1).
 - 2026-11-06: `load_leases` and `load_lease` skip a lease file they cannot read (damaged or newer), so it blocks no loop command (SP11 review).
 - 2026-11-06: `StorePaths.loops` and the loop lease files; the seeded SETTINGS.md gains `loop_start: ask` (SP11 M1).
@@ -48,11 +49,3 @@ Everything under `~/.kengash`: paths, atomic writes, frontmatter documents, ids,
 - 2026-10-23: `runtime.load_pings`; `runtime/ui.json` (`load_ui`, `save_ui` at mode 0600, `drop_ui`) (SP5 M1).
 - 2026-10-23: role skills seeded into `defaults/roles/`; `split_frontmatter` (SP4 M1).
 - 2026-10-23: worker records, ticket state, park flags, conductor pings and wait cursors (SP3 M3).
-- 2026-10-23: `runtime/trust.json` (SP3 M2).
-- 2026-10-22: runtime slots, claims and pause flags (SP3 M1).
-- 2026-10-22: default SETTINGS.md adds `memory.compactor`, `providers` and the `bypass_permissions` note (SP3 M1).
-- 2026-10-22: `read_sections`; ids never read as numbers (SP2 M3).
-- 2026-10-22: redaction also catches prefixed names, JSON keys and quoted values, in linear time (SP2 M2 review).
-- 2026-10-22: redaction and `package_default` (SP2 M2).
-- 2026-10-22: `link_state` accepts a link whose target resolves to the project folder through a symlinked path.
-- 2026-10-22: store core: layout, atomic files, frontmatter, documents, ids, locks, registry, links, seeding, store git (SP2 M1).

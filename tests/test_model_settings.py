@@ -266,3 +266,7 @@ def test_loop_start_defaults_to_ask_and_takes_auto() -> None:
 def test_loop_start_refuses_other_values() -> None:
     with pytest.raises(ValidationError, match="Input should be 'ask' or 'auto'"):
         Settings.model_validate({"loop_start": "always"})
+
+
+def test_default_token_cap() -> None:
+    assert Settings().tokens.per_ticket_max == 1_000_000

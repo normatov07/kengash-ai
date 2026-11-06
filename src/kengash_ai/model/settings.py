@@ -129,7 +129,7 @@ class Sessions(_Section):
 
 
 class Tokens(_Section):
-    per_ticket_max: int = Field(250_000, ge=1)
+    per_ticket_max: int = Field(1_000_000, ge=1)  # SP12: was 250,000
 
 
 class SkillCaps(_Section):
