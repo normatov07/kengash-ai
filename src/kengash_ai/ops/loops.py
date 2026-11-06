@@ -5,7 +5,7 @@ from datetime import datetime
 
 from kengash_ai import settings
 from kengash_ai.model import UserError, utc_now
-from kengash_ai.ops import conductors, leases, queue
+from kengash_ai.ops import conductors, leases, queue, records, waiting
 from kengash_ai.ops.conductors import Conductor
 from kengash_ai.store.paths import StorePaths
 
@@ -70,7 +70,8 @@ def claim(project: str | None, *, take_over: bool = False) -> Claimed:
 
 def release(*, force: bool = False) -> Released:
     """End the calling conductor's lease; without `force`, refused while `next` would list
-    runnable tickets in its scope, so tickets added as a loop winds down are never left."""
+    runnable tickets in its scope, or while its ready tickets wait for a slot a live worker
+    holds, so tickets added as a loop winds down are never left."""
     paths = StorePaths.default()
     me = conductors.conductor()
     with leases.guarded(paths):
@@ -81,6 +82,11 @@ def release(*, force: bool = False) -> Released:
             runnable = queue.compute(paths, own.project).runnable
             if runnable:
                 raise UserError(f"not released: {len(runnable)} runnable; run: kengash next")
+            waiting_now = waiting.slot_wait(paths, records.scope(paths, own.project))
+            if waiting_now:
+                raise UserError(
+                    f"not released: {waiting_now} ready, waiting for a slot; run: kengash wait"
+                )
         leases.ended(paths, own, "released")
     return Released(leases.scope_name(own.project))
 

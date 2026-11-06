@@ -3,6 +3,7 @@
 import json
 import os
 import time
+from collections.abc import Callable
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -12,6 +13,7 @@ from conftest import Engine, Events
 
 from kengash_ai import journal
 from kengash_ai.model import (
+    Doc,
     Event,
     JournalCursor,
     LoopBusy,
@@ -19,6 +21,7 @@ from kengash_ai.model import (
     PlanStatus,
     SlotEntry,
     SlotTable,
+    Ticket,
     TicketState,
     WorkerRecord,
     utc_now,
@@ -291,3 +294,38 @@ def test_a_wait_taken_over_midway_stops_before_reading(
     monkeypatch.setattr(conductors, "conductor", lambda: other)
     (found,) = waiting.wait(None, timeout=1, poll_s=0.05).events
     assert (found.id, found.status) == ("7b55e0c1", "awaiting_merge")
+
+
+def _busy_slots(paths: StorePaths, count: int) -> None:
+    held = [
+        SlotEntry(
+            provider="claude", project="elsewhere", ticket=f"b{n}", step="plan", pid=os.getpid()
+        )
+        for n in range(count)
+    ]
+    runtime.save_slots(paths, SlotTable(held=held))
+
+
+def test_wait_holds_while_ready_tickets_wait_on_a_busy_slot(
+    registered_repo: Path,
+    store_paths: StorePaths,
+    make_ticket: Callable[..., Doc[Ticket]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    documents.save_ticket(store_paths.project("payments-api"), make_ticket())
+    _busy_slots(store_paths, 2)
+    assert waiting.wait(None, timeout=0.2, poll_s=0.05).timed_out  # not idle: a slot frees later
+
+    def one_frees(_seconds: float) -> None:
+        _busy_slots(store_paths, 1)
+
+    monkeypatch.setattr(waiting, "time", SimpleNamespace(sleep=one_frees, monotonic=time.monotonic))
+    assert waiting.wait(None, timeout=5, poll_s=0.05).idle  # run `next` again
+
+
+def test_wait_is_idle_when_no_slot_is_held(
+    registered_repo: Path, store_paths: StorePaths, make_ticket: Callable[..., Doc[Ticket]]
+) -> None:
+    documents.save_ticket(store_paths.project("payments-api"), make_ticket())
+    _busy_slots(store_paths, 0)
+    assert waiting.wait(None, timeout=0.2, poll_s=0.05).idle

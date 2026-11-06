@@ -10,10 +10,10 @@ from typer.testing import CliRunner
 
 from kengash_ai import journal
 from kengash_ai.cli import app
-from kengash_ai.model import Doc, Event, PlanMode, Ticket
+from kengash_ai.model import Doc, Event, PlanMode, SlotEntry, SlotTable, Ticket
 from kengash_ai.ops import conductors, plans, tickets
 from kengash_ai.ops.conductors import Conductor, process_name
-from kengash_ai.store import StorePaths, documents
+from kengash_ai.store import StorePaths, documents, runtime
 
 runner = CliRunner()
 ME = Conductor(os.getpid(), "claude", process_name(os.getpid()) or "", True)
@@ -170,3 +170,22 @@ def test_capped_wait_points_at_status(as_conductor: As, store_paths: StorePaths)
         journal.append(store_paths, _gate(f"aaaaaaa{n}"))
     lines = runner.invoke(app, ["wait", "--timeout", "0.1"]).stdout.splitlines()
     assert len(lines) == 5 and lines[-1] == "+2 more; run: kengash status"
+
+
+@pytest.mark.usefixtures("inside_registered_repo")
+def test_release_refuses_while_ready_tickets_wait_for_a_slot(
+    as_conductor: As, store_paths: StorePaths, make_ticket: Callable[..., Doc[Ticket]]
+) -> None:
+    as_conductor(ME)
+    runner.invoke(app, ["loop", "claim", "-p", "payments-api"])
+    documents.save_ticket(store_paths.project("payments-api"), make_ticket())
+    held = [
+        SlotEntry(provider="claude", project="other", ticket=f"b{n}", step="plan", pid=os.getpid())
+        for n in range(3)
+    ]
+    runtime.save_slots(store_paths, SlotTable(held=held))
+    refused = runner.invoke(app, ["loop", "release"])
+    assert refused.exit_code == 1
+    assert refused.stderr == "not released: 1 ready, waiting for a slot; run: kengash wait\n"
+    runtime.save_slots(store_paths, SlotTable())
+    assert runner.invoke(app, ["loop", "release"]).stderr.startswith("not released: 1 runnable")

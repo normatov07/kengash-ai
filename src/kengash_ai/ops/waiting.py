@@ -106,6 +106,7 @@ def wait(project: str | None, *, timeout: float, poll_s: float = 1.0) -> WaitRes
         if gates:
             return WaitResult(events=gates)
     deadline = time.monotonic() + timeout
+    held: int | None = None  # live slots last round, while ready tickets wait on them
     while True:
         if me.detected and leases.own_lease(paths, me) is None:
             # taken over while polling: stop before reading the scope's events (SP11 §4.9)
@@ -120,12 +121,36 @@ def wait(project: str | None, *, timeout: float, poll_s: float = 1.0) -> WaitRes
         if found:
             return WaitResult(events=found)
         if not running:
-            return WaitResult(idle=True)
+            slots = _live_slots(paths)
+            if not (slots and _ready(paths, slugs)) or (held is not None and slots < held):
+                return WaitResult(idle=True)  # nothing to wait for, or a slot freed: run `next`
+            held = slots
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             return WaitResult(timed_out=True)
         time.sleep(min(poll_s, remaining))
         check_workers(paths)
+
+
+def slot_wait(paths: StorePaths, slugs: list[str]) -> int:
+    """Ready tickets in scope (outside paused projects) while a live worker of any project
+    holds a slot: they start once a slot frees, so a loop over them must not end (slots are
+    machine-wide; SP11 spec §4.6, §4.9)."""
+    return _ready(paths, slugs) if _live_slots(paths) else 0
+
+
+def _ready(paths: StorePaths, slugs: list[str]) -> int:
+    pause = runtime.pause_state(paths)
+    return sum(
+        doc.meta.status == READY
+        for slug in slugs
+        if not pause.covers(slug)
+        for doc in records.project_tickets(paths, slug).values()
+    )
+
+
+def _live_slots(paths: StorePaths) -> int:
+    return sum(lifecycle.pid_alive(entry.pid) for entry in runtime.load_slots(paths).held)
 
 
 def _wanted(event: Event, slugs: list[str]) -> bool:
