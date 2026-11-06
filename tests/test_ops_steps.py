@@ -357,7 +357,9 @@ def test_a_custom_step_between_built_ins_runs_in_order(
 
 def _codex_cut(thread: str | None = "th-1") -> str:
     """A codex turn that a connection reset ended; `thread` None: before the session began."""
-    events = [{"type": "thread.started", "thread_id": thread}] if thread else []
+    events: list[dict[str, object]] = (
+        [{"type": "thread.started", "thread_id": thread}] if thread else []
+    )
     events.append(
         {"type": "turn.failed", "error": {"message": "stream error: connection reset by peer"}}
     )
@@ -433,13 +435,13 @@ def test_running_log_follows_each_attempt_and_clears(engine: Engine, fake_clis: 
     seen: list[str] = []
     real = steps._next_log
 
-    def spy(job: object) -> Path:
-        path = real(job)  # type: ignore[arg-type]
+    def spy(job: steps._Job) -> Path:
+        path = real(job)
         running = runtime.load_ticket_state(engine.paths, engine.ticket_id).running
         seen.append(running.log.name if running else "")
         return path
 
-    steps._next_log = spy  # type: ignore[assignment]
+    steps._next_log = spy
     try:
         fake_clis.queue("claude", fixture="claude/work_resume.json")
         fake_clis.queue("codex", stdout=_codex_cut(), exit=1)
@@ -447,7 +449,7 @@ def test_running_log_follows_each_attempt_and_clears(engine: Engine, fake_clis: 
         fake_clis.queue("claude", fixture="claude/auth_error.json")
         steps.run_job("7b55e0c1", steps=2)
     finally:
-        steps._next_log = real  # type: ignore[assignment]
+        steps._next_log = real
     assert seen[-1] == f"{engine.ticket_id}-{len(seen)}.out"
     assert runtime.load_ticket_state(engine.paths, engine.ticket_id).running is None
 

@@ -230,8 +230,7 @@ def test_stdout_lines_get_stamps(tmp_path: Path) -> None:
 
 def test_lint_runs_after_tests(tmp_path: Path) -> None:
     result = Shell().run(_request(tmp_path, test_cmd="echo t", lint_cmd="echo l"))
-    assert result.output is not None and result.output.verdict == "pass"
-    assert isinstance(result.output, ReviewOutput)
+    assert isinstance(result.output, ReviewOutput) and result.output.verdict == "pass"
     assert result.output.summary == "tests and lint passed"
 
 

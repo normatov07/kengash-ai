@@ -172,7 +172,7 @@ def test_error_with_a_valid_output_is_a_success_with_a_warning(
 ) -> None:
     fake_clis.queue("agy", fixture="agy/stream-error-valid.jsonl", exit=1)
     result = Antigravity().run(_request(tmp_path, prompt="p", output="work"))
-    assert result.error is None and result.output is not None
+    assert result.error is None and isinstance(result.output, WorkOutput)
     assert result.output.summary == "Rebrand core package and UI to Chess Samurai"
     assert "connection reset by peer" in result.warning
 

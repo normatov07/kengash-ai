@@ -100,9 +100,8 @@ def test_follow_ends_with_the_ticket(engine: Engine) -> None:
     doc.meta.status = "done/merged"
     doc.meta.step = None
     documents.save_ticket(engine.paths.project(engine.slug), doc)
-    found = list(
-        activity.follow(engine.paths, engine.slug, engine.ticket_id, poll_s=0.01, root=WORK)
-    )
+    beats = activity.follow(engine.paths, engine.slug, engine.ticket_id, poll_s=0.01, root=WORK)
+    found = [item for item in beats if item is not None]
     assert found[0].text == "plan → claude" and found[-1].kind == "status"
     assert found[-1].text == "done/merged"
     assert json.dumps([item.text for item in found])  # plain strings all the way
