@@ -58,6 +58,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-06: `steps._call`: a `network` error gets one resumed turn (`prompts.NETWORK_PROMPT`), then the fallback under `fallback_on_error`, then fails; the commit-hook repair turn resumes a network error once too; a failed call stores the session it opened (`_keep_session`) so `kengash run` resumes it (SP12 M1).
 - 2026-11-06: `calls.call` resumes a `network` error once with `prompts.NETWORK_PROMPT` (`calls.resume`); steps fall back under `fallback_on_error`; the Agents view's `fallback_on_error` (SP12 M1).
 - 2026-11-06 (deferred review minors): `LoopBusy` names `kengash loop claim --take-over` for a loop that has ended; a reused own pid journals its old lease `gone`; a merge-conflict re-queue (`ticket.recirculated` to `in_queue/ready`) is `queued`.
 - 2026-11-06: `conductors` holds the conductor lookup that `waiting` had; `leases`; `loops`; `queue.compute`; `wait` holds the lease and reports `queued`; `ping` refreshes the lease; `skills.show` (SP11 M1).

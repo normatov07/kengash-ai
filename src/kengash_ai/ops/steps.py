@@ -223,12 +223,13 @@ def _take_slot(job: _Job, ready: _Ready, pick: agents.Pick) -> None:
 
 def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
     """Run the step's CLI: timeouts retry once, schema errors and denied actions get one
-    repair turn, rate limits fall back or wait for the quota, other errors fail the ticket
-    (SP3 spec §5 item 5)."""
+    repair turn, a network error one resumed turn, rate limits and network errors fall back
+    (or a rate limit waits for the quota), other errors fail the ticket, keeping the
+    session the CLI opened (SP3 spec §5 item 5; SP12 spec §3.4, §3.5)."""
     request = _prepare(job, ready, pick)
     usage = Usage()
     tried = {pick.provider}
-    timed_out = repaired = unblocked = False
+    timed_out = repaired = unblocked = reconnected = False
     while True:
         result = adapters.get(pick.provider, runtime=job.paths.runtime).run(request)
         usage = calls.plus(usage, result.usage)
@@ -248,7 +249,11 @@ def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
             unblocked = True
             request = _repair(job, request, result, problem)
             continue
-        if error == "rate_limit":
+        if error == "network" and not reconnected:
+            reconnected = True
+            request = _resume(job, request, result, prompts.NETWORK_PROMPT)
+            continue
+        if error in ("rate_limit", "network"):
             fallback = _fallback(job, ready, pick, tried)
             if fallback is not None:
                 pick = fallback
@@ -256,12 +261,16 @@ def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
                 slots.release(job.paths, job.ticket_id)
                 _take_slot(job, ready, pick)
                 request = _prepare(job, ready, pick)
+                reconnected = False
                 continue
+        if error == "rate_limit":
             _wait_quota(job, ready, result)
             request = _again(job, request, result)
             continue
         if _never_started(request, result):
             _forget_session(job, ready.step, pick.role, str(request.session_id))
+        elif result.session_id:
+            _keep_session(job, ready.step, pick, result.session_id)
         return _fail(job, calls.failure(pick.provider, request, result), usage)
 
 
@@ -310,6 +319,23 @@ def _forget_session(job: _Job, step: str, role: str, session_id: str) -> None:
             del doc.meta.sessions[role]
 
     _update(job, step, forget)
+
+
+def _keep_session(job: _Job, step: str, pick: agents.Pick, session_id: str) -> None:
+    """Store the session a failed call opened, so `kengash run` resumes it (SP12 §3.5)."""
+
+    def keep(doc: Doc[Ticket], state: TicketState) -> None:
+        ref = doc.meta.sessions.get(pick.role)
+        if ref is None or ref.id != session_id:
+            doc.meta.sessions[pick.role] = SessionRef(
+                provider=pick.provider, model=pick.model or "default", id=session_id
+            )
+
+    _update(job, step, keep)
+
+
+def _resume(job: _Job, request: StepRequest, result: StepResult, prompt: str) -> StepRequest:
+    return calls.resume(request, result, prompt, _next_log(job))
 
 
 def _again(job: _Job, request: StepRequest, result: StepResult | None = None) -> StepRequest:
@@ -437,8 +463,13 @@ def _commit(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
                 return _fail(job, f"commit failed: {last}", ran.usage)
             problem = "the commit hook failed:\n" + "\n".join(lines[-20:])
             request = _repair(job, ran.request, ran.result, problem)
-            result = adapters.get(ran.pick.provider, runtime=job.paths.runtime).run(request)
+            provider = adapters.get(ran.pick.provider, runtime=job.paths.runtime)
+            result = provider.run(request)
             ran.usage = calls.plus(ran.usage, result.usage)
+            if result.error == "network":  # one resumed turn, as for the step itself
+                request = _resume(job, request, result, prompts.NETWORK_PROMPT)
+                result = provider.run(request)
+                ran.usage = calls.plus(ran.usage, result.usage)
             if result.error is not None:
                 return _fail(job, calls.failure(ran.pick.provider, request, result), ran.usage)
             session = result.session_id or ran.result.session_id
