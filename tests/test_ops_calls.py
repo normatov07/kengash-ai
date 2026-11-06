@@ -146,19 +146,26 @@ def test_a_second_network_error_is_returned(
     assert called.result.error == "network" and len(provider.requests) == 2
 
 
-def test_failure_line_is_short_and_names_the_worktree(
-    request_: StepRequest, tmp_path: Path
-) -> None:
+def test_failure_line_is_short_and_names_the_worktree(request_: StepRequest) -> None:
     detail = '{"handoff": "' + "x" * 2000 + '"}\nsecond line'
     result = StepResult(error="crash", detail=detail)
-    line = calls.failure("antigravity", request_, result, worktree=tmp_path / "kg-1", changed=3)
-    assert len(line) <= 300 and line.startswith('crash: {"handoff": "xxx')
-    assert line.endswith(
-        f"; log: {request_.log}; work kept in {tmp_path / 'kg-1'} (3 files changed)"
-    )
+    short = request_.model_copy(update={"log": Path("/s/logs/t-1.out")})  # paths fixed: CI's
+    line = calls.failure("antigravity", short, result, worktree=Path("/s/kg-1"), changed=3)
+    assert len(line) == 300 and line.startswith('crash: {"handoff": "xxx')
+    assert line.endswith("; log: /s/logs/t-1.out; work kept in /s/kg-1 (3 files changed)")
     assert "second line" not in line
-    plain = calls.failure("codex", request_, StepResult(error="crash", detail="boom"))
-    assert plain == f"crash: boom; log: {request_.log}"
+    plain = calls.failure("codex", short, StepResult(error="crash", detail="boom"))
+    assert plain == "crash: boom; log: /s/logs/t-1.out"
+
+
+def test_long_paths_never_crowd_out_the_reason(request_: StepRequest) -> None:
+    deep = Path("/" + "/".join(["folder"] * 40))  # macOS runners' temp paths are this long
+    long = request_.model_copy(update={"log": deep / "t-1.out"})
+    result = StepResult(error="network", detail="read: connection reset by peer " + "y" * 500)
+    line = calls.failure("antigravity", long, result, worktree=deep / "kg-1", changed=1)
+    reason = line.split("; log: ")[0]
+    assert reason.startswith("network: read: connection reset by peer")
+    assert len(reason) >= len("network: ") + calls.DETAIL_MIN
 
 
 def test_a_fresh_session_cut_before_it_began_is_run_again_not_resumed(

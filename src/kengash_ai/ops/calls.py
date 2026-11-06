@@ -108,6 +108,7 @@ def resume(request: StepRequest, result: StepResult, prompt: str, log: Path) -> 
 
 
 FAILURE_MAX = 300
+DETAIL_MIN = 120  # the reason never shrinks below this: long paths may lengthen the line
 
 
 def failure(
@@ -118,8 +119,9 @@ def failure(
     worktree: Path | None = None,
     changed: int = 0,
 ) -> str:
-    """One line of at most FAILURE_MAX characters naming why a call failed, where its
-    output went and, for an editing step, where its changes are kept (SP12 spec §3.6)."""
+    """One line naming why a call failed, where its output went and, for an editing step,
+    where its changes are kept (SP12 spec §3.6): at most FAILURE_MAX characters, the
+    reason shortened first, but never below DETAIL_MIN; only long paths exceed the cap."""
     if result.error == "auth":
         return f"sign in to {BINARIES.get(provider, provider)} interactively"
     kept = f"; work kept in {worktree} ({changed} files changed)" if worktree and changed else ""
@@ -129,7 +131,7 @@ def failure(
     detail = lines[0].strip() if lines else ""
     tail_part = f"; log: {request.log}{kept}"
     head = f"{result.error}: "
-    room = FAILURE_MAX - len(head) - len(tail_part)
+    room = max(FAILURE_MAX - len(head) - len(tail_part), DETAIL_MIN)
     if len(detail) > room:
         detail = detail[: max(room - 1, 0)] + "…"
     return f"{head}{detail}{tail_part}"

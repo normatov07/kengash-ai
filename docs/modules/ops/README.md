@@ -61,6 +61,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-06 (CI): `calls.failure` keeps at least `DETAIL_MIN` (120) characters of the reason; long log and worktree paths may lengthen the line past 300 rather than crowd the reason out (macOS temp paths left it 12).
 - 2026-11-06 (CI): `waiting` imports `progress` as `progress_ops`: `WaitResult.progress` shadowed the module in its class body on Pythons that evaluate annotations eagerly (3.12, 3.13), failing every import of the CLI.
 - 2026-11-06 (final review): `calls.resume` runs a new session the CLI never reported again rather than resuming it; a late CLI warning is journaled on `step.end` and written to the Log line; `hygiene` ignores npm init's placeholder test script and flags only the old seeded doc-writer line; `activity.ticket` reads the journal from the ticket's day.
 - 2026-11-06: `hygiene`; `init` detects test and lint commands; doctor reports and fixes old defaults and missing checks; `DoctorReport.notes` (SP12 M3).
@@ -80,4 +81,3 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - 2026-10-30: a provider card not detected yet lists `adapters.known_models(name)` (SP10 M4).
 - 2026-10-30: `views.workflows_view` gains `routing` and `picker` (SP10 M4).
 - 2026-10-30: `views.skill_text(project=, name=)` → `SkillText(name, source, text)`; `agent_config.body(path)` is public (SP10 M3).
-- 2026-10-30: `views.agents_view` returns full agent details, role skills and instruction caps, and providers' models; `routing` and `loop_max` leave it for the Workflow screen; `skills.role_skills` (SP10 M3).
