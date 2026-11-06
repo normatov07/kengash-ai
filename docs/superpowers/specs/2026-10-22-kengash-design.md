@@ -359,7 +359,7 @@ Every `--project`/`-p` takes a project name or a folder inside a registered repo
 
 `next` and `wait` record a conductor ping in `runtime/conductors/` (process id, agent if detectable, project filter); the UI shows these as live conductors.
 
-Loop leases (SP11 spec §4): `runtime/loops/<pid>.json` records the conductor running a loop over one project or every project. A lease is live while its process runs under the same name and was seen within an hour; `wait` and `next` refresh it. `kengash loop claim` and a detected agent's `wait` take a lease, refused with exit 6 while another conductor's live lease overlaps the scope (every project overlaps any project) unless `--take-over`. `kengash loop release` refuses while `next` would list runnable tickets in the lease's scope, so tickets added while a loop winds down are never left unrun.
+Loop leases (SP11 spec §4): `runtime/loops/<pid>.json` records the conductor running a loop over one project or every project. A lease is live while its process runs under the same name and was seen within an hour; `wait` and `next` refresh it. `kengash loop claim` and a detected agent's `wait` take a lease, refused with exit 6 while another conductor's live lease overlaps the scope (every project overlaps any project) unless `--take-over`. `kengash loop release` refuses while `next` would list runnable tickets in the lease's scope, or while its ready tickets wait for a slot a live worker holds, so tickets added while a loop winds down are never left unrun. `wait` folds `queued` events into one line and is not `idle` while ready tickets wait on a held slot.
 
 ### 6.1 Journal events
 

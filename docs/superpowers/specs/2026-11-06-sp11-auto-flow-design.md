@@ -41,7 +41,8 @@ Today (0.3.0):
 7. **The loop skill claims first.** After `doctor` it runs `kengash loop claim [-p <project>]`. On exit 6 it tells the user which session runs the covering loop and stops. It reruns with `--take-over` only when the user says so.
    - When `kengash wait` exits 6, another conductor has taken over, and the loop stops the same way.
    - A new `queued` row in the event table runs `kengash next` and starts what it lists. `queued` lines are handled before any line that needs the user, so new work starts before the loop waits on a question.
-   - When the loop ends (nothing runnable and nothing running), it runs `kengash loop release`. On exit 1, `not released`, it goes back to `kengash next`.
+   - When the loop ends (nothing runnable and nothing running), it runs `kengash loop release`. On exit 1, `not released`, it goes back to `kengash wait` (final review: back to `next` would spin while tickets wait for a slot).
+   - When `kengash run` starts none of the listed tickets, it shows the `skipped <id>: <reason>` lines and asks the user how to go on, instead of cycling (final review).
    - When the user says to stop, it runs `kengash loop release --force`.
 8. **Skill caps hold.** The lint counts the whole file, frontmatter included (`ops/skills.py` `_lint_one`). By that count plan, grill, loop and ticket are at 399, 400, 376 and 315 of 400 words. The edits fit `skill.max_words` and `skill.max_lines` by tightening wording; the caps and the lint stay as they are (*call*). M2 reruns these skills' evals anyway, so the tightened wording is proven again. If grill still cannot fit, its round rules move to `grill/references/rounds.md`, read when asking a round.
 
@@ -61,6 +62,7 @@ Today (0.3.0):
 6. **`release(project, force=False)`** runs under the same lock.
    - When the caller holds no lease, it prints `no loop held here` and exits 0.
    - Without `force`, when `next` would list runnable tickets in the lease's scope, it refuses with exit 1: `not released: N runnable; run: kengash next`.
+   - Without `force`, when ready tickets in the scope (not paused) wait while a live worker of any project holds a slot, it refuses with exit 1: `not released: N ready, waiting for a slot; run: kengash wait`. Slots are machine-wide, so a project's loop must outlive another project's busy workers (final review).
    - Otherwise it deletes the lease and journals `loop.ended`, reason `released`. `force` is for a stop the user asked for.
 
    Why this closes the hand-off race: session B always adds its tickets before it claims, and claim and release are ordered by the lock. So either loop A's release sees B's ready tickets and keeps looping, or A has already gone and B's claim succeeds.
@@ -75,7 +77,7 @@ Today (0.3.0):
    - `kengash loop status` prints one line per live lease, `loop running: <agent> pid <pid> on <scope>, seen <age> ago`, or `no loop running`, and then `loop_start: ask|auto`.
 
    `<scope>` is the slug or `all projects`. The new `ops.loops` holds the use cases, and the conductor lookup moves there from `waiting`, which keeps `ping` and `wait`.
-9. **`wait` reports `queued`.** A `ticket.created` event whose status is `in_queue/ready`, or a `ticket.moved` event to `in_queue/ready` (which a merge emits for each ticket it unblocks), comes back as `<id> queued loop n/max: <title>`. The journal and the wait cursor keep these events while the conductor talks to the user, so a loop that is waiting on a question starts the new tickets as soon as it next runs `wait`. B's message to the user says so.
+9. **`wait` reports `queued`.** A `ticket.created` event whose status is `in_queue/ready`, or a `ticket.moved` event to `in_queue/ready` (which a merge emits for each ticket it unblocks), comes back as `<id> queued loop n/max: <title>` in `--json`; the text output folds every queued event into one line, `queued: N tickets ready; run: kengash next`, after the other lines, and points capped lines at `kengash status` (which lists open gates), never at a second `wait` whose cursor has moved on (final review). While ready tickets in scope wait on a slot a live worker holds, `wait` is not `idle`; it returns `idle` once a held slot frees, so the loop runs `next` again. A `wait` already polling checks each round that its conductor still holds the lease and raises LoopBusy once another conductor took over, before it reads further (final review). The journal and the wait cursor keep these events while the conductor talks to the user, so a loop that is waiting on a question starts the new tickets as soon as it next runs `wait`. B's message to the user says so.
 10. **Exit code 6**, "another loop covers this scope", joins the system spec's list. `model.errors.LoopBusy` carries it.
 
 ## 5. Decisions: Auto mode (milestone 3)
@@ -128,5 +130,5 @@ Each milestone ends with a critical review against this spec (hard rule 9).
   - The fallback lease belongs to a short-lived shell, so it is never live after that shell exits. Claims by such a conductor never block anyone for long.
   - The live smoke checks that the lease pid stays stable across two `kengash` calls on claude and agy.
   - Codex's process tree cannot be checked until the user installs codex. Until then, the one-loop guarantee for Codex is unverified.
-- **Held-back tickets at a release.** If B's ready tickets are held back (no free slot, or a provider signed out) at the moment A releases, A ends, and B, told a loop was running, ends too. The tickets then wait for the next `/kengash:loop`. B's message says to run `/kengash:loop` if nothing starts. *call*: accepted, because refusing release on held-back tickets would spin a loop that cannot progress.
+- **Held-back tickets at a release.** Tickets that wait for a slot keep the loop alive (decision 4.6). Tickets held back for other reasons (a signed-out provider, a paused project) do not: A ends, and B, told a loop was running, ends too, so they wait for the next `/kengash:loop`. B's message says to run `/kengash:loop` if nothing starts. *call*: accepted, because refusing release on those would keep a loop that cannot progress.
 - **Word caps.** The skill edits are tight against 400 words. If they cannot fit, the event table moves to `loop/references/events.md`, read when acting on an event.
