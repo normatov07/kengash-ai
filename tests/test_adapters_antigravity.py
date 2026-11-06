@@ -212,3 +212,13 @@ def test_no_result_classifies_stderr(fake_clis: FakeClis, tmp_path: Path) -> Non
     fake_clis.queue("agy", stdout=_stream(INIT), stderr=f"fatal: {RESET}\n", exit=1)
     result = Antigravity().run(_request(tmp_path, prompt="p", output="work"))
     assert (result.error, result.session_id) == ("network", CONV)
+
+
+def test_edit_steps_allow_reads(tmp_path: Path) -> None:
+    argv = Antigravity().command(
+        _request(tmp_path, prompt="p", output="work", profile="edit_worktree")
+    )
+    allow = json.loads(argv[argv.index("--settings") + 1])
+    assert allow == {"permissions": {"allow": ["read_file(*)"]}}
+    read_only = Antigravity().command(_request(tmp_path, prompt="p"))
+    assert "--settings" not in read_only

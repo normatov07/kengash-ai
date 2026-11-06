@@ -31,6 +31,9 @@ EDIT_LINE = (
     "file tools only, and do not run tests; review steps check the result."
 )
 MODE = {"read_only": "plan", "edit_worktree": "accept-edits"}
+# Headless agy auto-denies a read it cannot prompt for and ends the turn (chess-samurai run of
+# 2026-11-06, call 3); its own message names this allow-rule. Reads only (SP12 spec §5.3).
+READ_ALLOW = '{"permissions":{"allow":["read_file(*)"]}}'
 
 _MODEL = re.compile(r"[A-Za-z0-9][\w.:-]*")
 
@@ -60,6 +63,8 @@ class Antigravity(CliProvider):
         if req.model:
             argv += ["--model", req.model]
         argv += ["--mode", MODE[req.profile]]
+        if req.profile == "edit_worktree":
+            argv += ["--settings", READ_ALLOW]
         return argv + (["--dangerously-skip-permissions"] if req.bypass else [])
 
     def parse(self, req: StepRequest, proc: ProcessResult) -> StepResult:
