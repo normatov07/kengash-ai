@@ -48,6 +48,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - Errors are `model` errors and carry their exit code.
 
 - `activity` (SP12 spec §4.4): `Activity(ts, kind, text)` with kind step, read, edit, run, reply, error or status; `parse(text, stamps, root=)` reads a claude, agy or codex stream (tools mapped to read/edit/run, the structured output's summary as `reply: …`, an error keeping its end); `ticket(paths, slug, id, root=)` merges the ticket's journal steps and statuses with every `<id>-<n>.out` log (its last 64 KiB, timed by `<log>.ts`, else the file's mtime) in time order; `follow(…, poll_s=)` yields them, then each new one, until the ticket stops running, ending with its status; `running_status(status)`.
+- `progress` (SP12 spec §4.2): `running(paths, slugs)` → a `Progress(id, project, step, provider, model, elapsed_s, alive, active_s, action, changed, quiet)` per ticket a worker is busy with (elapsed since its last `step.start`; `alive`: worker pid and heartbeat; `active_s` since the running log or a changed file was written; the last activity line; uncommitted files, one `git status` per worktree per 60 s; `quiet` at `QUIET_S` = 600); `line(p)` → `<id> <step>→<provider>/<model> <elapsed> · active <age> ago · <N> files changed · <action>[ · quiet][ · worker gone]`; `forget()` drops the cache.
 ## Invariants
 
 - Registry changes happen under `runtime/locks/registry.lock`; project, plan and ticket changes under `runtime/locks/<slug>.lock`, then journal events, then a store commit.
@@ -59,6 +60,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-06: `progress` (SP12 M2).
 - 2026-11-06: `activity` (SP12 M2).
 - 2026-11-06: `calls.failure(…, worktree=, changed=)`: one line of at most 300 characters (the detail's first line, shortened), the log, and for an editing step `work kept in <worktree> (N files changed)`; `steps` points `state.running.log` at each attempt and clears it when the worker fails the step; an editing step over uncommitted changes gets `prompts.RETRY_NOTE` (SP12 M1).
 - 2026-11-06: `steps._call`: a `network` error gets one resumed turn (`prompts.NETWORK_PROMPT`), then the fallback under `fallback_on_error`, then fails; the commit-hook repair turn resumes a network error once too; a failed call stores the session it opened (`_keep_session`) so `kengash run` resumes it (SP12 M1).
@@ -78,4 +80,3 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - 2026-10-30: built-in role skills always load from the package (`role_file`); `ignored_copies`; doctor warns `ignored built-in skill copies in <folder> (<names>): built-in skills are fixed; copy the agent to change one` (SP10 M2).
 - 2026-10-30: `doctor` warns `old kengash skill names installed in <folder>; run: kengash skills install --agent <agents>` for every registered repo and the home folder; eval turns spell commands with `{kg}`; claude conductors get `--plugin-dir` (SP10 M1).
 - 2026-10-30: `skills.install` installs the `kengash` plugin (Claude Code skills-dir folder, `agy plugin install`) or `kengash-<name>` copies (Codex, agy fallback), removing 0.2.0's `to-…`, `open-ui` and `kengash-memory` skills of ours; `Installed.note`; eval runs install agy copies, never the plugin (SP10 M1).
-- 2026-10-27: `wait` checks running work before reading the journal and counts live workers, so it no longer answers `idle` over a gate a worker is journaling (the flaky lifecycle test; SP9).
