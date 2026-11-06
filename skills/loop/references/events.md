@@ -2,7 +2,7 @@
 
 | Status | What you do |
 |---|---|
-| `queued` | run `kengash next`, then `kengash run` the ids it lists |
+| `queued: N tickets ready` | run `kengash next`, then `kengash run` the ids it lists |
 | `awaiting_merge` | ask the user; on yes, `kengash merge <id>` |
 | `needs_approval` | explain the detail (loop or token cap, approval step); on yes, `kengash approve <id>` (`--loops N` for more loops) |
 | `stalled` | show `kengash ticket show <id>` findings; offer to re-plan with `/kengash:plan` or to retry with `kengash run <id>` |
