@@ -104,6 +104,7 @@ $HARNESS_HOME (default ~/.harness, mode 0700, a git repo)
 ├── journal/YYYY-MM-DD.jsonl         events (§6.1)
 ├── worktrees/<slug>/hrn-<id8>/      ticket worktrees                          (git-ignored)
 └── runtime/                         locks, pids, heartbeats, conductor pings, logs  (git-ignored)
+    └── loops/<pid>.json             loop leases, one per conductor; locks/loops.lock guards them (SP11)
 
 <repo>/.harness -> $HARNESS_HOME/projects/<slug>     listed in <repo>/.git/info/exclude
 ```
@@ -255,6 +256,7 @@ loop_grant: 2                 # loops added per approval
 loop_ask_at_cap: true         # false: park the ticket instead of asking
 loop_count_rejected_review: true   # false: plan-review rejections count only toward plan.review_max
 stall_repeat: 2               # the same finding fails this many loops in a row → stalled
+loop_start: ask              # auto: start the loop as soon as tickets are added (Auto mode, SP11)
 
 # planning
 grill.round_size: 3
@@ -335,7 +337,7 @@ Steps map to roles: `plan` → planner, `review_plan` → plan-reviewer, `implem
 
 ## 6. Conductor contract
 
-Status and action commands print at most 5 lines; `context` and `show` print the content asked for; `--json` gives full machine output everywhere. Exit codes: 0 ok · 1 error · 2 usage · 3 wait timeout · 4 setup needed (missing install, sign-in or init) · 5 a user decision is needed.
+Status and action commands print at most 5 lines; `context` and `show` print the content asked for; `--json` gives full machine output everywhere. Exit codes: 0 ok · 1 error · 2 usage · 3 wait timeout · 4 setup needed (missing install, sign-in or init) · 5 a user decision is needed · 6 another loop covers this scope (SP11).
 
 | Command | Purpose |
 |---|---|
@@ -344,17 +346,20 @@ Status and action commands print at most 5 lines; `context` and `show` print the
 | `harness ticket add\|show\|list\|find\|set\|move\|changes\|attach` | Ticket lifecycle. `add --plan <id>` validates the schema, acyclic `depends_on` and caps, and is refused unless the plan is approved. `changes` lists per-file diffs with the model and loop that wrote them. `attach` prints the command that opens a role's session. |
 | `harness next [project]` | Runnable tickets |
 | `harness run <id>… [--steps N]` | Claim tickets (→ `in_process`), start detached workers, return at once |
-| `harness wait [project] [--timeout 540]` | Block until a ticket or plan needs the conductor: `done`, `needs_approval`, `stalled`, `failed`, `awaiting_merge`, plan review finished |
+| `harness wait [project] [--timeout 540]` | Block until a ticket or plan needs the conductor: `done`, `needs_approval`, `stalled`, `failed`, `awaiting_merge`, plan review finished, or `queued` (a ticket became ready: added, or unblocked by a merge) |
+| `kengash loop claim [project] [--take-over]\|release [--force]\|status [project]` | The loop lease (SP11 spec §4): one live loop per project |
 | `harness approve\|park\|stop\|pause\|resume\|merge` | Gates and controls; `pause` and `resume` act on one project or on everything |
 | `harness memory add\|compact\|show` | Memory writes, attributed in the journal |
 | `harness status [project]` | Board summary; how a fresh conductor picks up where another stopped |
 | `harness init\|doctor\|link\|adopt` | Links and repair (§4.2) |
-| `harness skills install\|lint\|eval` | Packaging (§8) |
+| `harness skills install\|lint\|eval\|show` | Packaging (§8); `show <name>` prints a skill rendered for the calling agent, how one skill hands over to the next (SP11) |
 | `harness ui [open\|stop]` | Local UI (§9) |
 
 Every `--project`/`-p` takes a project name or a folder inside a registered repo (SP9 spec decision 1). `harness next` orders round-robin across projects, then by importance (critical first), then by age. A ticket is runnable when every `depends_on` ticket is merged or closed, its `touches` do not overlap any `in_process` ticket of the same project (two paths overlap when one is a prefix of the other, compared segment by segment, so `services/web` and `services/webhooks` do not; empty `touches` overlaps everything), and its next step's provider has a free slot within `sessions.max` and `sessions.per_provider`. Workers take slots per step, not per ticket.
 
 `next` and `wait` record a conductor ping in `runtime/conductors/` (process id, agent if detectable, project filter); the UI shows these as live conductors.
+
+Loop leases (SP11 spec §4): `runtime/loops/<pid>.json` records the conductor running a loop over one project or every project. A lease is live while its process runs under the same name and was seen within an hour; `wait` and `next` refresh it. `kengash loop claim` and a detected agent's `wait` take a lease, refused with exit 6 while another conductor's live lease overlaps the scope (every project overlaps any project) unless `--take-over`. `kengash loop release` refuses while `next` would list runnable tickets in the lease's scope, so tickets added while a loop winds down are never left unrun.
 
 ### 6.1 Journal events
 
@@ -364,7 +369,7 @@ One JSON object per line in `journal/YYYY-MM-DD.jsonl`:
 {"ts":"2026-10-22T12:04:11Z","type":"step.end","project":"payments-api","ticket":"4f2a1b7c","step":"implement","role":"implementer","provider":"codex","model":"default","session":"019a…","loop":2,"verdict":"pass","tokens":{"in":12000,"out":3400,"cache_read":80000},"duration_s":252,"files":3,"added":128,"removed":14,"commit":"abc1234"}
 ```
 
-Types: `plan.created`, `plan.saved`, `plan.reviewed`, `plan.approved`, `plan.rejected`, `ticket.created`, `ticket.claimed`, `step.start`, `step.end`, `ticket.recirculated`, `ticket.needs_approval`, `ticket.approved`, `ticket.stalled`, `ticket.failed`, `ticket.awaiting_merge`, `ticket.merged`, `ticket.moved`, `ticket.updated`, `ticket.paused`, `ticket.resumed`, `ticket.stopped`, `memory.write`, `memory.compacted`, `session.created`, `session.resumed`, `worker.started`, `worker.exited`, `settings.changed`, `link.broken`, `link.repaired`, `link.adopted`. Secrets are redacted before writing.
+Types: `plan.created`, `plan.saved`, `plan.reviewed`, `plan.approved`, `plan.rejected`, `ticket.created`, `ticket.claimed`, `step.start`, `step.end`, `ticket.recirculated`, `ticket.needs_approval`, `ticket.approved`, `ticket.stalled`, `ticket.failed`, `ticket.awaiting_merge`, `ticket.merged`, `ticket.moved`, `ticket.updated`, `ticket.paused`, `ticket.resumed`, `ticket.stopped`, `memory.write`, `memory.compacted`, `session.created`, `session.resumed`, `worker.started`, `worker.exited`, `settings.changed`, `link.broken`, `link.repaired`, `link.adopted`, `loop.started`, `loop.ended` (reason `released`, `taken_over` or `gone`; SP11). Secrets are redacted before writing.
 
 ## 7. Workers and provider adapters
 
@@ -429,10 +434,10 @@ Errors: `auth` stops the ticket with "sign in to <cli> interactively"; `rate_lim
 
 | Skill | Invoked by | Steps |
 |---|---|---|
-| `grill` | user | `harness context` → `harness plan new` → look up facts yourself (code, docs, memory; a subagent if the host has one) → grill rounds of at most `grill.round_size` questions, each with a recommended answer, using the host's multiple-choice tool if it has one, until nothing is left to ask and nothing is silently assumed → restate the shared understanding; the user confirms → `harness plan save` → `harness plan review` → show open findings → the user approves, edits or rejects → `harness plan approve` |
-| `plan` | user | the same without grilling; every unasked decision becomes an `## Assumptions` line |
-| `ticket` | user | an approved plan id, or a short prompt (creates a `quick` plan) → vertical slices: end to end, verifiable alone, one fresh context window each; wide refactors split expand → migrate → contract → importance by rubric → numbered list (title · importance · blockers · touches) → the user adjusts → `harness ticket add --plan <id>` |
-| `loop` | user | `harness doctor --quiet` → loop: `harness next` → `harness run` → `harness wait` → act on each event (ask the user to grant loops, re-plan stalled tickets, approve merges) until nothing is runnable or the user stops |
+| `grill` | user | `harness context` → `harness plan new` → look up facts yourself (code, docs, memory; a subagent if the host has one) → grill rounds of at most `grill.round_size` questions, each with a recommended answer, using the host's multiple-choice tool if it has one, until nothing is left to ask and nothing is silently assumed → restate the shared understanding; the user confirms → `harness plan save` → `harness plan review` → show open findings → the user approves, edits or rejects → `harness plan approve` → `kengash skills show ticket`, followed for the plan (SP11) |
+| `plan` | user | the same without grilling; every unasked decision becomes an `## Assumptions` line; approval also hands over to `ticket` |
+| `ticket` | user | an approved plan id, or a short prompt (creates a `quick` plan) → vertical slices: end to end, verifiable alone, one fresh context window each; wide refactors split expand → migrate → contract → importance by rubric → numbered list (title · importance · blockers · touches); a quick plan waits for the user's yes, an approved plan does not (SP11) → `harness ticket add --plan <id>`, each scope 3–8 lines → `kengash loop status`: a covering loop runs → stop; else `loop_start: auto` → follow `kengash skills show loop`, `ask` → ask once |
+| `loop` | user | `harness doctor --quiet` → `kengash loop claim` (exit 6: another loop covers the scope → stop) → loop: `harness next` → `harness run` → `harness wait` → act on each event (`queued` first: next and run; ask the user to grant loops, re-plan stalled tickets, approve merges) until nothing is runnable → `kengash loop release`, or the user stops → `release --force` |
 | `ui` | user | `harness ui open`; on exit 4, ask to install the UI extra, install it, open |
 | `memory` | model | triggered when the user states a lasting preference or goal, rejects an approach, or a design decision is made → `harness memory add` |
 

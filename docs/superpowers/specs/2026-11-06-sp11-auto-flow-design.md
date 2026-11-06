@@ -69,7 +69,7 @@ Today (0.3.0):
 7. **`status(project)`** is read-only. It returns the live leases that overlap the scope (all of them when no project is given) and the scope's resolved `loop_start`.
    - Another conductor's lease prints as `loop running: …`.
    - The caller's own lease prints as `this session holds the loop on <scope>`. That is never `loop running:`: one session cannot plan while it loops, so its own lease means a loop that has stopped, and the ticket skill goes on to claim, which refreshes the lease.
-8. **CLI** (each command takes `-p/--project` and `--json`):
+8. **CLI** (each command takes `--json`; `claim` and `status` take `-p/--project`, while `release` acts on the caller's own lease and takes none, *call*):
    - `kengash loop claim [--take-over]` prints `loop claimed: <scope>`.
    - `kengash loop release [--force]` prints `loop released: <scope>`, `no loop held here`, or `not released: …`.
    - `kengash loop status` prints one line per live lease, `loop running: <agent> pid <pid> on <scope>, seen <age> ago`, or `no loop running`, and then `loop_start: ask|auto`.
