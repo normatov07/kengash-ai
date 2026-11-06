@@ -60,6 +60,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 - 2026-11-06: `conductors` holds the conductor lookup that `waiting` had; `leases`; `loops`; `queue.compute`; `wait` holds the lease and reports `queued`; `ping` refreshes the lease; `skills.show` (SP11 M1).
 - 2026-11-06: `views.Overview` gains `loops`, `auto_default` and `auto` (SP11 M3).
+- 2026-11-06 (final review): a polling `wait` checks each round that its conductor still holds the lease and raises `LoopBusy` after a take-over, before reading.
 - 2026-10-30 (final review): `new_agent` refuses a built-in skill's name; a review step's default send-back to `implement` only when `implement` comes before it; `skills.install` clears 0.2.0's skills from `.claude/skills` and, globally, agy's own folder once the plugin installs, and notes Claude Code's trust dialog for a project install (`InstallResult.notes`, `TRUST_NOTE`); `old_installs` no longer flags Codex's `kengash-memory` copy; doctor's old-name hint adds `--global` for the home folder, and `doctor --fix` removes ignored built-in skill copies in a store commit.
 - 2026-10-30: a provider card not detected yet lists `adapters.known_models(name)` (SP10 M4).
 - 2026-10-30: `views.workflows_view` gains `routing` and `picker` (SP10 M4).

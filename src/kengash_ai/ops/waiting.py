@@ -107,6 +107,10 @@ def wait(project: str | None, *, timeout: float, poll_s: float = 1.0) -> WaitRes
             return WaitResult(events=gates)
     deadline = time.monotonic() + timeout
     while True:
+        if me.detected and leases.own_lease(paths, me) is None:
+            # taken over while polling: stop before reading the scope's events (SP11 §4.9)
+            leases.check(paths, project, me)
+            leases.claim(paths, project, me)  # nobody else holds it: take the scope back
         # checked before the read: a worker journals its last event before it exits, so once
         # nothing runs, every event that ended the work is already in the journal
         running = _running(paths, slugs)

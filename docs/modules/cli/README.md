@@ -30,6 +30,7 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 
 
 ## Changes
 
+- 2026-11-06 (final review): `wait` folds queued events into `queued: N tickets ready; run: kengash next` and points capped lines at `kengash status`.
 - 2026-11-06: `loop claim|release|status`; exit 6; `wait` prints `queued` lines; `skills show` (SP11 M1).
 - 2026-10-30: 0.3.0 drops the `harness` and `hrn` console scripts and `cli.legacy`, as 0.2.0 announced.
 - 2026-10-30 (final review): `skills install` prints `note: …` lines (Claude Code's trust dialog for a project install); an `--instructions-file` that cannot be read exits 1 naming it.

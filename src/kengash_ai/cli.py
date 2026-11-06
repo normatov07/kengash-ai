@@ -842,8 +842,15 @@ def wait(
     if as_json:
         _emit_json(result)
     elif result.events:
-        lines = [_wait_line(event) for event in result.events]
-        for line in _capped(lines, "kengash wait --json"):
+        # the cursor has moved past every event: capped lines point at `status`, which lists
+        # open gates, and queued tickets fold into one line (SP11 final review)
+        gates = [event for event in result.events if event.status != "queued"]
+        queued = len(result.events) - len(gates)
+        tail = [f"queued: {_plural(queued, 'ticket')} ready; run: kengash next"] if queued else []
+        lines = _capped(
+            [_wait_line(event) for event in gates], "kengash status", MAX_LINES - len(tail)
+        )
+        for line in [*lines, *tail]:
             typer.echo(line)
     elif result.idle:
         typer.echo("idle")

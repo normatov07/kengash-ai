@@ -2,8 +2,10 @@
 
 import json
 import os
+import time
 from datetime import timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from conftest import Engine, Events
@@ -12,6 +14,7 @@ from kengash_ai import journal
 from kengash_ai.model import (
     Event,
     JournalCursor,
+    LoopBusy,
     PlanMode,
     PlanStatus,
     SlotEntry,
@@ -20,7 +23,17 @@ from kengash_ai.model import (
     WorkerRecord,
     utc_now,
 )
-from kengash_ai.ops import conductors, lifecycle, merging, plans, records, steps, tickets, waiting
+from kengash_ai.ops import (
+    conductors,
+    leases,
+    lifecycle,
+    merging,
+    plans,
+    records,
+    steps,
+    tickets,
+    waiting,
+)
 from kengash_ai.ops.conductors import Conductor, process_name
 from kengash_ai.store import StorePaths, documents, runtime
 
@@ -255,3 +268,26 @@ def test_wait_reports_queued_for_ready_adds_and_unblocks_only(
         "queued",
         "Rotate keys",
     )
+
+
+def test_a_wait_taken_over_midway_stops_before_reading(
+    registered_repo: Path, store_paths: StorePaths, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    other = Conductor(os.getppid(), "codex", process_name(os.getppid()) or "", True)
+    monkeypatch.setattr(conductors, "conductor", lambda: ME)
+    record = WorkerRecord(id="a1b2c3d4", project="payments-api", pid=os.getpid(), job="plan-review")
+    runtime.save_worker(store_paths, record)  # keeps the scope running, so wait polls
+    waiting.wait(None, timeout=0.1, poll_s=0.05)  # claims the lease and sets the cursor
+    gate = {"type": "ticket.awaiting_merge", "project": "payments-api", "ticket": "7b55e0c1"}
+
+    def take_over(_seconds: float) -> None:
+        leases.claim(store_paths, None, other, take_over=True)
+        journal.append(store_paths, Event.model_validate({**gate, "status": "awaiting_merge"}))
+
+    monkeypatch.setattr(waiting, "time", SimpleNamespace(sleep=take_over, monotonic=time.monotonic))
+    with pytest.raises(LoopBusy):
+        waiting.wait(None, timeout=5, poll_s=0.05)
+    monkeypatch.setattr(waiting, "time", time)
+    monkeypatch.setattr(conductors, "conductor", lambda: other)
+    (found,) = waiting.wait(None, timeout=1, poll_s=0.05).events
+    assert (found.id, found.status) == ("7b55e0c1", "awaiting_merge")

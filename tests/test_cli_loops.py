@@ -8,9 +8,10 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from kengash_ai import journal
 from kengash_ai.cli import app
-from kengash_ai.model import Doc, Ticket
-from kengash_ai.ops import conductors
+from kengash_ai.model import Doc, Event, PlanMode, Ticket
+from kengash_ai.ops import conductors, plans, tickets
 from kengash_ai.ops.conductors import Conductor, process_name
 from kengash_ai.store import StorePaths, documents
 
@@ -122,3 +123,50 @@ def test_wait_refuses_under_another_conductors_lease(as_conductor: As) -> None:
     undetected = Conductor(ME.pid, "unknown", ME.command, False)
     as_conductor(undetected)
     assert runner.invoke(app, ["wait", "--timeout", "0.1"]).exit_code == 6
+
+
+def _gate(ticket_id: str) -> Event:
+    return Event.model_validate(
+        {
+            "type": "ticket.awaiting_merge",
+            "project": "payments-api",
+            "ticket": ticket_id,
+            "status": "awaiting_merge",
+            "loop": 1,
+            "loop_max": 3,
+            "reason": "every step passed",
+        }
+    )
+
+
+@pytest.mark.usefixtures("inside_registered_repo")
+def test_wait_folds_queued_lines_and_keeps_gates(
+    as_conductor: As, store_paths: StorePaths, inside_registered_repo: Path
+) -> None:
+    as_conductor(ME)
+    runner.invoke(app, ["wait", "--timeout", "0.1"])  # sets the cursor
+    plan_id = plans.new_plan(
+        "Six.", title="Six", mode=PlanMode.quick, project=None, cwd=inside_registered_repo, by="x"
+    ).id
+    batch = "".join(
+        f"- title: Slice {n}\n  importance: simple\n  touches: [s{n}]\n  scope: S.\n"
+        "  acceptance: [ok]\n"
+        for n in range(6)
+    )
+    tickets.add_tickets(plan_id, batch, project=None, by="x")
+    journal.append(store_paths, _gate("aaaaaaa1"))
+    lines = runner.invoke(app, ["wait", "--timeout", "0.1"]).stdout.splitlines()
+    assert lines == [
+        "aaaaaaa1 awaiting_merge loop 1/3: every step passed",
+        "queued: 6 tickets ready; run: kengash next",
+    ]
+
+
+@pytest.mark.usefixtures("inside_registered_repo")
+def test_capped_wait_points_at_status(as_conductor: As, store_paths: StorePaths) -> None:
+    as_conductor(ME)
+    runner.invoke(app, ["wait", "--timeout", "0.1"])
+    for n in range(6):
+        journal.append(store_paths, _gate(f"aaaaaaa{n}"))
+    lines = runner.invoke(app, ["wait", "--timeout", "0.1"]).stdout.splitlines()
+    assert len(lines) == 5 and lines[-1] == "+2 more; run: kengash status"
