@@ -24,11 +24,13 @@ def result(text: str, *, key: str, value: str) -> dict[str, Any] | None:
     """The last event whose `key` equals `value`; else the whole text as one JSON object
     (the CLIs' `json` format, which older recordings and the fake CLIs use); else None."""
     events = lines(text)
-    match = next((event for event in reversed(events) if event.get(key) == value), None)
+    match: dict[str, Any] | None = next(
+        (event for event in reversed(events) if event.get(key) == value), None
+    )
     if match is not None:
         return match
     try:
-        whole = json.loads(text)
+        whole: object = json.loads(text)
     except json.JSONDecodeError:
         return None
     return whole if isinstance(whole, dict) else None

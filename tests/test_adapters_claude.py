@@ -163,3 +163,42 @@ def test_detect_and_attach(fake_clis: FakeClis) -> None:
     fake_clis.hide("claude")
     assert Claude().detect().installed is False
     assert Claude().attach_command("s-1") == ["claude", "--resume", "s-1"]
+
+
+SID = "8c01d4e5-26b1-4128-9078-ace747701d97"
+
+
+def test_argv_streams(tmp_path: Path) -> None:
+    argv = Claude().command(_request(tmp_path, prompt="p"))
+    assert argv[argv.index("--output-format") + 1] == "stream-json" and "--verbose" in argv
+
+
+def test_stream_ok_parses_the_result(fake_clis: FakeClis, tmp_path: Path) -> None:
+    fake_clis.queue("claude", fixture="claude/stream-ok.jsonl")
+    result = Claude().run(_request(tmp_path, prompt="p", output="work", profile="edit_worktree"))
+    assert (result.error, result.session_id) == (None, SID)
+    assert (
+        isinstance(result.output, WorkOutput)
+        and result.output.summary == "Add add(a, b) to calc.py"
+    )
+
+
+def test_recover_session_reads_init(tmp_path: Path) -> None:
+    log = tmp_path / "t-1.out"
+    init = {"type": "system", "subtype": "init", "session_id": SID}
+    log.write_text(json.dumps(init) + "\n", encoding="utf-8")
+    assert Claude().recover_session(log) == SID
+
+
+def test_error_with_a_valid_output_is_a_success(fake_clis: FakeClis, tmp_path: Path) -> None:
+    work = {"summary": "s", "handoff": "h"}
+    late = {
+        "type": "result",
+        "is_error": True,
+        "session_id": SID,
+        "result": "API Error: Connection error. (ECONNRESET)",
+        "structured_output": work,
+    }
+    fake_clis.queue("claude", stdout=json.dumps(late) + "\n", exit=1)
+    result = Claude().run(_request(tmp_path, prompt="p", output="work", profile="edit_worktree"))
+    assert result.error is None and result.output is not None and "ECONNRESET" in result.warning
