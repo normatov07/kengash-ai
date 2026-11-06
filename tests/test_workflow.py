@@ -84,7 +84,9 @@ def test_effective_steps_skip_off_roles_and_add_approval() -> None:
 def test_before_runs_the_step_or_halts_at_a_gate() -> None:
     assert before(settings(), progress()).decision == Run("review_code", 1)
     capped = before(settings(), progress(tokens=250_000)).decision
-    assert capped == Halt(NEEDS_APPROVAL, "token cap: 250000 of 250000", "token_cap")
+    assert capped == Halt(
+        NEEDS_APPROVAL, "token cap: 250,000 of 250,000 used; approve with --tokens N", "token_cap"
+    )
     gate = before(settings(), progress("approve", hitl=True)).decision
     assert gate == Halt(NEEDS_APPROVAL, "waiting for the user's approval", "approve_step")
 

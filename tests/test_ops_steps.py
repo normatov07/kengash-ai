@@ -427,3 +427,57 @@ def test_commit_hook_turn_survives_a_network_error(engine: Engine, fake_clis: Fa
     steps.run_job("7b55e0c1", steps=2)
     assert fake_clis.calls("codex")[2]["argv"][-1] == prompts.NETWORK_PROMPT
     assert engine.ticket().meta.step == "review_code"
+
+
+def test_running_log_follows_each_attempt_and_clears(engine: Engine, fake_clis: FakeClis) -> None:
+    seen: list[str] = []
+    real = steps._next_log
+
+    def spy(job: object) -> Path:
+        path = real(job)  # type: ignore[arg-type]
+        running = runtime.load_ticket_state(engine.paths, engine.ticket_id).running
+        seen.append(running.log.name if running else "")
+        return path
+
+    steps._next_log = spy  # type: ignore[assignment]
+    try:
+        fake_clis.queue("claude", fixture="claude/work_resume.json")
+        fake_clis.queue("codex", stdout=_codex_cut(), exit=1)
+        fake_clis.queue("codex", stdout=_codex_cut(), exit=1)
+        fake_clis.queue("claude", fixture="claude/auth_error.json")
+        steps.run_job("7b55e0c1", steps=2)
+    finally:
+        steps._next_log = real  # type: ignore[assignment]
+    assert seen[-1] == f"{engine.ticket_id}-{len(seen)}.out"
+    assert runtime.load_ticket_state(engine.paths, engine.ticket_id).running is None
+
+
+def test_a_failure_on_an_editing_step_names_the_worktree(
+    engine: Engine, fake_clis: FakeClis
+) -> None:
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    failed = [
+        {"type": "thread.started", "thread_id": "th-9"},
+        {"type": "turn.failed", "error": {"message": "gave up"}},
+    ]
+    fake_clis.queue(
+        "codex",
+        stdout="".join(json.dumps(e) + "\n" for e in failed),
+        exit=1,
+        edits={"x.py": "x = 1\n"},
+    )
+    end = steps.run_job("7b55e0c1", steps=2)
+    assert end.reason.endswith(f"; work kept in {engine.worktree} (1 files changed)")
+
+
+def test_a_retry_over_changes_gets_the_note(engine: Engine, fake_clis: FakeClis) -> None:
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    failed = {"type": "turn.failed", "error": {"message": "gave up"}}
+    fake_clis.queue("codex", stdout=json.dumps(failed) + "\n", exit=1, edits={"x.py": "x = 1\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    doc = engine.ticket()
+    doc.meta.status = "in_process/under_implementation"  # what `kengash run` does on a retry
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl")
+    steps.run_job("7b55e0c1", steps=1)
+    assert prompts.RETRY_NOTE in fake_clis.calls("codex")[1]["argv"][-1]

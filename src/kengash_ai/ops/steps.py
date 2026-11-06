@@ -271,7 +271,12 @@ def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
             _forget_session(job, ready.step, pick.role, str(request.session_id))
         elif result.session_id:
             _keep_session(job, ready.step, pick, result.session_id)
-        return _fail(job, calls.failure(pick.provider, request, result), usage)
+        editing = ready.resolved.kind_of(ready.step) == "edit"
+        changed = len(gitops.changed_files(job.worktree)) if editing else 0
+        reason = calls.failure(
+            pick.provider, request, result, worktree=job.worktree, changed=changed
+        )
+        return _fail(job, reason, usage)
 
 
 def _prepare(job: _Job, ready: _Ready, pick: agents.Pick) -> StepRequest:
@@ -376,8 +381,11 @@ def _next_log(job: _Job) -> Path:
     with locked(_lock(job.paths, job.slug)):
         state = runtime.load_ticket_state(job.paths, job.ticket_id)
         state.calls += 1
+        log = job.paths.logs / f"{job.ticket_id}-{state.calls}.out"
+        if state.running is not None:  # progress reads the attempt that runs now (SP12)
+            state.running = state.running.model_copy(update={"log": log})
         runtime.save_ticket_state(job.paths, job.ticket_id, state)
-    return job.paths.logs / f"{job.ticket_id}-{state.calls}.out"
+    return log
 
 
 def _request(
@@ -414,6 +422,8 @@ def _request(
             instruction=told,
         )
         skill = prompts.role_skill(job.paths, job.slug, resolved.agents[pick.role].skill)
+    if resolved.kind_of(step) == "edit" and gitops.changed_files(job.worktree):
+        prompt = f"{prompts.RETRY_NOTE}\n\n{prompt}"  # a failed attempt left its changes
     options = ProviderOptions() if pick.provider == "shell" else resolved.provider(pick.provider)
     return StepRequest(
         role=pick.role,
@@ -561,6 +571,11 @@ def _halt(job: _Job, doc: Doc[Ticket], status: str, reason: str) -> JobEnd:
 def _fail(job: _Job, reason: str, usage: Usage | None = None) -> JobEnd:
     tokens = usage.tokens if usage is not None else 0
     status = fail_ticket(job.paths, job.slug, job.ticket_id, reason, tokens=tokens)
+    with locked(_lock(job.paths, job.slug)):  # the worker ends the call itself: nothing runs
+        state = runtime.load_ticket_state(job.paths, job.ticket_id)
+        if state.running is not None:
+            state.running = None
+            runtime.save_ticket_state(job.paths, job.ticket_id, state)
     return JobEnd(status, reason)
 
 

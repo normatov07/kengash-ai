@@ -105,13 +105,32 @@ def resume(request: StepRequest, result: StepResult, prompt: str, log: Path) -> 
     )
 
 
-def failure(provider: str, request: StepRequest, result: StepResult) -> str:
-    """One line naming why a call failed, and where its output went."""
-    if result.error == "timeout":
-        return f"timeout: killed after {request.timeout_s} s twice; log: {request.log}"
+FAILURE_MAX = 300
+
+
+def failure(
+    provider: str,
+    request: StepRequest,
+    result: StepResult,
+    *,
+    worktree: Path | None = None,
+    changed: int = 0,
+) -> str:
+    """One line of at most FAILURE_MAX characters naming why a call failed, where its
+    output went and, for an editing step, where its changes are kept (SP12 spec §3.6)."""
     if result.error == "auth":
         return f"sign in to {BINARIES.get(provider, provider)} interactively"
-    return f"{result.error}: {result.detail}; log: {request.log}"
+    kept = f"; work kept in {worktree} ({changed} files changed)" if worktree and changed else ""
+    if result.error == "timeout":
+        return f"timeout: killed after {request.timeout_s} s twice; log: {request.log}{kept}"
+    lines = result.detail.strip().splitlines()
+    detail = lines[0].strip() if lines else ""
+    tail_part = f"; log: {request.log}{kept}"
+    head = f"{result.error}: "
+    room = FAILURE_MAX - len(head) - len(tail_part)
+    if len(detail) > room:
+        detail = detail[: max(room - 1, 0)] + "…"
+    return f"{head}{detail}{tail_part}"
 
 
 def plus(a: Usage, b: Usage) -> Usage:

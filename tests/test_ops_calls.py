@@ -144,3 +144,18 @@ def test_a_second_network_error_is_returned(
     provider = scripted(cut, cut)
     called = calls.call(store_paths, "claude", request_, logs(tmp_path))
     assert called.result.error == "network" and len(provider.requests) == 2
+
+
+def test_failure_line_is_short_and_names_the_worktree(
+    request_: StepRequest, tmp_path: Path
+) -> None:
+    detail = '{"handoff": "' + "x" * 2000 + '"}\nsecond line'
+    result = StepResult(error="crash", detail=detail)
+    line = calls.failure("antigravity", request_, result, worktree=tmp_path / "kg-1", changed=3)
+    assert len(line) <= 300 and line.startswith('crash: {"handoff": "xxx')
+    assert line.endswith(
+        f"; log: {request_.log}; work kept in {tmp_path / 'kg-1'} (3 files changed)"
+    )
+    assert "second line" not in line
+    plain = calls.failure("codex", request_, StepResult(error="crash", detail="boom"))
+    assert plain == f"crash: boom; log: {request_.log}"

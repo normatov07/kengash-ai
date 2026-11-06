@@ -168,6 +168,11 @@ NETWORK_PROMPT = (
 )
 
 
+RETRY_NOTE = (
+    "The worktree already holds changes from a failed attempt; review them and finish the step."
+)
+
+
 def repair_prompt(problem: str) -> str:
     return (
         f"Your last reply failed: {problem}\n"

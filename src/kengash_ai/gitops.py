@@ -148,6 +148,22 @@ def _current(key: str) -> str:
     return TRAILER + key.removeprefix(LEGACY_TRAILER) if key.startswith(LEGACY_TRAILER) else key
 
 
+def changed_files(cwd: Path) -> list[str]:
+    """Uncommitted paths in `cwd`, tracked or not, sorted (SP12: where failed work is kept)."""
+    entries = _git(cwd, "status", "--porcelain=v1", "-z", "--untracked-files=all").split("\0")
+    found: list[str] = []
+    skip = False
+    for entry in entries:
+        if skip:  # a rename's or copy's source path
+            skip = False
+            continue
+        if len(entry) < 4:
+            continue
+        found.append(entry[3:])
+        skip = entry[0] in "RC"
+    return sorted(found)
+
+
 def ticket_commits(repo: Path, ticket_uuid: str, ref: str) -> list[Commit]:
     """Commits on `ref` that carry `Kengash-Ticket: <uuid>` (or 0.1.0's `Harness-Ticket`),
     oldest first; their trailers come back under the `Kengash-` names."""

@@ -24,6 +24,7 @@ Decide what a ticket does next (SP3 spec §6): which steps its workflow runs, wh
 
 ## Changes
 
+- 2026-11-06: the token-cap reason reads `token cap: <used:,> of <max:,> used; approve with --tokens N` (SP12 M1).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-26: steps are looked up through `Settings.role_of`/`kind_of`; custom review steps keep stall streaks (SP6).
 - 2026-10-22: effective steps, caps, stalls, approvals, fingerprints (SP3 M1).
