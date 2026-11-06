@@ -32,6 +32,12 @@ _AUTH = re.compile(
 _RATE = re.compile(
     r"(?i)usage limit|rate limit|limit reached|too many requests|quota|resource_exhausted|\b429\b"
 )
+# transient transport failures (SP12 spec §3.3): resumed once, then the fallback
+_NETWORK = re.compile(
+    r"(?i)connection reset|connection refused|broken pipe|econnreset|\bEOF\b|tls handshake"
+    r"|no such host|temporary failure in name resolution|network is unreachable|stream error"
+    r"|\b50[0234]\b|unavailable|\binternal\b|overloaded"
+)
 _VERSION = re.compile(r"\d+\.\d+(?:\.\d+)?")
 
 
@@ -50,11 +56,13 @@ def positional(text: str) -> str:
 
 
 def classify(text: str) -> ErrorKind:
-    """An error message's kind: `auth`, `rate_limit`, else `crash`."""
+    """An error message's kind: `auth`, `rate_limit`, `network`, else `crash`."""
     if _AUTH.search(text):
         return "auth"
     if _RATE.search(text):
         return "rate_limit"
+    if _NETWORK.search(text):
+        return "network"
     return "crash"
 
 

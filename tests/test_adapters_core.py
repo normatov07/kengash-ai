@@ -182,3 +182,31 @@ def test_an_interrupted_wait_ends_the_cli_group(
         signal.alarm(0)
         signal.signal(signal.SIGALRM, previous)
     assert _gone(int(pid_file.read_text()))
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        'request failed: Post "https://x/v1": read tcp 10.0.0.1:47416->172.217.115.4:443: '
+        "read: connection reset by peer",
+        "dial tcp: lookup api.example.com: no such host",
+        "stream error: stream ID 7; INTERNAL_ERROR",
+        "upstream returned 503 Service Unavailable",
+        "rpc error: code = UNAVAILABLE desc = overloaded",
+        "write: broken pipe",
+    ],
+)
+def test_classify_network(message: str) -> None:
+    assert classify(message) == "network"
+
+
+def test_auth_and_rate_limit_win_over_network() -> None:
+    assert classify("429 Too Many Requests; connection reset by peer") == "rate_limit"
+    assert classify("401 unauthorized after EOF") == "auth"
+    assert classify("the tests failed") == "crash"
+
+
+def test_step_results_carry_a_warning() -> None:
+    from kengash_ai.model import StepResult
+
+    assert StepResult(warning="connection reset").warning == "connection reset"

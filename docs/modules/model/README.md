@@ -28,6 +28,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Changes
 
+- 2026-11-06: `ErrorKind` gains `network`; `StepResult.warning` keeps an error a CLI reported after a valid output (SP12 M1).
 - 2026-11-06: `LoopLease`, `LoopBusy`; `Settings.loop_start: ask | auto` (SP11 M1).
 - 2026-10-30: `ProviderStatus.models` (SP10 M3).
 - 2026-10-30: fixed built-in skills (`BUILTIN_SKILLS`), `routing` and `workflow_for`, workflow name and duplicate-step rules, send-back-only edges, one-word models (SP10 M2).

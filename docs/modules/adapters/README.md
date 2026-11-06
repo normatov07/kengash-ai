@@ -29,6 +29,7 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 
 ## Changes
 
+- 2026-11-06: `classify` knows `network` (connection resets and refusals, broken pipes, EOF, TLS and DNS failures, stream errors, HTTP 500/502/503/504, `UNAVAILABLE`, `INTERNAL`, overloaded), after `auth` and `rate_limit` (SP12 M1).
 - 2026-10-30: `known_models(name)`: Claude Code's aliases without running the CLI (SP10 M4).
 - 2026-10-30: `ProviderStatus.models` from `detect()` once signed in: claude's `MODELS` aliases (fable, opus, sonnet, haiku), agy's from the `agy models` sign-in check (`antigravity.parse_models`), none for codex (SP10 M3).
 - 2026-10-26: workers get `KENGASH_AGENT` (SP8).
