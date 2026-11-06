@@ -245,7 +245,8 @@ The whole file is YAML; `#` lines are YAML comments that read as Markdown headin
 version: 1
 
 # project
-project.test_cmd: ""          # e.g. "uv run pytest -q"; used by run_tests steps and reviewers
+project.test_cmd: ""          # e.g. "uv run pytest -q"; run_tests runs it, then lint_cmd (SP12); reviewers see both;
+                              # kengash init detects both for Flutter, Dart, uv, Node, Go and Rust projects
 project.lint_cmd: ""
 
 # loops
@@ -267,9 +268,9 @@ plan.reviewer: different-provider   # or provider[/model]
 sessions.reuse: true          # resume each ticket×role session across loops
 sessions.max: 8
 sessions.per_provider: {claude: 3, codex: 3, antigravity: 2, gemini: 0}
-tokens.per_ticket_max: 250000
+tokens.per_ticket_max: 1000000   # SP12: was 250000; doctor --fix updates the old value
 step_timeout_min: 30          # a step running longer is killed and retried once
-fallback_on_rate_limit: true
+fallback_on_error: true      # SP12: rate limits and network errors use the role's fallback (old key fallback_on_rate_limit is read)
 
 # token discipline
 skill.max_lines: 80
@@ -294,7 +295,7 @@ agents:
   code-reviewer:     {on: true,  cli: claude/opus,   skill: review-code}
   security-reviewer: {on: true,  cli: claude/sonnet, skill: review-security, blocking: true}
   test-runner:       {on: false, cli: shell,         skill: run-tests}
-  doc-writer:        {on: false, cli: antigravity,   skill: sync-docs}
+  doc-writer:        {on: false, cli: antigravity,   skill: sync-docs, fallback: [claude/sonnet]}
 
 # workflows: steps run in order; on_fail routes a failing verdict back and adds a loop
 workflows:
@@ -346,12 +347,14 @@ Status and action commands print at most 5 lines; `context` and `show` print the
 | `harness ticket add\|show\|list\|find\|set\|move\|changes\|attach` | Ticket lifecycle. `add --plan <id>` validates the schema, acyclic `depends_on` and caps, and is refused unless the plan is approved. `changes` lists per-file diffs with the model and loop that wrote them. `attach` prints the command that opens a role's session. |
 | `harness next [project]` | Runnable tickets |
 | `harness run <id>… [--steps N]` | Claim tickets (→ `in_process`), start detached workers, return at once |
-| `harness wait [project] [--timeout 540]` | Block until a ticket or plan needs the conductor: `done`, `needs_approval`, `stalled`, `failed`, `awaiting_merge`, plan review finished, or `queued` (a ticket became ready: added, or unblocked by a merge) |
+| `harness wait [project] [--timeout 300]` | Block until a ticket or plan needs the conductor: `done`, `needs_approval`, `stalled`, `failed`, `awaiting_merge`, plan review finished, or `queued` (a ticket became ready: added, or unblocked by a merge); on timeout (exit 3) one progress line per running ticket (SP12) |
+| `kengash ps [project] [--line]` | One progress line per running ticket: step, CLI and model, elapsed, last activity, files changed, last action (SP12) |
+| `kengash logs ID [-f]` | The ticket's workers' actions as readable lines, parsed from their stream logs; `-f` follows until the ticket stops (SP12) |
 | `kengash loop claim [project] [--take-over]\|release [--force]\|status [project]` | The loop lease (SP11 spec §4): one live loop per project |
 | `harness approve\|park\|stop\|pause\|resume\|merge` | Gates and controls; `pause` and `resume` act on one project or on everything |
 | `harness memory add\|compact\|show` | Memory writes, attributed in the journal |
 | `harness status [project]` | Board summary; how a fresh conductor picks up where another stopped |
-| `harness init\|doctor\|link\|adopt` | Links and repair (§4.2) |
+| `harness init\|doctor\|link\|adopt` | Links and repair (§4.2); `init` detects test and lint commands and adds a `run_tests` step; `doctor` names projects without a test command and settings still at an old default, and `--fix` updates them (SP12) |
 | `harness skills install\|lint\|eval\|show` | Packaging (§8); `show <name>` prints a skill rendered for the calling agent, how one skill hands over to the next (SP11) |
 | `harness ui [open\|stop]` | Local UI (§9) |
 
@@ -420,13 +423,13 @@ class Provider(Protocol):
 
 | Provider | New session | Resume | Notes |
 |---|---|---|---|
-| claude | `claude -p … --output-format json --json-schema … --session-id <uuid>` | `--resume <id>` | permission profile → `--permission-mode` plus `--allowedTools`; workers skip the user's settings, plugins and MCP (`--setting-sources project,local --strict-mcp-config`); never `--bare` |
+| claude | `claude -p … --output-format stream-json --verbose --json-schema … --session-id <uuid>` (SP12; the last `result` event) | `--resume <id>` | permission profile → `--permission-mode` plus `--allowedTools`; workers skip the user's settings, plugins and MCP (`--setting-sources project,local --strict-mcp-config`); never `--bare` |
 | codex | `codex exec --json --output-schema <file> -s <sandbox> …` | `codex exec resume --json --output-schema <file> -c sandbox_mode=… <id> "…"` | never `--ephemeral`; workers run with `--ignore-user-config`; full mapping in the SP3 spec §8 |
-| antigravity | `agy -p … --output-format json --json-schema … --mode <mode>` | `--conversation <id>` | empty stdout with exit 0 is an `empty` error: recover from the transcript, otherwise fail |
+| antigravity | `agy -p … --output-format stream-json --json-schema … --mode <mode>` (SP12; `init` carries the session, the last `result` event the output) | `--conversation <id>` | empty stdout with exit 0 is an `empty` error: recover from the transcript, otherwise fail |
 | gemini | — | — | removed: Antigravity replaces it (SP7 spec decision 15) |
-| shell | `project.test_cmd` | — | `run_tests` steps; exit 0 = pass |
+| shell | `project.test_cmd`, then `project.lint_cmd` | — | `run_tests` steps; both exit 0 = pass (SP12) |
 
-Errors: `auth` stops the ticket with "sign in to <cli> interactively"; `rate_limit` switches to the role's `fallback` when `fallback_on_rate_limit` is on, otherwise waits as `waiting_quota` until `retry_after`; `timeout` retries once; `schema` retries once with a "return valid JSON" repair prompt; anything else → `failed` with the log path.
+Errors: `auth` stops the ticket with "sign in to <cli> interactively"; `rate_limit` switches to the role's `fallback` when `fallback_on_error` is on, otherwise waits as `waiting_quota` until `retry_after`; `network` (SP12: connection resets, 5xx, DNS) resumes the session once, then switches to the fallback when `fallback_on_error` is on, otherwise fails; `timeout` retries once; `schema` retries once with a "return valid JSON" repair prompt; anything else → `failed`. A failure is one line naming the log and, for an editing step, the worktree and its changed files. A CLI that reports an error after returning a structured output that passes the schema has succeeded; its error is kept as a warning (SP12).
 
 ## 8. Skills
 
