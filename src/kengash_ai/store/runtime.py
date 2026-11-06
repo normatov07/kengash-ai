@@ -136,16 +136,26 @@ def load_pings(paths: StorePaths) -> list[ConductorPing]:
 
 
 def load_lease(paths: StorePaths, pid: int) -> LoopLease | None:
-    path = paths.loops / f"{pid}.json"
-    return _load(path, LoopLease) if path.exists() else None
+    """The lease on `pid`; None when there is none or its file cannot be read."""
+    return _lease(paths.loops / f"{pid}.json")
 
 
 def load_leases(paths: StorePaths) -> list[LoopLease]:
-    """Every loop lease on record, by pid."""
+    """Every readable loop lease, by pid. A damaged or newer-format file is skipped: a lease
+    nobody can read holds no loop, and it must not stop every loop command (SP11)."""
     if not paths.loops.is_dir():
         return []
-    leases = [_load(path, LoopLease) for path in paths.loops.glob("*.json")]
-    return sorted(leases, key=lambda lease: lease.pid)
+    found = [_lease(path) for path in paths.loops.glob("*.json")]
+    return sorted((lease for lease in found if lease is not None), key=lambda lease: lease.pid)
+
+
+def _lease(path: Path) -> LoopLease | None:
+    if not path.exists():
+        return None
+    try:
+        return _load(path, LoopLease)
+    except (KengashError, OSError):
+        return None
 
 
 def save_lease(paths: StorePaths, lease: LoopLease) -> None:

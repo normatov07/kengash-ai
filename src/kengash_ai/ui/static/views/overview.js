@@ -2,7 +2,7 @@
 // and the loop journal, newest first; the running loop and the Auto mode switch (SP11 §5.3).
 import { get } from "../api.js";
 import { toggle } from "../controls.js";
-import { STEPS, clock, elapsed, loopSummary, stepColor, tokens } from "../format.js";
+import { STEPS, clock, elapsed, loopSummary, loopsIn, stepColor, tokens } from "../format.js";
 import { html } from "../html.js";
 import { icon } from "../icons.js";
 import { armed } from "../scope.js";
@@ -20,7 +20,7 @@ const inScope = (app, item) => !app.project || item.project === app.project;
 function subtitle(data, app) {
   const projects = app.project ? 1 : data.projects.length;
   const live = data.sessions.filter((s) => inScope(app, s)).length;
-  return `${projects} ${projects === 1 ? "project" : "projects"} · ${live} live CLI ${live === 1 ? "session" : "sessions"} · ${loopSummary(data.loops)}${data.paused ? " · all loops paused" : ""}`;
+  return `${projects} ${projects === 1 ? "project" : "projects"} · ${live} live CLI ${live === 1 ? "session" : "sessions"} · ${loopSummary(loopsIn(data.loops, app.project))}${data.paused ? " · all loops paused" : ""}`;
 }
 
 function tiles(data, app) {
@@ -198,12 +198,19 @@ export function foot(data) {
     : html`<div class="faint">no store yet</div>`}</div></div>`;
 }
 
+// The `loop_start` change the Overview switch saves: a project whose new value matches the
+// defaults drops its own key (null), so it keeps following the defaults.
+export function autoChange(project, auto, autoDefault) {
+  return project && auto === autoDefault ? null : auto ? "auto" : "ask";
+}
+
 export function bind(root, app) {
   root.addEventListener("change", async (event) => {
     if (event.target.id !== "ov-auto") return;
     const auto = event.target.checked;
     const scope = encodeURIComponent(app.project);
-    const done = await app.post(`/api/settings?project=${scope}`, { changes: { loop_start: auto ? "auto" : "ask" } });
+    const loopStart = autoChange(app.project, auto, app.overview?.auto_default ?? false);
+    const done = await app.post(`/api/settings?project=${scope}`, { changes: { loop_start: loopStart } });
     if (done) app.toast(auto ? "Auto mode on: the loop starts once tickets are added." : "Auto mode off: your agent asks before it starts the loop.");
     else event.target.checked = !auto;
   });

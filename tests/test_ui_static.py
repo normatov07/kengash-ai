@@ -382,3 +382,47 @@ def test_overview_shows_the_loop_and_switches_auto_mode() -> None:
     assert "loopSummary(" in page and "toggle(" in page and "loop_start" in page
     shell = (STATIC / "app.js").read_text()
     assert "30_000" in shell and '"overview"' in shell
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_the_overview_scopes_loops_and_auto_mode() -> None:
+    fmt = (STATIC / "format.js").as_uri()
+    overview = (STATIC / "views" / "overview.js").as_uri()
+    found = json.loads(
+        _node(
+            f"import {{ loopsIn }} from '{fmt}'; import {{ autoChange }} from '{overview}';"
+            "const loops = [{agent: 'claude', project: null}, {agent: 'codex', project: 'a'},"
+            " {agent: 'agy', project: 'b'}];"
+            "console.log(JSON.stringify({all: loopsIn(loops, '').length,"
+            " a: loopsIn(loops, 'a').map((l) => l.agent),"
+            " changes: [autoChange('', true, false), autoChange('a', true, false),"
+            " autoChange('a', false, false), autoChange('a', true, true)]}));"
+        )
+    )
+    assert found == {
+        "all": 3,
+        "a": ["claude", "codex"],
+        "changes": ["auto", "auto", None, None],
+    }
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_the_overview_switch_reverts_on_a_failed_save() -> None:
+    overview = (STATIC / "views" / "overview.js").as_uri()
+    out = _node(
+        f"import {{ bind }} from '{overview}';"
+        "const on = {}; const root = {addEventListener(type, f) { on[type] = f; }};"
+        "const toasts = []; const bodies = [];"
+        "const app = (result) => ({project: 'a',"
+        " post: async (path, body) => { bodies.push([path, body]); return result; },"
+        " toast: (m) => toasts.push(m)});"
+        "const failed = {id: 'ov-auto', checked: true};"
+        "bind(root, {...app(null), overview: null}); await on.change({target: failed});"
+        "const saved = {id: 'ov-auto', checked: true};"
+        "bind(root, app({})); await on.change({target: saved});"
+        "console.log(JSON.stringify({failed: failed.checked, saved: saved.checked,"
+        " toasts: toasts.length, bodies}));"
+    )
+    found = json.loads(out)
+    assert (found["failed"], found["saved"], found["toasts"]) == (False, True, 1)
+    assert found["bodies"][0] == ["/api/settings?project=a", {"changes": {"loop_start": "auto"}}]

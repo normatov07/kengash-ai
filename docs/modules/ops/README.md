@@ -58,6 +58,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-06 (deferred review minors): `LoopBusy` names `kengash loop claim --take-over` for a loop that has ended; a reused own pid journals its old lease `gone`; a merge-conflict re-queue (`ticket.recirculated` to `in_queue/ready`) is `queued`.
 - 2026-11-06: `conductors` holds the conductor lookup that `waiting` had; `leases`; `loops`; `queue.compute`; `wait` holds the lease and reports `queued`; `ping` refreshes the lease; `skills.show` (SP11 M1).
 - 2026-11-06: `views.Overview` gains `loops`, `auto_default` and `auto` (SP11 M3).
 - 2026-11-06 (final review): a polling `wait` checks each round that its conductor still holds the lease and raises `LoopBusy` after a take-over, before reading; `wait` is not `idle` while ready tickets in scope wait on a slot a live worker holds, and returns `idle` once one frees; `waiting.slot_wait(paths, slugs)` counts those tickets and `loops.release` refuses on it (`not released: N ready, waiting for a slot; run: kengash wait`).

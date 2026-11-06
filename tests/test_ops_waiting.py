@@ -329,3 +329,21 @@ def test_wait_is_idle_when_no_slot_is_held(
     documents.save_ticket(store_paths.project("payments-api"), make_ticket())
     _busy_slots(store_paths, 0)
     assert waiting.wait(None, timeout=0.2, poll_s=0.05).idle
+
+
+def test_a_merge_conflict_requeue_is_queued_but_a_send_back_is_not(
+    registered_repo: Path,
+    store_paths: StorePaths,
+    make_ticket: Callable[..., Doc[Ticket]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(conductors, "conductor", lambda: ME)
+    documents.save_ticket(store_paths.project("payments-api"), make_ticket(title="Rotate keys"))
+    assert waiting.wait(None, timeout=0.1).idle  # sets the cursor
+    base = {"type": "ticket.recirculated", "project": "payments-api", "ticket": "7b55e0c1"}
+    sent_back = {**base, "from": "review_code", "to": "implement", "loop": 2, "loop_max": 4}
+    journal.append(store_paths, Event.model_validate(sent_back))
+    conflict = {**base, "from": "merge", "to": "implement", "status": "in_queue/ready"}
+    journal.append(store_paths, Event.model_validate({**conflict, "loop": 2, "loop_max": 4}))
+    (found,) = waiting.wait(None, timeout=0.1).events
+    assert (found.id, found.status, found.detail) == ("7b55e0c1", "queued", "Rotate keys")

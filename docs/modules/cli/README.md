@@ -24,7 +24,7 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 
 ## Invariants
 
 - Status and action commands print at most 5 lines by default; `--json` gives full output (spec §6).
-- `loop claim [-p] [--take-over]` (`loop claimed: <scope>`; exit 6 `loop running: <agent> pid <pid> on <scope>, seen <age>`), `loop release [--force]` (`loop released: <scope>`, `no loop held here`, exit 1 `not released: N runnable; run: kengash next` or `not released: N ready, waiting for a slot; run: kengash wait`), `loop status [-p]` (a line per live lease, `loop running: …` or `this session holds the loop on <scope>`, else `no loop running`; then `loop_start: ask|auto`), each with `--json` (SP11 spec §4.8).
+- `loop claim [-p] [--take-over]` (`loop claimed: <scope>`; exit 6 `loop running: <agent> pid <pid> on <scope>, seen <age>; if that loop has ended: kengash loop claim --take-over`), `loop release [--force]` (`loop released: <scope>`, `no loop held here`, exit 1 `not released: N runnable; run: kengash next` or `not released: N ready, waiting for a slot; run: kengash wait`), `loop status [-p]` (a line per live lease, `loop running: …` or `this session holds the loop on <scope>`, else `no loop running`; then `loop_start: ask|auto`), each with `--json` (SP11 spec §4.8).
 - Exit codes: 0 ok · 1 error · 2 usage · 3 wait timeout · 4 setup needed · 5 user decision needed · 6 another loop covers the scope.
 - `cli` imports only `ops` and `model` (spec §3.1).
 

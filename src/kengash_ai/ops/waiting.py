@@ -158,8 +158,8 @@ def _wanted(event: Event, slugs: list[str]) -> bool:
         return False
     if event.type in WAIT_TYPES:
         return True
-    if event.type == "ticket.created":
-        return bool(_extra(event, "status") == READY)
+    if event.type in ("ticket.created", "ticket.recirculated"):  # added, or re-queued by a
+        return bool(_extra(event, "status") == READY)  # merge conflict
     to = str(_extra(event, "to"))
     return event.type == "ticket.moved" and (to.startswith("done/") or to == READY)
 

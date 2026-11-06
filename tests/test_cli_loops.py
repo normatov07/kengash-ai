@@ -37,7 +37,10 @@ def test_claim_prints_and_a_second_conductor_exits_6(as_conductor: As) -> None:
     as_conductor(ME)
     second = runner.invoke(app, ["loop", "claim", "-p", "payments-api"])
     assert second.exit_code == 6
-    assert second.stderr == f"loop running: codex pid {OTHER.pid} on all projects, seen just now\n"
+    assert second.stderr == (
+        f"loop running: codex pid {OTHER.pid} on all projects, seen just now"
+        "; if that loop has ended: kengash loop claim --take-over\n"
+    )
 
 
 @pytest.mark.usefixtures("inside_registered_repo")

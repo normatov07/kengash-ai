@@ -65,7 +65,7 @@ def check(paths: StorePaths, project: str | None, me: Conductor) -> None:
     """Raise LoopBusy when another conductor's live lease overlaps `project`."""
     others = _others(paths, project, me, utc_now())
     if others:
-        raise LoopBusy(f"loop running: {describe(others[0], utc_now())}")
+        raise _busy(others[0])
 
 
 def claim(
@@ -82,10 +82,13 @@ def claim(
                 ended(paths, lease, "gone")
         others = _others(paths, project, me, now)
         if others and not take_over:
-            raise LoopBusy(f"loop running: {describe(others[0], now)}")
+            raise _busy(others[0])
         for lease in others:
             ended(paths, lease, "taken_over")
         own = _own(paths, me)
+        stale = runtime.load_lease(paths, me.pid)
+        if own is None and stale is not None:
+            ended(paths, stale, "gone")  # our pid once belonged to another program
         same = own is not None and own.project == project
         started = own.started if own is not None and same else now
         lease = LoopLease(
@@ -120,6 +123,14 @@ def ended(paths: StorePaths, lease: LoopLease, reason: str) -> None:
     """Drop `lease` and journal `loop.ended` with `reason`; the caller holds the lock."""
     runtime.drop_lease(paths, lease.pid)
     _ended(paths, lease, reason)
+
+
+def _busy(lease: LoopLease) -> LoopBusy:
+    """The refusal naming the conductor that holds the scope, and how to free a dead one."""
+    return LoopBusy(
+        f"loop running: {describe(lease, utc_now())}; "
+        "if that loop has ended: kengash loop claim --take-over"
+    )
 
 
 def _own(paths: StorePaths, me: Conductor) -> LoopLease | None:

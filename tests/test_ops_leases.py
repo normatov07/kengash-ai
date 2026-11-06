@@ -75,7 +75,10 @@ def test_another_live_lease_on_the_same_project_is_busy(store_paths: StorePaths)
     with pytest.raises(LoopBusy) as caught:
         leases.claim(store_paths, "app", ME)
     assert caught.value.exit_code == 6
-    assert str(caught.value) == f"loop running: codex pid {OTHER.pid} on app, seen 3 min ago"
+    assert str(caught.value) == (
+        f"loop running: codex pid {OTHER.pid} on app, seen 3 min ago"
+        "; if that loop has ended: kengash loop claim --take-over"
+    )
     assert runtime.load_lease(store_paths, ME.pid) is None
 
 
@@ -148,3 +151,25 @@ def test_describe_says_just_now_then_minutes() -> None:
     assert leases.describe(lease, now) == "claude pid 4211 on all projects, seen just now"
     lease.seen = now - timedelta(seconds=150)
     assert leases.describe(lease, now) == "claude pid 4211 on all projects, seen 2 min ago"
+
+
+def test_a_reused_own_pid_journals_the_old_lease_gone(
+    store_paths: StorePaths, journal_events: Events
+) -> None:
+    runtime.save_lease(
+        store_paths, LoopLease(pid=ME.pid, agent="agy", command="not-this-program", project="app")
+    )
+    assert leases.claim(store_paths, "app", ME) is True
+    assert _loop_events(journal_events) == [
+        ("loop.ended", "app", "gone"),
+        ("loop.started", "app", None),
+    ]
+
+
+def test_a_damaged_lease_file_is_not_live_and_blocks_nothing(store_paths: StorePaths) -> None:
+    _hold(store_paths, OTHER, "billing")
+    store_paths.loops.mkdir(parents=True, exist_ok=True)
+    (store_paths.loops / "999.json").write_text("{not json", encoding="utf-8")
+    assert [lease.pid for lease in runtime.load_leases(store_paths)] == [OTHER.pid]
+    assert runtime.load_lease(store_paths, 999) is None
+    assert leases.claim(store_paths, "app", ME) is True

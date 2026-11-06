@@ -53,6 +53,11 @@ export function shortTime(seconds) {
   return s >= 3600 ? `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m` : `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
+// The loops that cover `project` ("" for all projects): those over every project, and its own.
+export function loopsIn(loops, project) {
+  return project ? loops.filter((loop) => loop.project === null || loop.project === project) : loops;
+}
+
 // The Overview's loop line (SP11): which conductors hold a loop lease right now.
 export function loopSummary(loops) {
   if (!loops.length) return "no loop running: run /kengash:loop in your agent";
