@@ -47,6 +47,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - `queue.next_tickets(project=None)` → `Queue(runnable, held_back, blocked, running, gates, paused)`: `runnable` holds `NextTicket(id, project, importance, step, provider, title)` in start order (`provider` is `shell` or `user` when the step needs no session); `held_back` maps each waiting ready ticket to its reason. `queue.compute(paths, project)` gives the same without the worker check and the ping, so it runs under the lease lock (SP11). `loops` (SP11): `claim(project, take_over=)` → `Claimed(scope, new)`, `release(force=)` → `Released(scope)` (None when no lease; without `force` a `UserError` while `compute` lists runnable tickets), `status(project)` → `LoopStatus(leases, loop_start)`, `views(paths, me)` → `LeaseView(pid, agent, project, scope, started, seen, mine, line)`. `queue.progress_of(settings, ticket)` → `workflow.Progress`.
 - Errors are `model` errors and carry their exit code.
 
+- `activity` (SP12 spec §4.4): `Activity(ts, kind, text)` with kind step, read, edit, run, reply, error or status; `parse(text, stamps, root=)` reads a claude, agy or codex stream (tools mapped to read/edit/run, the structured output's summary as `reply: …`, an error keeping its end); `ticket(paths, slug, id, root=)` merges the ticket's journal steps and statuses with every `<id>-<n>.out` log (its last 64 KiB, timed by `<log>.ts`, else the file's mtime) in time order; `follow(…, poll_s=)` yields them, then each new one, until the ticket stops running, ending with its status; `running_status(status)`.
 ## Invariants
 
 - Registry changes happen under `runtime/locks/registry.lock`; project, plan and ticket changes under `runtime/locks/<slug>.lock`, then journal events, then a store commit.
@@ -58,6 +59,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-06: `activity` (SP12 M2).
 - 2026-11-06: `calls.failure(…, worktree=, changed=)`: one line of at most 300 characters (the detail's first line, shortened), the log, and for an editing step `work kept in <worktree> (N files changed)`; `steps` points `state.running.log` at each attempt and clears it when the worker fails the step; an editing step over uncommitted changes gets `prompts.RETRY_NOTE` (SP12 M1).
 - 2026-11-06: `steps._call`: a `network` error gets one resumed turn (`prompts.NETWORK_PROMPT`), then the fallback under `fallback_on_error`, then fails; the commit-hook repair turn resumes a network error once too; a failed call stores the session it opened (`_keep_session`) so `kengash run` resumes it (SP12 M1).
 - 2026-11-06: `calls.call` resumes a `network` error once with `prompts.NETWORK_PROMPT` (`calls.resume`); steps fall back under `fallback_on_error`; the Agents view's `fallback_on_error` (SP12 M1).
@@ -77,4 +79,3 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - 2026-10-30: `doctor` warns `old kengash skill names installed in <folder>; run: kengash skills install --agent <agents>` for every registered repo and the home folder; eval turns spell commands with `{kg}`; claude conductors get `--plugin-dir` (SP10 M1).
 - 2026-10-30: `skills.install` installs the `kengash` plugin (Claude Code skills-dir folder, `agy plugin install`) or `kengash-<name>` copies (Codex, agy fallback), removing 0.2.0's `to-…`, `open-ui` and `kengash-memory` skills of ours; `Installed.note`; eval runs install agy copies, never the plugin (SP10 M1).
 - 2026-10-27: `wait` checks running work before reading the journal and counts live workers, so it no longer answers `idle` over a gate a worker is journaling (the flaky lifecycle test; SP9).
-- 2026-10-27: `workspace.project_slug`: `--project` takes a project name or folder (SP9).
