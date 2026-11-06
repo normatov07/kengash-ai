@@ -29,6 +29,7 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 
 ## Changes
 
+- 2026-11-06: `run_process` pumps stdout through a thread into the log line by line, stamping each line in `<log>.ts` (ISO UTC), so a running worker can be watched (SP12 M2).
 - 2026-11-06: claude runs `--output-format stream-json --verbose`; parse reads the last `result` event (or a single object), the session comes from `system/init` when the result lacks one, `recover_session` reads it from the log, and `is_error` with a schema-valid output is a success with `warning` (SP12 M1).
 - 2026-11-06: `stream` (`lines`, `result`, `first`) reads stream-json; agy runs `--output-format stream-json`: its session comes from `init`, `recover_session` reads it from the log, a fresh schema-valid output wins over a late `ERROR` (kept as `warning`), and an error is classified from agy's `error` field and stderr (the response only when both are empty) (SP12 M1).
 - 2026-11-06: `classify` knows `network` (connection resets and refusals, broken pipes, EOF, TLS and DNS failures, stream errors, HTTP 500/502/503/504, `UNAVAILABLE`, `INTERNAL`, overloaded), after `auth` and `rate_limit` (SP12 M1).

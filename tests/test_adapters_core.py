@@ -210,3 +210,19 @@ def test_step_results_carry_a_warning() -> None:
     from kengash_ai.model import StepResult
 
     assert StepResult(warning="connection reset").warning == "connection reset"
+
+
+def test_stdout_lines_get_stamps(tmp_path: Path) -> None:
+    from datetime import datetime
+
+    log = tmp_path / "logs" / "t-1.out"
+    result = run_process(
+        ["sh", "-c", "echo a; sleep 0.3; echo b"],
+        cwd=tmp_path,
+        env=dict(os.environ),
+        timeout_s=10,
+        log=log,
+    )
+    assert result.stdout == "a\nb\n" and log.read_text() == "a\nb\n"
+    stamps = [datetime.fromisoformat(line) for line in log.with_suffix(".ts").read_text().split()]
+    assert len(stamps) == 2 and (stamps[1] - stamps[0]).total_seconds() >= 0.25
