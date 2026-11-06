@@ -114,6 +114,20 @@ def follow(
         sleep(poll_s)
 
 
+def history(ticket_id: str, project: str | None) -> list[Activity]:
+    """`ticket` for a ticket of the user's store, found by id."""
+    paths = StorePaths.default()
+    slug, _ = records.locate_ticket(paths, ticket_id, project)
+    return ticket(paths, slug, ticket_id)
+
+
+def watch(ticket_id: str, project: str | None, *, poll_s: float = 1.0) -> Iterator[Activity]:
+    """`follow` for a ticket of the user's store, found by id."""
+    paths = StorePaths.default()
+    slug, _ = records.locate_ticket(paths, ticket_id, project)
+    return follow(paths, slug, ticket_id, poll_s=poll_s)
+
+
 def running_status(status: str) -> bool:
     """A status at which a worker is busy with the ticket."""
     folder, _, sub = status.partition("/")

@@ -15,7 +15,7 @@ from kengash_ai.model import (
     WorkerRecord,
     utc_now,
 )
-from kengash_ai.ops import conductors, jobs, leases, lifecycle, records, steps
+from kengash_ai.ops import conductors, jobs, leases, lifecycle, progress, records, steps
 from kengash_ai.ops.workspace import GATES
 from kengash_ai.store import runtime
 from kengash_ai.store.paths import StorePaths
@@ -48,6 +48,7 @@ class WaitResult:
     events: list[WaitEvent] = field(default_factory=list)
     idle: bool = False
     timed_out: bool = False
+    progress: list[progress.Progress] = field(default_factory=list)  # on a timeout (SP12)
 
 
 def dead_workers(paths: StorePaths) -> list[WorkerRecord]:
@@ -127,7 +128,7 @@ def wait(project: str | None, *, timeout: float, poll_s: float = 1.0) -> WaitRes
             held = slots
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            return WaitResult(timed_out=True)
+            return WaitResult(timed_out=True, progress=progress.running(paths, slugs))
         time.sleep(min(poll_s, remaining))
         check_workers(paths)
 

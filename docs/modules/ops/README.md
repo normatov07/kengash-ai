@@ -60,6 +60,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-06: `WaitResult.progress` on a timeout; `progress.snapshot`, `progress.short`; `activity.history`, `activity.watch` (SP12 M2).
 - 2026-11-06: `progress` (SP12 M2).
 - 2026-11-06: `activity` (SP12 M2).
 - 2026-11-06: `calls.failure(…, worktree=, changed=)`: one line of at most 300 characters (the detail's first line, shortened), the log, and for an editing step `work kept in <worktree> (N files changed)`; `steps` points `state.running.log` at each attempt and clears it when the worker fails the step; an editing step over uncommitted changes gets `prompts.RETRY_NOTE` (SP12 M1).
@@ -79,4 +80,3 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - 2026-10-30: `tickets.add_tickets` gives a new ticket `Settings.workflow_for(importance)`, the routed workflow; its loop cap stays the importance's (SP10 M2).
 - 2026-10-30: built-in role skills always load from the package (`role_file`); `ignored_copies`; doctor warns `ignored built-in skill copies in <folder> (<names>): built-in skills are fixed; copy the agent to change one` (SP10 M2).
 - 2026-10-30: `doctor` warns `old kengash skill names installed in <folder>; run: kengash skills install --agent <agents>` for every registered repo and the home folder; eval turns spell commands with `{kg}`; claude conductors get `--plugin-dir` (SP10 M1).
-- 2026-10-30: `skills.install` installs the `kengash` plugin (Claude Code skills-dir folder, `agy plugin install`) or `kengash-<name>` copies (Codex, agy fallback), removing 0.2.0's `to-…`, `open-ui` and `kengash-memory` skills of ours; `Installed.note`; eval runs install agy copies, never the plugin (SP10 M1).

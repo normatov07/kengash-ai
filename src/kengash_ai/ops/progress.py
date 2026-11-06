@@ -68,6 +68,22 @@ def running(paths: StorePaths, slugs: list[str]) -> list[Progress]:
     return found
 
 
+def snapshot(project: str | None) -> list[Progress]:
+    """`running` over one project, or every project, of the user's store."""
+    paths = StorePaths.default()
+    return running(paths, records.scope(paths, project))
+
+
+def short(found: list[Progress]) -> str:
+    """One line for a status bar: `kg: <N> running · <id> <step>→<provider> <elapsed>
+    <action>`, or `kg: nothing running`."""
+    if not found:
+        return "kg: nothing running"
+    first = found[0]
+    head = f"{first.id} {first.step}→{first.provider} {_span(first.elapsed_s)}"
+    return f"kg: {len(found)} running · {head} {first.action}".rstrip()
+
+
 def line(p: Progress) -> str:
     """`<id> <step>→<provider>/<model> <elapsed> · active <age> ago · <N> files changed ·
     <action>`, then ` · quiet` and ` · worker gone` when they apply."""
