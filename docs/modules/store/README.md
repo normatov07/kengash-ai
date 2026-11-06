@@ -29,7 +29,7 @@ Everything under `~/.kengash`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
-- 2026-11-06: `StorePaths.loops` and the loop lease files (SP11 M1).
+- 2026-11-06: `StorePaths.loops` and the loop lease files; the seeded SETTINGS.md gains `loop_start: ask` (SP11 M1).
 - 2026-10-30: `ensure_store` no longer seeds `defaults/roles/` (SP10 M2).
 - 2026-10-30: `defaults/SETTINGS.md` explains `routing` in a comment (SP10 M2).
 - 2026-10-26: the seeded MEMORY.md, DECISIONS.md and SETTINGS.md name `kengash` (SP8).

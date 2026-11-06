@@ -24,6 +24,7 @@ def inside_repo(store_paths: StorePaths, repo: Path, monkeypatch: pytest.MonkeyP
 
 def test_settings_commands(store_paths: StorePaths, inside_repo: Path) -> None:
     assert runner.invoke(app, ["settings", "get", "loop_max.critical"]).stdout == "6\n"
+    assert runner.invoke(app, ["settings", "get", "loop_start"]).stdout == "ask\n"
     planner = runner.invoke(app, ["settings", "get", "agents.planner"]).stdout
     assert planner.startswith('{"on": true, "cli": "claude/opus"')
     assert (
