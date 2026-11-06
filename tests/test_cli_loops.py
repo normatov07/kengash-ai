@@ -109,3 +109,16 @@ def test_status_outside_a_store_is_empty(as_conductor: As, tmp_path: Path) -> No
     as_conductor(ME)
     result = runner.invoke(app, ["loop", "status"])
     assert (result.exit_code, result.stdout) == (0, "no loop running\nloop_start: ask\n")
+
+
+@pytest.mark.usefixtures("inside_registered_repo")
+def test_wait_refuses_under_another_conductors_lease(as_conductor: As) -> None:
+    as_conductor(OTHER)
+    runner.invoke(app, ["loop", "claim"])
+    as_conductor(ME)
+    refused = runner.invoke(app, ["wait", "--timeout", "0.1"])
+    assert refused.exit_code == 6
+    assert refused.stderr.startswith(f"loop running: codex pid {OTHER.pid} on all projects")
+    undetected = Conductor(ME.pid, "unknown", ME.command, False)
+    as_conductor(undetected)
+    assert runner.invoke(app, ["wait", "--timeout", "0.1"]).exit_code == 6

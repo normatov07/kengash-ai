@@ -20,7 +20,8 @@ from kengash_ai.model import (
     WorkerRecord,
     utc_now,
 )
-from kengash_ai.ops import lifecycle, plans, records, steps, waiting
+from kengash_ai.ops import conductors, lifecycle, merging, plans, records, steps, tickets, waiting
+from kengash_ai.ops.conductors import Conductor, process_name
 from kengash_ai.store import StorePaths, documents, runtime
 
 
@@ -192,3 +193,65 @@ def test_wait_is_never_idle_over_a_gate_its_worker_is_journaling(
     monkeypatch.setattr(journal, "read_after", read_then_the_worker_finishes)
     result = waiting.wait(None, timeout=2, poll_s=0.05)
     assert [(e.id, e.status) for e in result.events] == [("7b55e0c1", "in_process/awaiting_merge")]
+
+
+ME = Conductor(os.getpid(), "claude", process_name(os.getpid()) or "", True)
+BATCH = """
+- key: first
+  title: Add keyring
+  importance: simple
+  touches: [keys]
+  scope: The keyring.
+  acceptance: [it loads]
+- key: second
+  title: Rotate keys
+  importance: simple
+  touches: [keys/rotate]
+  depends_on: [first]
+  scope: Rotation.
+  acceptance: [it rotates]
+"""
+
+
+def test_wait_claims_for_a_detected_agent(
+    registered_repo: Path, store_paths: StorePaths, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(conductors, "conductor", lambda: ME)
+    assert waiting.wait("payments-api", timeout=0.1).idle
+    lease = runtime.load_lease(store_paths, ME.pid)
+    assert lease is not None and (lease.project, lease.agent) == ("payments-api", "claude")
+
+
+def test_wait_from_an_undetected_caller_writes_no_lease(
+    registered_repo: Path, store_paths: StorePaths, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    shell = Conductor(ME.pid, "unknown", ME.command, False)
+    monkeypatch.setattr(conductors, "conductor", lambda: shell)
+    assert waiting.wait(None, timeout=0.1).idle
+    assert runtime.load_leases(store_paths) == []
+
+
+def test_wait_reports_queued_for_ready_adds_and_unblocks_only(
+    registered_repo: Path, store_paths: StorePaths, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(conductors, "conductor", lambda: ME)
+    plan_id = plans.new_plan(
+        "Keys.", title="Keys", mode=PlanMode.quick, project=None, cwd=registered_repo, by="x"
+    ).id
+    assert waiting.wait(None, timeout=0.1).idle  # sets the cursor
+    first, second = tickets.add_tickets(plan_id, BATCH, project=None, by="x").tickets
+    (queued,) = waiting.wait(None, timeout=0.1).events
+    assert (queued.id, queued.status, queued.loop, queued.loop_max, queued.detail) == (
+        first.id,
+        "queued",
+        1,
+        3,
+        "Add keyring",
+    )
+    journal.append(store_paths, merging._unblocked("payments-api", second.id, first.id))
+    (unblocked,) = waiting.wait(None, timeout=0.1).events
+    assert (unblocked.id, unblocked.status, unblocked.detail) == (
+        second.id,
+        "queued",
+        "Rotate keys",
+    )

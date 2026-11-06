@@ -1,4 +1,5 @@
-"""Wait for gates, find dead workers, record conductor pings (SP3 spec decisions 9, 24, 33)."""
+"""Wait for gates and queued tickets, find dead workers, record conductor pings (SP3 spec
+decisions 9, 24, 33); `wait` holds the loop lease (SP11 spec §4.5, §4.9)."""
 
 import time
 from dataclasses import dataclass, field
@@ -14,7 +15,7 @@ from kengash_ai.model import (
     WorkerRecord,
     utc_now,
 )
-from kengash_ai.ops import conductors, jobs, lifecycle, records, steps
+from kengash_ai.ops import conductors, jobs, leases, lifecycle, records, steps
 from kengash_ai.ops.workspace import GATES
 from kengash_ai.store import runtime
 from kengash_ai.store.paths import StorePaths
@@ -28,6 +29,7 @@ WAIT_TYPES = (
     "plan.reviewed",
 )
 NOT_RUNNING = (*GATES, "paused")
+READY = "in_queue/ready"
 
 
 @dataclass
@@ -73,19 +75,29 @@ def check_workers(paths: StorePaths, *, fix: bool = True) -> list[str]:
     return [record.id for record in dead]
 
 
-def ping(paths: StorePaths, project: str | None) -> None:
-    """Record the conductor (`conductors.conductor`): its pid, agent and project filter."""
-    me = conductors.conductor()
+def ping(paths: StorePaths, project: str | None, me: conductors.Conductor | None = None) -> None:
+    """Record the conductor (`conductors.conductor`): its pid, agent and project filter;
+    its loop lease, if it holds one, is seen now."""
+    me = me or conductors.conductor()
     runtime.save_ping(paths, ConductorPing(pid=me.pid, agent=me.agent, project=project))
+    leases.refresh(paths, me)
 
 
 def wait(project: str | None, *, timeout: float, poll_s: float = 1.0) -> WaitResult:
-    """Block until a ticket in scope needs the conductor; each event is reported once."""
+    """Block until a ticket in scope needs the conductor or becomes ready; each event is
+    reported once. A conductor found by process name holds the scope's loop lease (taking
+    it if free); any other caller takes none. Both get LoopBusy (exit 6) while another
+    conductor's live lease covers the scope, so two conductors never share events."""
     paths = StorePaths.default()
     slugs = records.scope(paths, project)
     scope = project or "all"
+    me = conductors.conductor()
+    if me.detected:
+        leases.claim(paths, project, me)
+    else:
+        leases.check(paths, project, me)
     check_workers(paths)
-    ping(paths, project)
+    ping(paths, project, me)
     cursor = runtime.load_cursor(paths, scope)
     if cursor is None:
         cursor = journal.end(paths)  # saved before the scan, so no gate slips between them
@@ -117,7 +129,10 @@ def _wanted(event: Event, slugs: list[str]) -> bool:
         return False
     if event.type in WAIT_TYPES:
         return True
-    return event.type == "ticket.moved" and str(_extra(event, "to")).startswith("done/")
+    if event.type == "ticket.created":
+        return bool(_extra(event, "status") == READY)
+    to = str(_extra(event, "to"))
+    return event.type == "ticket.moved" and (to.startswith("done/") or to == READY)
 
 
 def _wait_event(paths: StorePaths, event: Event) -> WaitEvent:
@@ -136,13 +151,17 @@ def _wait_event(paths: StorePaths, event: Event) -> WaitEvent:
     if loop is None or loop_max is None:
         ticket = _ticket(paths, str(event.project), str(event.ticket))
         loop, loop_max = (ticket.loop, ticket.loop_max) if ticket else (0, 0)
+    detail = _extra(event, "reason") or _extra(event, "why") or ""
+    if status == READY:  # added ready, or unblocked by a merge: the conductor starts it
+        ticket = _ticket(paths, str(event.project), str(event.ticket))
+        status, detail = "queued", _extra(event, "title") or (ticket.title if ticket else "")
     return WaitEvent(
         id=str(event.ticket),
         project=str(event.project),
         status=str(status),
         loop=int(loop),
         loop_max=int(loop_max),
-        detail=str(_extra(event, "reason") or _extra(event, "why") or ""),
+        detail=str(detail),
     )
 
 
