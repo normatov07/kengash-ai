@@ -24,11 +24,13 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 
 ## Invariants
 
 - Status and action commands print at most 5 lines by default; `--json` gives full output (spec §6).
-- Exit codes: 0 ok · 1 error · 2 usage · 3 wait timeout · 4 setup needed · 5 user decision needed.
+- `loop claim [-p] [--take-over]` (`loop claimed: <scope>`; exit 6 `loop running: <agent> pid <pid> on <scope>, seen <age>`), `loop release [--force]` (`loop released: <scope>`, `no loop held here`, exit 1 `not released: N runnable; run: kengash next`), `loop status [-p]` (a line per live lease, `loop running: …` or `this session holds the loop on <scope>`, else `no loop running`; then `loop_start: ask|auto`), each with `--json` (SP11 spec §4.8).
+- Exit codes: 0 ok · 1 error · 2 usage · 3 wait timeout · 4 setup needed · 5 user decision needed · 6 another loop covers the scope.
 - `cli` imports only `ops` and `model` (spec §3.1).
 
 ## Changes
 
+- 2026-11-06: `loop claim|release|status`; exit 6 (SP11 M1).
 - 2026-10-30: 0.3.0 drops the `harness` and `hrn` console scripts and `cli.legacy`, as 0.2.0 announced.
 - 2026-10-30 (final review): `skills install` prints `note: …` lines (Claude Code's trust dialog for a project install); an `--instructions-file` that cannot be read exits 1 naming it.
 - 2026-10-30: `agent edit|copy|show`, `agent new --fallback --skill --instructions-file`, the `workflow` group; help texts say `PROVIDER or PROVIDER/MODEL`, since Rich read `[/MODEL]` as markup and `agent new --help` crashed (SP10 M2).

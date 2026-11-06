@@ -44,7 +44,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - `tickets`: `add_tickets` → `Batch(plan, project, tickets=[NewTicket(id, key, title, status)])` (each ticket runs its importance's routed workflow, `Settings.workflow_for`), `show_ticket` → `Document`, `list_tickets`/`find_tickets` → `TicketLine(id, project, status, importance, title)`; without a project they cover the project here, else every project.
 - `tickets.move_ticket` → `Moved(id, project, before, after, ready, blocked, stopped)`: a move out of `in_process` (to `in_queue` or `done`) first stops the ticket's live worker (`jobs.end`, under the project lock) and frees its slots; `tickets.set_fields` → `Updated(id, project, fields, status)` for the `SETTABLE` fields.
 - `status.board(project=None)` → `Board([ProjectStatus(project, folders, statuses, gates)])`: every registered project unless one is named.
-- `queue.next_tickets(project=None)` → `Queue(runnable, held_back, blocked, running, gates, paused)`: `runnable` holds `NextTicket(id, project, importance, step, provider, title)` in start order (`provider` is `shell` or `user` when the step needs no session); `held_back` maps each waiting ready ticket to its reason. `queue.progress_of(settings, ticket)` → `workflow.Progress`.
+- `queue.next_tickets(project=None)` → `Queue(runnable, held_back, blocked, running, gates, paused)`: `runnable` holds `NextTicket(id, project, importance, step, provider, title)` in start order (`provider` is `shell` or `user` when the step needs no session); `held_back` maps each waiting ready ticket to its reason. `queue.compute(paths, project)` gives the same without the worker check and the ping, so it runs under the lease lock (SP11). `loops` (SP11): `claim(project, take_over=)` → `Claimed(scope, new)`, `release(force=)` → `Released(scope)` (None when no lease; without `force` a `UserError` while `compute` lists runnable tickets), `status(project)` → `LoopStatus(leases, loop_start)`, `views(paths, me)` → `LeaseView(pid, agent, project, scope, started, seen, mine, line)`. `queue.progress_of(settings, ticket)` → `workflow.Progress`.
 - Errors are `model` errors and carry their exit code.
 
 ## Invariants
@@ -58,7 +58,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
-- 2026-11-06: `conductors` holds the conductor lookup that `waiting` had; `leases` (SP11 M1).
+- 2026-11-06: `conductors` holds the conductor lookup that `waiting` had; `leases`; `loops`; `queue.compute` (SP11 M1).
 - 2026-10-30 (final review): `new_agent` refuses a built-in skill's name; a review step's default send-back to `implement` only when `implement` comes before it; `skills.install` clears 0.2.0's skills from `.claude/skills` and, globally, agy's own folder once the plugin installs, and notes Claude Code's trust dialog for a project install (`InstallResult.notes`, `TRUST_NOTE`); `old_installs` no longer flags Codex's `kengash-memory` copy; doctor's old-name hint adds `--global` for the home folder, and `doctor --fix` removes ignored built-in skill copies in a store commit.
 - 2026-10-30: a provider card not detected yet lists `adapters.known_models(name)` (SP10 M4).
 - 2026-10-30: `views.workflows_view` gains `routing` and `picker` (SP10 M4).

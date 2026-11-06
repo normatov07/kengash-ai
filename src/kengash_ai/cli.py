@@ -19,6 +19,7 @@ from kengash_ai.ops import (
     compaction,
     controls,
     evals,
+    loops,
     merging,
     plans,
     projects,
@@ -494,12 +495,12 @@ Every = Annotated[
 ]
 
 
-def _capped(lines: list[str], command: str) -> list[str]:
-    """At most MAX_LINES lines; the last one says how many more `command` shows."""
-    if len(lines) <= MAX_LINES:
+def _capped(lines: list[str], command: str, limit: int = MAX_LINES) -> list[str]:
+    """At most `limit` lines; the last one says how many more `command` shows."""
+    if len(lines) <= limit:
         return lines
-    more = len(lines) - MAX_LINES + 1
-    return [*lines[: MAX_LINES - 1], f"+{more} more; run: {command}"]
+    more = len(lines) - limit + 1
+    return [*lines[: limit - 1], f"+{more} more; run: {command}"]
 
 
 def _ticket_lines(lines: list[tickets.TicketLine], as_json: bool) -> None:
@@ -776,6 +777,54 @@ def merge_ticket(
         _emit_json(merged)
         return
     typer.echo(f"merged {merged.id}: {merged.commits} commits into {merged.base}")
+
+
+loop_app = typer.Typer(
+    help="The loop lease: at most one live loop covers a project.", no_args_is_help=True
+)
+app.add_typer(loop_app, name="loop")
+
+
+@loop_app.command("claim")
+def loop_claim(
+    project: Every = None,
+    take_over: Annotated[
+        bool, typer.Option("--take-over", help="End another conductor's loop on this scope.")
+    ] = False,
+    as_json: AsJson = False,
+) -> None:
+    """Take the loop for this conductor; exit 6 while another loop covers the scope."""
+    with _errors():
+        result = loops.claim(project, take_over=take_over)
+    _emit(result, as_json, f"loop claimed: {result.scope}")
+
+
+@loop_app.command("release")
+def loop_release(
+    force: Annotated[
+        bool, typer.Option("--force", help="Release even with runnable tickets left.")
+    ] = False,
+    as_json: AsJson = False,
+) -> None:
+    """End this conductor's loop; refused (exit 1) while tickets are runnable."""
+    with _errors():
+        result = loops.release(force=force)
+    line = f"loop released: {result.scope}" if result.scope else "no loop held here"
+    _emit(result, as_json, line)
+
+
+@loop_app.command("status")
+def loop_status(project: Every = None, as_json: AsJson = False) -> None:
+    """Live loops on the scope, then its loop_start (ask or auto)."""
+    with _errors():
+        result = loops.status(project)
+    if as_json:
+        _emit_json(result)
+        return
+    lines = [view.line for view in result.leases] or ["no loop running"]
+    for line in _capped(lines, "kengash loop status --json", MAX_LINES - 1):
+        typer.echo(line)
+    typer.echo(f"loop_start: {result.loop_start}")
 
 
 @app.command("wait")
