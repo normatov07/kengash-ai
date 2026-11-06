@@ -35,6 +35,10 @@ Leave out `[ui]` for the CLI alone. The latest code: `uv tool install 'kengash-a
 
 The skills install as the `kengash` plugin: in Claude Code and Antigravity you type `/kengash:plan`, `/kengash:grill`, `/kengash:ticket`, `/kengash:loop` and `/kengash:ui`; Codex has no plugin namespace, so it gets `$kengash-plan` and so on. Claude Code can also take the plugin from its marketplace: `/plugin marketplace add normatov07/kengash-ai`, then `/plugin install kengash@kengash-ai`.
 
+### Upgrading from 0.3.0
+
+`uv tool upgrade kengash-ai`, then `kengash skills install --agent … --global` again (an approved plan now flows into tickets and the loop, and the loop watches its workers), and `kengash doctor --fix`: it renames `fallback_on_rate_limit` to `fallback_on_error`, raises a token cap still at the old 250,000 to 1,000,000, gives the docs agent a fallback where you left it as seeded, and adds the detected test and lint commands with a `run_tests` step to each project that has none. Switch Auto mode on in Settings or on Overview to have the loop start by itself.
+
 ### Upgrading from 0.2.0
 
 Run `kengash skills install --agent … --global` again: the commands are now `/kengash:<name>`, and the old `to-plan`, `to-plan-with-grill`, `to-ticket`, `to-loop`, `open-ui` and `kengash-memory` skills of ours are removed (`kengash doctor` points out any left behind).

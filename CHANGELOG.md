@@ -4,6 +4,8 @@ All notable changes to this project are written here. The format follows [Keep a
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-06
+
 ### Added
 
 - An approved plan flows on: `/kengash:plan` and `/kengash:grill` cut the tickets as soon as you approve, with no second yes, each ticket's scope 3 to 8 lines.
@@ -98,6 +100,7 @@ The first release.
 
 - The UI checks Host, Origin, a per-run token and an `X-Harness` header on changes, and sends a strict Content Security Policy with framing, sniffing and referrer protections.
 
+[0.4.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.4.0
 [0.3.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.3.0
 [0.2.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.2.0
 [0.1.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.1.0

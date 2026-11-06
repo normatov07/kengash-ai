@@ -40,8 +40,8 @@ def test_only_kengash_is_installed() -> None:
     assert scripts == {"kengash": "kengash_ai.cli:app"}
 
 
-def test_the_version_is_0_3_0() -> None:
-    assert __version__ == "0.3.0"
+def test_the_version_is_0_4_0() -> None:
+    assert __version__ == "0.4.0"
 
 
 def test_native_windows_stops_with_the_wsl_message(monkeypatch: pytest.MonkeyPatch) -> None:
