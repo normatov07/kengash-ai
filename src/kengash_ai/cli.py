@@ -17,8 +17,10 @@ from kengash_ai.ops import (
     agent_config,
     changes,
     compaction,
+    conductors,
     controls,
     evals,
+    loops,
     merging,
     plans,
     projects,
@@ -494,12 +496,12 @@ Every = Annotated[
 ]
 
 
-def _capped(lines: list[str], command: str) -> list[str]:
-    """At most MAX_LINES lines; the last one says how many more `command` shows."""
-    if len(lines) <= MAX_LINES:
+def _capped(lines: list[str], command: str, limit: int = MAX_LINES) -> list[str]:
+    """At most `limit` lines; the last one says how many more `command` shows."""
+    if len(lines) <= limit:
         return lines
-    more = len(lines) - MAX_LINES + 1
-    return [*lines[: MAX_LINES - 1], f"+{more} more; run: {command}"]
+    more = len(lines) - limit + 1
+    return [*lines[: limit - 1], f"+{more} more; run: {command}"]
 
 
 def _ticket_lines(lines: list[tickets.TicketLine], as_json: bool) -> None:
@@ -778,6 +780,54 @@ def merge_ticket(
     typer.echo(f"merged {merged.id}: {merged.commits} commits into {merged.base}")
 
 
+loop_app = typer.Typer(
+    help="The loop lease: at most one live loop covers a project.", no_args_is_help=True
+)
+app.add_typer(loop_app, name="loop")
+
+
+@loop_app.command("claim")
+def loop_claim(
+    project: Every = None,
+    take_over: Annotated[
+        bool, typer.Option("--take-over", help="End another conductor's loop on this scope.")
+    ] = False,
+    as_json: AsJson = False,
+) -> None:
+    """Take the loop for this conductor; exit 6 while another loop covers the scope."""
+    with _errors():
+        result = loops.claim(project, take_over=take_over)
+    _emit(result, as_json, f"loop claimed: {result.scope}")
+
+
+@loop_app.command("release")
+def loop_release(
+    force: Annotated[
+        bool, typer.Option("--force", help="Release even with runnable tickets left.")
+    ] = False,
+    as_json: AsJson = False,
+) -> None:
+    """End this conductor's loop; refused (exit 1) while tickets are runnable."""
+    with _errors():
+        result = loops.release(force=force)
+    line = f"loop released: {result.scope}" if result.scope else "no loop held here"
+    _emit(result, as_json, line)
+
+
+@loop_app.command("status")
+def loop_status(project: Every = None, as_json: AsJson = False) -> None:
+    """Live loops on the scope, then its loop_start (ask or auto)."""
+    with _errors():
+        result = loops.status(project)
+    if as_json:
+        _emit_json(result)
+        return
+    lines = [view.line for view in result.leases] or ["no loop running"]
+    for line in _capped(lines, "kengash loop status --json", MAX_LINES - 1):
+        typer.echo(line)
+    typer.echo(f"loop_start: {result.loop_start}")
+
+
 @app.command("wait")
 def wait(
     project: Every = None,
@@ -792,8 +842,15 @@ def wait(
     if as_json:
         _emit_json(result)
     elif result.events:
-        lines = [_wait_line(event) for event in result.events]
-        for line in _capped(lines, "kengash wait --json"):
+        # the cursor has moved past every event: capped lines point at `status`, which lists
+        # open gates, and queued tickets fold into one line (SP11 final review)
+        gates = [event for event in result.events if event.status != "queued"]
+        queued = len(result.events) - len(gates)
+        tail = [f"queued: {_plural(queued, 'ticket')} ready; run: kengash next"] if queued else []
+        lines = _capped(
+            [_wait_line(event) for event in gates], "kengash status", MAX_LINES - len(tail)
+        )
+        for line in [*lines, *tail]:
             typer.echo(line)
     elif result.idle:
         typer.echo("idle")
@@ -1146,8 +1203,26 @@ def workflow_set(
     _emit(change, as_json, f"set workflow {name}: {' → '.join(order)}")
 
 
-skills_app = typer.Typer(help="Skills: lint, install and eval.", no_args_is_help=True)
+skills_app = typer.Typer(help="Skills: lint, install, eval and show.", no_args_is_help=True)
 app.add_typer(skills_app, name="skills")
+
+
+@skills_app.command("show")
+def skills_show(
+    name: Annotated[str, typer.Argument(help="The skill, e.g. ticket.")],
+    agent: Annotated[
+        str | None,
+        typer.Option("--agent", help="claude, codex or antigravity; default: the calling agent."),
+    ] = None,
+) -> None:
+    """Print a skill as installed for the calling agent: how one skill hands over to the next."""
+    with _errors():
+        text = skills.show(
+            name,
+            agent=agent or conductors.conductor().agent,
+            cli_name=skills.invoked_name(sys.argv[0]),
+        )
+    typer.echo(text, nl=False)
 
 
 def _command_tree() -> set[str]:

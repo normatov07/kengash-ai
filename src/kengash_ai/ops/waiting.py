@@ -1,10 +1,8 @@
-"""Wait for gates, find dead workers, record conductor pings (SP3 spec decisions 9, 24, 33)."""
+"""Wait for gates and queued tickets, find dead workers, record conductor pings (SP3 spec
+decisions 9, 24, 33); `wait` holds the loop lease (SP11 spec §4.5, §4.9)."""
 
-import os
-import subprocess
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 from kengash_ai import journal
@@ -17,7 +15,7 @@ from kengash_ai.model import (
     WorkerRecord,
     utc_now,
 )
-from kengash_ai.ops import jobs, lifecycle, records, steps
+from kengash_ai.ops import conductors, jobs, leases, lifecycle, records, steps
 from kengash_ai.ops.workspace import GATES
 from kengash_ai.store import runtime
 from kengash_ai.store.paths import StorePaths
@@ -31,8 +29,7 @@ WAIT_TYPES = (
     "plan.reviewed",
 )
 NOT_RUNNING = (*GATES, "paused")
-AGENTS = ("claude", "codex", "agy")
-ANCESTORS = 20
+READY = "in_queue/ready"
 
 
 @dataclass
@@ -78,24 +75,29 @@ def check_workers(paths: StorePaths, *, fix: bool = True) -> list[str]:
     return [record.id for record in dead]
 
 
-def ping(paths: StorePaths, project: str | None) -> None:
-    """Record the conductor: the nearest ancestor named claude, codex or agy, else the
-    parent; its agent is $KENGASH_AGENT ($HARNESS_AGENT before 0.2.0), else the detected
-    name, else `unknown`."""
-    pid, detected = _conductor()
-    agent = (
-        os.environ.get("KENGASH_AGENT") or os.environ.get("HARNESS_AGENT") or detected or "unknown"
-    )
-    runtime.save_ping(paths, ConductorPing(pid=pid, agent=agent, project=project))
+def ping(paths: StorePaths, project: str | None, me: conductors.Conductor | None = None) -> None:
+    """Record the conductor (`conductors.conductor`): its pid, agent and project filter;
+    its loop lease, if it holds one, is seen now."""
+    me = me or conductors.conductor()
+    runtime.save_ping(paths, ConductorPing(pid=me.pid, agent=me.agent, project=project))
+    leases.refresh(paths, me)
 
 
 def wait(project: str | None, *, timeout: float, poll_s: float = 1.0) -> WaitResult:
-    """Block until a ticket in scope needs the conductor; each event is reported once."""
+    """Block until a ticket in scope needs the conductor or becomes ready; each event is
+    reported once. A conductor found by process name holds the scope's loop lease (taking
+    it if free); any other caller takes none. Both get LoopBusy (exit 6) while another
+    conductor's live lease covers the scope, so two conductors never share events."""
     paths = StorePaths.default()
     slugs = records.scope(paths, project)
     scope = project or "all"
+    me = conductors.conductor()
+    if me.detected:
+        leases.claim(paths, project, me)
+    else:
+        leases.check(paths, project, me)
     check_workers(paths)
-    ping(paths, project)
+    ping(paths, project, me)
     cursor = runtime.load_cursor(paths, scope)
     if cursor is None:
         cursor = journal.end(paths)  # saved before the scan, so no gate slips between them
@@ -104,7 +106,12 @@ def wait(project: str | None, *, timeout: float, poll_s: float = 1.0) -> WaitRes
         if gates:
             return WaitResult(events=gates)
     deadline = time.monotonic() + timeout
+    held: int | None = None  # live slots last round, while ready tickets wait on them
     while True:
+        if me.detected and leases.own_lease(paths, me) is None:
+            # taken over while polling: stop before reading the scope's events (SP11 §4.9)
+            leases.check(paths, project, me)
+            leases.claim(paths, project, me)  # nobody else holds it: take the scope back
         # checked before the read: a worker journals its last event before it exits, so once
         # nothing runs, every event that ended the work is already in the journal
         running = _running(paths, slugs)
@@ -114,7 +121,10 @@ def wait(project: str | None, *, timeout: float, poll_s: float = 1.0) -> WaitRes
         if found:
             return WaitResult(events=found)
         if not running:
-            return WaitResult(idle=True)
+            slots = _live_slots(paths)
+            if not (slots and _ready(paths, slugs)) or (held is not None and slots < held):
+                return WaitResult(idle=True)  # nothing to wait for, or a slot freed: run `next`
+            held = slots
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             return WaitResult(timed_out=True)
@@ -122,12 +132,36 @@ def wait(project: str | None, *, timeout: float, poll_s: float = 1.0) -> WaitRes
         check_workers(paths)
 
 
+def slot_wait(paths: StorePaths, slugs: list[str]) -> int:
+    """Ready tickets in scope (outside paused projects) while a live worker of any project
+    holds a slot: they start once a slot frees, so a loop over them must not end (slots are
+    machine-wide; SP11 spec §4.6, §4.9)."""
+    return _ready(paths, slugs) if _live_slots(paths) else 0
+
+
+def _ready(paths: StorePaths, slugs: list[str]) -> int:
+    pause = runtime.pause_state(paths)
+    return sum(
+        doc.meta.status == READY
+        for slug in slugs
+        if not pause.covers(slug)
+        for doc in records.project_tickets(paths, slug).values()
+    )
+
+
+def _live_slots(paths: StorePaths) -> int:
+    return sum(lifecycle.pid_alive(entry.pid) for entry in runtime.load_slots(paths).held)
+
+
 def _wanted(event: Event, slugs: list[str]) -> bool:
     if event.project not in slugs:
         return False
     if event.type in WAIT_TYPES:
         return True
-    return event.type == "ticket.moved" and str(_extra(event, "to")).startswith("done/")
+    if event.type in ("ticket.created", "ticket.recirculated"):  # added, or re-queued by a
+        return bool(_extra(event, "status") == READY)  # merge conflict
+    to = str(_extra(event, "to"))
+    return event.type == "ticket.moved" and (to.startswith("done/") or to == READY)
 
 
 def _wait_event(paths: StorePaths, event: Event) -> WaitEvent:
@@ -146,13 +180,17 @@ def _wait_event(paths: StorePaths, event: Event) -> WaitEvent:
     if loop is None or loop_max is None:
         ticket = _ticket(paths, str(event.project), str(event.ticket))
         loop, loop_max = (ticket.loop, ticket.loop_max) if ticket else (0, 0)
+    detail = _extra(event, "reason") or _extra(event, "why") or ""
+    if status == READY:  # added ready, or unblocked by a merge: the conductor starts it
+        ticket = _ticket(paths, str(event.project), str(event.ticket))
+        status, detail = "queued", _extra(event, "title") or (ticket.title if ticket else "")
     return WaitEvent(
         id=str(event.ticket),
         project=str(event.project),
         status=str(status),
         loop=int(loop),
         loop_max=int(loop_max),
-        detail=str(_extra(event, "reason") or _extra(event, "why") or ""),
+        detail=str(detail),
     )
 
 
@@ -198,38 +236,3 @@ def _ticket(paths: StorePaths, slug: str, ticket_id: str) -> Ticket | None:
 
 def _extra(event: Event, key: str) -> Any:
     return (event.model_extra or {}).get(key)
-
-
-def _conductor() -> tuple[int, str | None]:
-    """The nearest ancestor process named claude, codex or agy, else the parent."""
-    parent = os.getppid()
-    pid = parent
-    for _ in range(ANCESTORS):
-        if pid <= 1:
-            break
-        found = _ps(pid)
-        if found is None:
-            break
-        ppid, command = found
-        name = Path(command).name
-        if name in AGENTS:
-            return pid, name
-        pid = ppid
-    return parent, None
-
-
-def _ps(pid: int) -> tuple[int, str] | None:
-    try:
-        result = subprocess.run(
-            ["ps", "-o", "ppid=,comm=", "-p", str(pid)],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=5,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    fields = result.stdout.strip().split(None, 1)
-    if result.returncode != 0 or len(fields) != 2 or not fields[0].isdigit():
-        return None
-    return int(fields[0]), fields[1].strip()

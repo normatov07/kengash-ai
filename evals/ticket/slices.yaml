@@ -1,5 +1,5 @@
 skill: ticket
-description: an approved plan is sliced into tickets the user checks before they are added
+description: an approved plan is sliced into tickets added at once, then the loop is offered and declined (SP11)
 notes: >-
   RED 2026-10-23: claude (haiku) added no tickets; agy found `kengash ticket add` on its own
   and added two simple tickets after showing the list.
@@ -23,9 +23,10 @@ setup:
   - args: [plan, approve, "{plan}", --skip-review]
 turns:
   - "{kg}ticket {plan}"
-  - "Looks good, add them."
+  - "Not now."
 expect:
   journal: [ticket.created]
+  absent: [loop.started]
   tickets: {min: 1}
   plans: {count: 1, fields: {status: ticketed}}
   clean: true

@@ -17,8 +17,8 @@ from typer.testing import CliRunner
 from kengash_ai import adapters
 from kengash_ai.cli import app
 from kengash_ai.model import Doc, Plan, Ticket
-from kengash_ai.ops import projects, records
-from kengash_ai.store import StorePaths
+from kengash_ai.ops import evals, projects, records
+from kengash_ai.store import StorePaths, runtime
 
 pytestmark = [pytest.mark.live, pytest.mark.timeout(0)]  # real CLIs take minutes
 runner = CliRunner()
@@ -220,3 +220,26 @@ def test_memory_compaction(scratch: Path, store_paths: StorePaths) -> None:
     text = path.read_text(encoding="utf-8")
     assert all(pin in text.splitlines() for pin in PINS), text
     assert len(text.splitlines()) < 24, text
+
+
+def test_a_conductor_keeps_one_lease_pid(
+    provider: str, store_paths: StorePaths, tmp_path: Path
+) -> None:
+    """SP11 spec §9: every `kengash` call of one agent session finds the same conductor
+    pid, so the session's own `wait` never looks like another loop."""
+    turn = (
+        "Run exactly these two shell commands, each as its own tool call, then reply DONE: "
+        "`kengash loop claim`, then `kengash loop status --json`."
+    )
+    argv = evals.conductor_argv(provider, turn, model=CHEAPEST[provider], session=None)
+    env = evals._env(provider, store_paths.home, tmp_path / "work")
+    subprocess.run(argv, cwd=tmp_path, env=env, capture_output=True, text=True, timeout=600)
+    (lease,) = runtime.load_leases(store_paths)
+    assert lease.project is None and lease.command in ("claude", "codex", "agy")
+    loops = [
+        text
+        for day in store_paths.journal.glob("*.jsonl")
+        for text in day.read_text(encoding="utf-8").splitlines()
+        if '"loop.' in text
+    ]
+    assert len(loops) == 1 and '"loop.started"' in loops[0]  # one claim, no second lease

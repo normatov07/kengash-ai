@@ -119,3 +119,10 @@ def test_cli_install_names_the_agy_fallback(
     folder = repo / ".agents" / "skills" / "kengash-alpha"
     note = "agy plugin install failed; copies instead"
     assert result.stdout == f"antigravity alpha: installed → {folder} ({note})\n"
+
+
+def test_cli_show_renders_for_the_named_agent() -> None:
+    shown = runner.invoke(app, ["skills", "show", "ticket", "--agent", "codex"])
+    assert shown.exit_code == 0 and "`$kengash-loop`" in shown.stdout
+    missing = runner.invoke(app, ["skills", "show", "nope"])
+    assert missing.exit_code == 1 and missing.stderr.startswith("unknown skill: nope; known:")

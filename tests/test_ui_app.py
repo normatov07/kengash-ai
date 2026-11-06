@@ -377,3 +377,20 @@ def test_workflow_endpoints_create_rename_and_refuse(
     )
     shipped = client.post("/api/workflows/critical/remove", json={}, headers=POST)
     assert shipped.status_code == 400 and "ships with kengash" in shipped.json()["error"]
+
+
+def test_the_overview_carries_loops_and_auto_mode(client: TestClient) -> None:
+    signed_in(client)
+    overview = client.get("/api/overview").json()
+    assert (overview["loops"], overview["auto_default"], overview["auto"]) == (
+        [],
+        False,
+        {"payments-api": False},
+    )
+    saved = client.post(
+        "/api/settings?project=payments-api",
+        json={"changes": {"loop_start": "auto"}},
+        headers=POST,
+    )
+    assert saved.status_code == 200 and saved.json()["values"]["loop_start"] == "auto"
+    assert client.get("/api/overview").json()["auto"] == {"payments-api": True}

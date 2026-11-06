@@ -87,6 +87,17 @@ class ConductorPing(_Runtime):
     time: datetime = Field(default_factory=utc_now)
 
 
+class LoopLease(_Runtime):
+    """runtime/loops/<pid>.json: the conductor running a loop over one project or all (SP11)."""
+
+    pid: int
+    agent: str
+    command: str = ""  # the process name at claim time; a reused pid runs something else
+    project: str | None = None  # None: every project
+    started: datetime = Field(default_factory=utc_now)
+    seen: datetime = Field(default_factory=utc_now)
+
+
 class UiRecord(_Runtime):
     """runtime/ui.json: the running UI server (mode 0600: it holds the run's token)."""
 

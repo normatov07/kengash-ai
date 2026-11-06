@@ -33,10 +33,17 @@ class Queue:
 
 
 def next_tickets(project: str | None = None) -> Queue:
-    """Tickets to start now, in start order: of every project, or of the named one."""
+    """Tickets to start now, in start order: of every project, or of the named one. Dead
+    workers are failed first and the conductor is pinged."""
     paths = StorePaths.default()
     waiting.check_workers(paths)
     waiting.ping(paths, project)
+    return compute(paths, project)
+
+
+def compute(paths: StorePaths, project: str | None) -> Queue:
+    """What `next_tickets` lists, read without side effects: no worker check, no ping, so
+    it runs safely under the lease lock (SP11 spec §4.6)."""
     machine = settings.load(paths)
     pause = runtime.pause_state(paths)
     found = Queue()

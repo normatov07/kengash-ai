@@ -2,25 +2,42 @@
 
 import json
 import os
+import time
+from collections.abc import Callable
 from datetime import timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from conftest import Engine, Events
 
 from kengash_ai import journal
 from kengash_ai.model import (
+    Doc,
     Event,
     JournalCursor,
+    LoopBusy,
     PlanMode,
     PlanStatus,
     SlotEntry,
     SlotTable,
+    Ticket,
     TicketState,
     WorkerRecord,
     utc_now,
 )
-from kengash_ai.ops import lifecycle, plans, records, steps, waiting
+from kengash_ai.ops import (
+    conductors,
+    leases,
+    lifecycle,
+    merging,
+    plans,
+    records,
+    steps,
+    tickets,
+    waiting,
+)
+from kengash_ai.ops.conductors import Conductor, process_name
 from kengash_ai.store import StorePaths, documents, runtime
 
 
@@ -192,3 +209,141 @@ def test_wait_is_never_idle_over_a_gate_its_worker_is_journaling(
     monkeypatch.setattr(journal, "read_after", read_then_the_worker_finishes)
     result = waiting.wait(None, timeout=2, poll_s=0.05)
     assert [(e.id, e.status) for e in result.events] == [("7b55e0c1", "in_process/awaiting_merge")]
+
+
+ME = Conductor(os.getpid(), "claude", process_name(os.getpid()) or "", True)
+BATCH = """
+- key: first
+  title: Add keyring
+  importance: simple
+  touches: [keys]
+  scope: The keyring.
+  acceptance: [it loads]
+- key: second
+  title: Rotate keys
+  importance: simple
+  touches: [keys/rotate]
+  depends_on: [first]
+  scope: Rotation.
+  acceptance: [it rotates]
+"""
+
+
+def test_wait_claims_for_a_detected_agent(
+    registered_repo: Path, store_paths: StorePaths, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(conductors, "conductor", lambda: ME)
+    assert waiting.wait("payments-api", timeout=0.1).idle
+    lease = runtime.load_lease(store_paths, ME.pid)
+    assert lease is not None and (lease.project, lease.agent) == ("payments-api", "claude")
+
+
+def test_wait_from_an_undetected_caller_writes_no_lease(
+    registered_repo: Path, store_paths: StorePaths, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    shell = Conductor(ME.pid, "unknown", ME.command, False)
+    monkeypatch.setattr(conductors, "conductor", lambda: shell)
+    assert waiting.wait(None, timeout=0.1).idle
+    assert runtime.load_leases(store_paths) == []
+
+
+def test_wait_reports_queued_for_ready_adds_and_unblocks_only(
+    registered_repo: Path, store_paths: StorePaths, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(conductors, "conductor", lambda: ME)
+    plan_id = plans.new_plan(
+        "Keys.", title="Keys", mode=PlanMode.quick, project=None, cwd=registered_repo, by="x"
+    ).id
+    assert waiting.wait(None, timeout=0.1).idle  # sets the cursor
+    first, second = tickets.add_tickets(plan_id, BATCH, project=None, by="x").tickets
+    (queued,) = waiting.wait(None, timeout=0.1).events
+    assert (queued.id, queued.status, queued.loop, queued.loop_max, queued.detail) == (
+        first.id,
+        "queued",
+        1,
+        3,
+        "Add keyring",
+    )
+    journal.append(store_paths, merging._unblocked("payments-api", second.id, first.id))
+    (unblocked,) = waiting.wait(None, timeout=0.1).events
+    assert (unblocked.id, unblocked.status, unblocked.detail) == (
+        second.id,
+        "queued",
+        "Rotate keys",
+    )
+
+
+def test_a_wait_taken_over_midway_stops_before_reading(
+    registered_repo: Path, store_paths: StorePaths, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    other = Conductor(os.getppid(), "codex", process_name(os.getppid()) or "", True)
+    monkeypatch.setattr(conductors, "conductor", lambda: ME)
+    record = WorkerRecord(id="a1b2c3d4", project="payments-api", pid=os.getpid(), job="plan-review")
+    runtime.save_worker(store_paths, record)  # keeps the scope running, so wait polls
+    waiting.wait(None, timeout=0.1, poll_s=0.05)  # claims the lease and sets the cursor
+    gate = {"type": "ticket.awaiting_merge", "project": "payments-api", "ticket": "7b55e0c1"}
+
+    def take_over(_seconds: float) -> None:
+        leases.claim(store_paths, None, other, take_over=True)
+        journal.append(store_paths, Event.model_validate({**gate, "status": "awaiting_merge"}))
+
+    monkeypatch.setattr(waiting, "time", SimpleNamespace(sleep=take_over, monotonic=time.monotonic))
+    with pytest.raises(LoopBusy):
+        waiting.wait(None, timeout=5, poll_s=0.05)
+    monkeypatch.setattr(waiting, "time", time)
+    monkeypatch.setattr(conductors, "conductor", lambda: other)
+    (found,) = waiting.wait(None, timeout=1, poll_s=0.05).events
+    assert (found.id, found.status) == ("7b55e0c1", "awaiting_merge")
+
+
+def _busy_slots(paths: StorePaths, count: int) -> None:
+    held = [
+        SlotEntry(
+            provider="claude", project="elsewhere", ticket=f"b{n}", step="plan", pid=os.getpid()
+        )
+        for n in range(count)
+    ]
+    runtime.save_slots(paths, SlotTable(held=held))
+
+
+def test_wait_holds_while_ready_tickets_wait_on_a_busy_slot(
+    registered_repo: Path,
+    store_paths: StorePaths,
+    make_ticket: Callable[..., Doc[Ticket]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    documents.save_ticket(store_paths.project("payments-api"), make_ticket())
+    _busy_slots(store_paths, 2)
+    assert waiting.wait(None, timeout=0.2, poll_s=0.05).timed_out  # not idle: a slot frees later
+
+    def one_frees(_seconds: float) -> None:
+        _busy_slots(store_paths, 1)
+
+    monkeypatch.setattr(waiting, "time", SimpleNamespace(sleep=one_frees, monotonic=time.monotonic))
+    assert waiting.wait(None, timeout=5, poll_s=0.05).idle  # run `next` again
+
+
+def test_wait_is_idle_when_no_slot_is_held(
+    registered_repo: Path, store_paths: StorePaths, make_ticket: Callable[..., Doc[Ticket]]
+) -> None:
+    documents.save_ticket(store_paths.project("payments-api"), make_ticket())
+    _busy_slots(store_paths, 0)
+    assert waiting.wait(None, timeout=0.2, poll_s=0.05).idle
+
+
+def test_a_merge_conflict_requeue_is_queued_but_a_send_back_is_not(
+    registered_repo: Path,
+    store_paths: StorePaths,
+    make_ticket: Callable[..., Doc[Ticket]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(conductors, "conductor", lambda: ME)
+    documents.save_ticket(store_paths.project("payments-api"), make_ticket(title="Rotate keys"))
+    assert waiting.wait(None, timeout=0.1).idle  # sets the cursor
+    base = {"type": "ticket.recirculated", "project": "payments-api", "ticket": "7b55e0c1"}
+    sent_back = {**base, "from": "review_code", "to": "implement", "loop": 2, "loop_max": 4}
+    journal.append(store_paths, Event.model_validate(sent_back))
+    conflict = {**base, "from": "merge", "to": "implement", "status": "in_queue/ready"}
+    journal.append(store_paths, Event.model_validate({**conflict, "loop": 2, "loop_max": 4}))
+    (found,) = waiting.wait(None, timeout=0.1).events
+    assert (found.id, found.status, found.detail) == ("7b55e0c1", "queued", "Rotate keys")

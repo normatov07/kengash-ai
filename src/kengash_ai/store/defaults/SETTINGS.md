@@ -13,6 +13,7 @@ loop_grant: 2                 # loops added per approval
 loop_ask_at_cap: true         # false: park the ticket instead of asking
 loop_count_rejected_review: true   # false: plan-review rejections count only toward plan.review_max
 stall_repeat: 2               # the same finding fails this many loops in a row → stalled
+loop_start: ask               # auto: start the loop as soon as tickets are added (Auto mode)
 
 # planning
 grill.round_size: 3

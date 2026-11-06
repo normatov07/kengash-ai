@@ -336,9 +336,11 @@ def test_settings_offers_planning_and_merging_as_real_controls() -> None:
         "merge.mode",
         "grill.round_size",
         "plan.review_max",
+        "loop_start",
     ):
         assert f'"{key}"' in page, key
-    assert "modelPicker(" in page and "segmented(" in page
+    assert "modelPicker(" in page and "segmented(" in page and "toggle(" in page
+    assert "Auto mode" in page
 
 
 @pytest.mark.skipif(NODE is None, reason="node is not installed")
@@ -355,3 +357,72 @@ def test_an_emptied_other_model_saves_the_default() -> None:
         "console.log(JSON.stringify(got));"
     )
     assert json.loads(out) == ["claude/o", "claude"]
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_loop_summary() -> None:
+    fmt = (STATIC / "format.js").as_uri()
+    found = json.loads(
+        _node(
+            f"import {{ loopSummary }} from '{fmt}';"
+            "const one = {agent: 'claude', scope: 'all projects'};"
+            "console.log(JSON.stringify([loopSummary([]), loopSummary([one]),"
+            " loopSummary([one, {agent: 'codex', scope: 'app'}, {agent: 'claude', scope: 'b'}])]));"
+        )
+    )
+    assert found == [
+        "no loop running: run /kengash:loop in your agent",
+        "loop running (claude · all projects)",
+        "3 loops running (claude, codex)",
+    ]
+
+
+def test_overview_shows_the_loop_and_switches_auto_mode() -> None:
+    page = (STATIC / "views" / "overview.js").read_text()
+    assert "loopSummary(" in page and "toggle(" in page and "loop_start" in page
+    shell = (STATIC / "app.js").read_text()
+    assert "30_000" in shell and '"overview"' in shell
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_the_overview_scopes_loops_and_auto_mode() -> None:
+    fmt = (STATIC / "format.js").as_uri()
+    overview = (STATIC / "views" / "overview.js").as_uri()
+    found = json.loads(
+        _node(
+            f"import {{ loopsIn }} from '{fmt}'; import {{ autoChange }} from '{overview}';"
+            "const loops = [{agent: 'claude', project: null}, {agent: 'codex', project: 'a'},"
+            " {agent: 'agy', project: 'b'}];"
+            "console.log(JSON.stringify({all: loopsIn(loops, '').length,"
+            " a: loopsIn(loops, 'a').map((l) => l.agent),"
+            " changes: [autoChange('', true, false), autoChange('a', true, false),"
+            " autoChange('a', false, false), autoChange('a', true, true)]}));"
+        )
+    )
+    assert found == {
+        "all": 3,
+        "a": ["claude", "codex"],
+        "changes": ["auto", "auto", None, None],
+    }
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_the_overview_switch_reverts_on_a_failed_save() -> None:
+    overview = (STATIC / "views" / "overview.js").as_uri()
+    out = _node(
+        f"import {{ bind }} from '{overview}';"
+        "const on = {}; const root = {addEventListener(type, f) { on[type] = f; }};"
+        "const toasts = []; const bodies = [];"
+        "const app = (result) => ({project: 'a',"
+        " post: async (path, body) => { bodies.push([path, body]); return result; },"
+        " toast: (m) => toasts.push(m)});"
+        "const failed = {id: 'ov-auto', checked: true};"
+        "bind(root, {...app(null), overview: null}); await on.change({target: failed});"
+        "const saved = {id: 'ov-auto', checked: true};"
+        "bind(root, app({})); await on.change({target: saved});"
+        "console.log(JSON.stringify({failed: failed.checked, saved: saved.checked,"
+        " toasts: toasts.length, bodies}));"
+    )
+    found = json.loads(out)
+    assert (found["failed"], found["saved"], found["toasts"]) == (False, True, 1)
+    assert found["bodies"][0] == ["/api/settings?project=a", {"changes": {"loop_start": "auto"}}]

@@ -1,0 +1,39 @@
+skill: loop
+description: a second /kengash:loop starts nothing while another conductor's loop covers the project (SP11)
+notes: >-
+  RED 2026-11-06 (baseline, claude haiku): /kengash:loop was not installed, so the conductor
+  ran nothing and never said a loop was running; before SP11 the loop skill had no lease to
+  check, so a second session would have claimed the ticket beside the first.
+files:
+  calc.py: "\"\"\"Small arithmetic helpers.\"\"\"\n\n\ndef sub(a: int, b: int) -> int:\n    return a - b\n"
+settings: |
+  merge.mode: ask
+  step_timeout_min: 10
+  plan.reviewer: {cli}
+  project.test_cmd: "python3 -c 'import calc; assert calc.add(2, 3) == 5'"
+  agents:
+    planner: {cli: {cli}, skill: plan, fallback: []}
+    plan-reviewer: {cli: {cli}, skill: review-plan, fallback: []}
+    implementer: {cli: {cli}, skill: implement, fallback: []}
+    code-reviewer: {cli: {cli}, skill: review-code, fallback: []}
+    security-reviewer: {cli: {cli}, skill: review-security, fallback: []}
+setup:
+  - args: [plan, new, --mode, quick, --title, "Add add()"]
+    stdin: "Add add(a, b) to calc.py."
+    save: plan
+  - args: [ticket, add, --plan, "{plan}"]
+    stdin: |
+      - title: Add add(a, b) to calc.py
+        importance: simple
+        touches: [calc.py]
+        scope: "Add add(a: int, b: int) -> int to calc.py; it returns a + b."
+        acceptance: ["calc.add(2, 3) == 5"]
+    save: ticket
+  - args: [loop, claim]
+turns:
+  - "{kg}loop"
+expect:
+  absent: [ticket.claimed]
+  reply: ["running"]
+  clean: true
+timeout_s: 900

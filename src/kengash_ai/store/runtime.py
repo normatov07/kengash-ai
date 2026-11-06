@@ -1,5 +1,5 @@
 """Engine bookkeeping under runtime/ (SP3 spec §4): slots, claims, flags, workers, ticket
-state, conductor pings and wait cursors, repo trust."""
+state, conductor pings and wait cursors, repo trust, loop leases (SP11)."""
 
 import threading
 from dataclasses import dataclass
@@ -12,6 +12,7 @@ from kengash_ai.model import (
     ConductorPing,
     JournalCursor,
     KengashError,
+    LoopLease,
     SlotTable,
     TicketState,
     Trust,
@@ -132,6 +133,37 @@ def load_pings(paths: StorePaths) -> list[ConductorPing]:
         if not path.name.startswith("cursor-")
     ]
     return sorted(pings, key=lambda ping: ping.time, reverse=True)
+
+
+def load_lease(paths: StorePaths, pid: int) -> LoopLease | None:
+    """The lease on `pid`; None when there is none or its file cannot be read."""
+    return _lease(paths.loops / f"{pid}.json")
+
+
+def load_leases(paths: StorePaths) -> list[LoopLease]:
+    """Every readable loop lease, by pid. A damaged or newer-format file is skipped: a lease
+    nobody can read holds no loop, and it must not stop every loop command (SP11)."""
+    if not paths.loops.is_dir():
+        return []
+    found = [_lease(path) for path in paths.loops.glob("*.json")]
+    return sorted((lease for lease in found if lease is not None), key=lambda lease: lease.pid)
+
+
+def _lease(path: Path) -> LoopLease | None:
+    if not path.exists():
+        return None
+    try:
+        return _load(path, LoopLease)
+    except (KengashError, OSError):
+        return None
+
+
+def save_lease(paths: StorePaths, lease: LoopLease) -> None:
+    _save(paths.loops / f"{lease.pid}.json", lease)
+
+
+def drop_lease(paths: StorePaths, pid: int) -> None:
+    (paths.loops / f"{pid}.json").unlink(missing_ok=True)
 
 
 def load_ui(paths: StorePaths) -> UiRecord | None:

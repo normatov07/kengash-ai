@@ -256,3 +256,13 @@ def test_model_names_may_carry_brackets_and_dots() -> None:
         Settings.model_validate({"agents": agents}).agents["implementer"].cli == "claude/opus[1m]"
     )
     assert Settings.model_validate({"memory": {"compactor": "antigravity/gemini-3.8-flash-low"}})
+
+
+def test_loop_start_defaults_to_ask_and_takes_auto() -> None:
+    assert Settings().loop_start == "ask"
+    assert Settings.model_validate({"loop_start": "auto"}).loop_start == "auto"
+
+
+def test_loop_start_refuses_other_values() -> None:
+    with pytest.raises(ValidationError, match="Input should be 'ask' or 'auto'"):
+        Settings.model_validate({"loop_start": "always"})

@@ -1,5 +1,5 @@
 skill: plan
-description: a direct plan from a one-line request, reviewed, then approved by the user
+description: a direct plan from a one-line request, reviewed, approved by the user, then cut into tickets without another yes (SP11)
 notes: >-
   RED 2026-10-23: claude (haiku) tried to edit calc.py and stopped at the denied write; agy
   loaded the user's own global writing-plans skill and wrote docs/ into the repo. Neither
@@ -12,8 +12,11 @@ settings: "plan.reviewer: {cli}\nplan.review_max: 1\n"
 turns:
   - "{kg}plan Add an add(a, b) function to calc.py"
   - "Approve it."
+  - "Not now."
 expect:
-  journal: [plan.created, plan.saved, plan.reviewed, plan.approved]
-  plans: {count: 1, fields: {mode: direct, status: approved}}
+  journal: [plan.created, plan.saved, plan.reviewed, plan.approved, ticket.created]
+  absent: [loop.started]
+  plans: {count: 1, fields: {mode: direct, status: ticketed}}
+  tickets: {min: 1}
   clean: true
 timeout_s: 900

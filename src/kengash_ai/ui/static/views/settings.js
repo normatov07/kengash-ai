@@ -1,10 +1,10 @@
 // Project settings (canvas board Settings): loop limits, token discipline, planning and
 // merging (SP10: real controls for the plan reviewer, grill rounds, merge mode and memory
-// compactor), project commands and the status flow of one scope, its SETTINGS.md with this
+// compactor; SP11: the Auto mode switch, `loop_start`), project commands and the status flow of one scope, its SETTINGS.md with this
 // scope's overrides in amber, and the memory behind it: the files, the shared store and what
 // the project sees of it.
 import { get } from "../api.js";
-import { bindModelPicker, modelPicker, modelValue, segmented } from "../controls.js";
+import { bindModelPicker, modelPicker, modelValue, segmented, toggle } from "../controls.js";
 import { clock } from "../format.js";
 import { html } from "../html.js";
 import { icon } from "../icons.js";
@@ -36,8 +36,9 @@ function planning(data, on) {
   const other = reviewer === "different-provider";
   const merge = pick(v, "merge.mode") ?? "ask";
   const round = pick(v, "grill.round_size") ?? 3;
+  const start = pick(v, "loop_start") ?? "ask";
   return html`<section class="panel"><div class="panel-body planning">
-    <h2 class="section-title">Planning and merging</h2><p class="section-note">Who reviews a plan, how many questions a grill round asks, and what happens once every step passes</p>
+    <h2 class="section-title">Planning and merging</h2><p class="section-note">Who reviews a plan, how many questions a grill round asks, whether the loop starts by itself once tickets are added, and what happens once every step passes</p>
     <div class="setting ${on("plan.reviewer") ? "set" : ""}" data-choice="plan.reviewer"><div class="setting-label">Plan reviewer</div>
       ${segmented({ name: "plan-reviewer-mode", value: other ? "other" : "cli", label: "Plan reviewer", options: [["other", "Another provider", "A signed-in CLI other than the planner's"], ["cli", "This CLI", "Always the CLI and model you pick"]] })}
       <div data-reviewer-picker ${other ? "hidden" : ""}>${modelPicker({ id: "set-reviewer", cards: data.providers, value: other ? "claude" : reviewer, label: "Plan reviewer CLI and model" })}</div>
@@ -46,6 +47,7 @@ function planning(data, on) {
       <div class="field ${on("plan.review_max") ? "set" : ""}"><label for="f-plan-review_max">PLAN REVIEW ROUNDS</label><input id="f-plan-review_max" class="mono" type="number" min="0" data-key="plan.review_max" data-kind="number" data-initial="${pick(v, "plan.review_max")}" value="${pick(v, "plan.review_max")}"></div>
       <div class="field ${on("grill.round_size") ? "set" : ""}"><label for="f-grill-round_size">QUESTIONS PER GRILL ROUND</label><select id="f-grill-round_size" class="select full" data-key="grill.round_size" data-kind="number" data-initial="${round}">${[1, 2, 3, 4].map((n) => html`<option value="${n}" ${n === round ? "selected" : ""}>${n}</option>`)}</select></div>
     </div>
+    <div class="setting ${on("loop_start") ? "set" : ""}" data-choice="loop_start"><div class="setting-label">After tickets are added</div>${toggle({ id: "set-auto", checked: start === "auto", label: "Auto mode", hint: "Start the loop as soon as tickets are added; off, your agent asks first" })}${hidden("loop_start", start)}</div>
     <div class="setting ${on("merge.mode") ? "set" : ""}" data-choice="merge.mode"><div class="setting-label">When every step passes</div>${segmented({ name: "merge-mode", value: merge, label: "Merge mode", options: MERGE })}${hidden("merge.mode", merge)}</div>
   </div></section>`;
 }
@@ -248,6 +250,7 @@ export function bind(root, app, data, bar) {
       store("plan.reviewer", other ? "different-provider" : modelValue(reviewer));
     }
     if (event.target.name === "merge-mode") store("merge.mode", event.target.value);
+    if (event.target.id === "set-auto") store("loop_start", event.target.checked ? "auto" : "ask");
   });
   root.addEventListener("click", async (event) => {
     if (event.target.closest("[data-relink-open]")) {

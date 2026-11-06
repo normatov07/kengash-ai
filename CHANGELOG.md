@@ -2,6 +2,21 @@
 
 All notable changes to this project are written here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- An approved plan flows on: `/kengash:plan` and `/kengash:grill` cut the tickets as soon as you approve, with no second yes, each ticket's scope 3 to 8 lines.
+- Auto mode (`loop_start: auto`, switched in Settings or on Overview): once tickets are added the loop starts by itself; with it off your agent asks once.
+- One live loop per project: `kengash loop claim|release|status` keep a lease per agent session; a second loop on the same project is refused (exit 6) and told which session runs it, and `--take-over` frees a lease you know is dead. A lease ends with its session, or after an hour without a `wait`.
+- A running loop starts newly ready tickets at once: `kengash wait` reports `queued` when a ticket is added ready or unblocked by a merge.
+- `kengash skills show <name>` prints a skill as installed for the calling agent; skills hand over to each other through it.
+- Overview names the running loop and reads again every 30 s.
+
+### Changed
+
+- The loop skill's event table moved to `loop/references/events.md`. Run `kengash skills install --agent … [--global]` again to get the new skills.
+
 ## [0.3.0] - 2026-10-30
 
 ### Breaking

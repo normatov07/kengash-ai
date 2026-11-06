@@ -236,6 +236,7 @@ class Settings(_Section):
     loop_ask_at_cap: bool = True
     loop_count_rejected_review: bool = True
     stall_repeat: int = Field(2, ge=1)
+    loop_start: Literal["ask", "auto"] = "ask"  # auto: the loop starts once tickets are added
     grill: Grill = Field(default_factory=Grill)
     plan: PlanReview = Field(default_factory=PlanReview)
     sessions: Sessions = Field(default_factory=Sessions)

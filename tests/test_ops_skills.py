@@ -357,3 +357,47 @@ def test_a_project_claude_install_notes_the_trust_dialog(tmp_path: Path, source:
     assert install(["claude"], tmp_path, source).notes == [skills.TRUST_NOTE]
     assert install(["claude"], tmp_path, source, home=True).notes == []
     assert install(["codex"], tmp_path / "other", source).notes == []
+
+
+def test_show_prints_the_body_without_frontmatter() -> None:
+    for folder in sorted(skills.packaged().iterdir()):
+        if not (folder / "SKILL.md").is_file():
+            continue
+        _, body = split_frontmatter((folder / "SKILL.md").read_text(encoding="utf-8"))
+        shown = skills.show(folder.name, agent="claude", cli_name="kengash")
+        assert shown.startswith(body.lstrip()), folder.name
+        assert "\nname: " not in shown and "disable-model-invocation" not in shown
+
+
+def test_show_inlines_references() -> None:
+    rubric = (skills.packaged() / "ticket" / "references" / "importance.md").read_text()
+    shown = skills.show("ticket", agent="claude", cli_name="kengash")
+    assert shown.endswith(f"\n## references/importance.md\n\n{rubric}")
+
+
+def test_show_spells_codex_commands() -> None:
+    shown = skills.show("loop", agent="codex", cli_name="kengash")
+    assert "`$kengash-plan`" in shown and "/kengash:" not in shown
+    assert "`/kengash:plan`" in skills.show("loop", agent="agy", cli_name="kengash")
+
+
+def test_show_names_a_full_path_cli() -> None:
+    shown = skills.show("loop", agent="claude", cli_name="/opt/kg/kengash")
+    assert "`/opt/kg/kengash next`" in shown and "`kengash next`" not in shown
+
+
+def test_invoked_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    first = tmp_path / "bin" / "kengash"
+    other = tmp_path / "venv" / "kengash"
+    for path in (first, other):
+        path.parent.mkdir()
+        path.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setattr(shutil, "which", lambda name: str(first) if name == "kengash" else None)
+    assert skills.invoked_name(str(first)) == "kengash"
+    assert skills.invoked_name(str(other)) == str(other)
+
+
+def test_show_unknown_skill() -> None:
+    with pytest.raises(UserError) as caught:
+        skills.show("nope", agent="claude", cli_name="kengash")
+    assert str(caught.value) == "unknown skill: nope; known: grill, loop, memory, plan, ticket, ui"

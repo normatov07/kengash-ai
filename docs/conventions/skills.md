@@ -39,6 +39,7 @@ An installed skill's name and description load into every session of every agent
 - Names are short (`plan`, `grill`, `ticket`, `loop`, `ui`, `memory`): the `kengash` plugin namespace makes them `/kengash:<name>`, and Codex copies are renamed `kengash-<name>` at install time.
 - User commands (`grill`, `plan`, `ticket`, `loop`, `ui`) set `disable-model-invocation: true` for Claude Code, so only the user starts them.
 - Model-invoked skills (`memory`) need sharp triggers, because the agent decides when to load them.
+- One skill hands over to the next by running `kengash skills show <name>` and following it, never by a file path: install folders and command spellings differ per agent, and `show` renders the skill as installed for the caller, its references appended (SP11). `plan` and `grill` hand over to `ticket`, and `ticket` to `loop`.
 
 ## Test first
 

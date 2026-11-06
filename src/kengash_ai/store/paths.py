@@ -104,6 +104,10 @@ class StorePaths:
         return self.runtime / "conductors"
 
     @property
+    def loops(self) -> Path:
+        return self.runtime / "loops"
+
+    @property
     def logs(self) -> Path:
         return self.runtime / "logs"
 
