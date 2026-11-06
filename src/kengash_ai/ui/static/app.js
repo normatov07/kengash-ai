@@ -177,6 +177,12 @@ document.addEventListener("click", async (event) => {
   }
 });
 
+// A loop that dies or goes stale journals nothing, so Overview also reads again every 30 s
+// while it is on screen (SP11 §5.4).
+setInterval(() => {
+  if (route().name === "overview" && !app.dirty && !document.hidden) show();
+}, 30_000);
+
 let pending = 0;
 subscribe(
   () => {

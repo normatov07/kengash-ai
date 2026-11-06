@@ -1,7 +1,8 @@
 // Overview (canvas board Main): what runs, what waits, what needs the user, what it cost,
-// and the loop journal, newest first.
+// and the loop journal, newest first; the running loop and the Auto mode switch (SP11 §5.3).
 import { get } from "../api.js";
-import { STEPS, clock, elapsed, stepColor, tokens } from "../format.js";
+import { toggle } from "../controls.js";
+import { STEPS, clock, elapsed, loopSummary, stepColor, tokens } from "../format.js";
 import { html } from "../html.js";
 import { icon } from "../icons.js";
 import { armed } from "../scope.js";
@@ -19,11 +20,7 @@ const inScope = (app, item) => !app.project || item.project === app.project;
 function subtitle(data, app) {
   const projects = app.project ? 1 : data.projects.length;
   const live = data.sessions.filter((s) => inScope(app, s)).length;
-  const conductors = data.conductors.length;
-  const lead = conductors
-    ? `${conductors} live ${conductors === 1 ? "conductor" : "conductors"} (${[...new Set(data.conductors.map((c) => c.agent))].join(", ")})`
-    : "no live conductor: run /kengash:loop in your agent";
-  return `${projects} ${projects === 1 ? "project" : "projects"} · ${live} live CLI ${live === 1 ? "session" : "sessions"} · ${lead}${data.paused ? " · all loops paused" : ""}`;
+  return `${projects} ${projects === 1 ? "project" : "projects"} · ${live} live CLI ${live === 1 ? "session" : "sessions"} · ${loopSummary(data.loops)}${data.paused ? " · all loops paused" : ""}`;
 }
 
 function tiles(data, app) {
@@ -182,6 +179,7 @@ export function view(data, app) {
       <div><h1>Overview</h1><p>${subtitle(data, app)}</p></div>
       <div class="head-row">
         <div class="segmented" role="group" aria-label="Window">${WINDOWS.map(([key, label]) => html`<button type="button" data-window="${key}" aria-pressed="${app.window === key ? "true" : "false"}">${label}</button>`)}</div>
+        ${toggle({ id: "ov-auto", checked: app.project ? Boolean(data.auto[app.project]) : data.auto_default, label: "Auto mode", hint: app.project ? `start the loop once ${app.project} gets tickets` : "every project without its own setting" })}
         <button class="btn danger" type="button" data-pause="${data.paused ? "resume" : "pause"}">${data.paused ? "Resume all loops" : "Pause all loops"}</button>
       </div>
     </div>
@@ -201,6 +199,14 @@ export function foot(data) {
 }
 
 export function bind(root, app) {
+  root.addEventListener("change", async (event) => {
+    if (event.target.id !== "ov-auto") return;
+    const auto = event.target.checked;
+    const scope = encodeURIComponent(app.project);
+    const done = await app.post(`/api/settings?project=${scope}`, { changes: { loop_start: auto ? "auto" : "ask" } });
+    if (done) app.toast(auto ? "Auto mode on: the loop starts once tickets are added." : "Auto mode off: your agent asks before it starts the loop.");
+    else event.target.checked = !auto;
+  });
   root.addEventListener("click", async (event) => {
     const win = event.target.closest("[data-window]");
     if (win) {
