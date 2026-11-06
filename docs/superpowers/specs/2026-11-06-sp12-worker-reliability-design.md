@@ -48,7 +48,7 @@ agy also takes `--settings <json>` for one session. Claude Code has `--output-fo
 - Goal: a transient network error is retried on the same session once, then sent to the agent's fallback, then reported in one clear line that says where the work is.
 - Goal: while a step runs, the conductor and the user see what it is doing at least every 5 minutes: step, CLI and model, elapsed time, last activity, last action and changed files. The UI shows the same.
 - Goal: a new project gets its test and lint commands detected, and `doctor` names any project that has none.
-- Non-goals: a daemon or a terminal multiplexer; showing the worker's full transcript in the conductor (it costs tokens; `kengash logs` and the UI are for that); parallel branches; Codex live verification (codex is not installed here).
+- Non-goals: a daemon or a terminal multiplexer; a real Claude Code subagent per worker (§4.4); showing the worker's full transcript in the conductor's context (it costs tokens; background `kengash logs -f`, which the user opens, and the UI Live tab are for that); parallel branches; Codex live verification (codex is not installed here).
 - Anti-goals:
   - accepting an output that fails the step schema;
   - retrying an `auth` error, or retrying without limit;
@@ -98,14 +98,30 @@ agy also takes `--settings <json>` for one session. Claude Code has `--output-fo
    - On exit 3, `wait` prints one line per running ticket in scope, at most 5 lines: `<id> <step>→<provider>/<model> <elapsed> · active <age> ago · <N> files changed · <action>`, ending with `· quiet` when marked.
    - The loop skill shows these lines to the user and waits again.
    - `--json` gives the `Progress` list.
-4. **On demand.**
-   - `kengash ps [-p]` prints the same lines, or `nothing running`.
-   - `kengash logs <id> [-f]` prints the current step's activity as readable lines, one per tool call and reply, then its final status; `-f` follows the log until the step ends.
-   - Both take `--json`.
-5. **UI.**
+4. **Each worker as a watchable "sub-agent"** (the user's request of 2026-11-06: see the worker CLIs like Claude Code's or Antigravity's subagents, and click one to see what it does).
+   - **What is not possible, and why.** A worker cannot become a real Claude Code subagent: the Agent tool runs Claude models only. A Claude "watcher" subagent per ticket would spend tokens re-reading every event, and its transcript would show its own tool calls, not agy's. So kengash streams the worker's own actions to the places the user already clicks. That costs no tokens, keeps the conductor free, and works with any conductor (*call*).
+   - **`kengash logs <id> -f`: the worker's live transcript.**
+     - It follows one ticket across all its steps, one readable line per worker action, parsed from the stream logs (§4.1):
+       ```
+       11:05:43 implement → antigravity/gemini-3.8-flash-medium (session d68cea60)
+       11:05:51 read pubspec.yaml
+       11:06:02 edit lib/main.dart
+       11:26:27 reply: Rebrand core package and UI to Chess Samurai
+       11:26:30 implement done · 26 files changed · 498k tokens
+       11:26:31 review_code → claude/opus
+       ```
+     - Without `-f` it prints what has happened so far. With `-f` it ends when the ticket reaches a gate, is done or fails, with a closing status line. `--json` gives the events.
+   - **In the conductor: background tasks, not a silent wait.** The loop skill gains `references/background.md`, read "when your shell can run a command in the background and tell you when it ends" (Claude Code's background commands; *call*: a reference, because the skill is at its word cap and other agents lack the feature). It says:
+     - After `kengash run`, start `kengash logs <id> -f` in the background for each started ticket. The host lists each as a running task named after the ticket, and the user opens it to watch that worker live, the way a subagent's transcript opens. It ends on its own when the ticket stops.
+     - Run `kengash wait` in the background too, and keep answering the user while it runs. Act on its events when the host reports that it ended. The session is never frozen in a blocking call.
+     - Agents without background commands keep today's blocking `wait`, which now prints progress every 5 minutes (§4.3).
+   - **`kengash ps`.** Prints one progress line per running ticket (§4.2), or `nothing running`. `--line` prints one compact line for a status bar: `kg: 2 running · 7add8c2e implement→agy 12m edit lib/main.dart`, for example from Claude Code's `statusLine` command. The docs show how to set it up; kengash never edits the user's agent settings (*call*).
+5. **UI: the worker live view.**
    - Overview's Live agent sessions table gains an "activity" cell: `active <age> ago · <N> files · <action>`, red when quiet.
+   - Clicking a running session opens its ticket on a new **Live** tab. It shows the same timeline as `kengash logs`: each action a row with time, kind icon (read, edit, run, reply) and target. It streams over SSE from `GET /api/tickets/{id}/live`, follows the newest row, and shows a pulsing "running" header with step, CLI and model, elapsed time and changed files.
+   - Board cards of running tickets show a small pulsing dot. Clicking the card opens the Live tab.
    - The ticket sheet's changes tab lists the worktree's uncommitted files under "in progress" while a step runs.
-   - The data comes from `ops.progress` through the existing views, so the UI's 30-second reload covers it.
+   - The data comes from `ops.progress` and a shared log parser (`ops.activity`), which the CLI and the UI both use.
 
 ## 5. Decisions: setup (milestone 3)
 
@@ -159,7 +175,7 @@ agy also takes `--settings <json>` for one session. Claude Code has `--output-fo
 | M | Scope | Exit |
 |---|---|---|
 | M1 | §3: valid output wins, error-field classification, `network` kind with retry and fallback, session id kept, one-line failures with the worktree | unit tests reproducing `7add8c2e-4.out` (ERROR with a valid output → success; network error without output → resume, then fallback, then failure naming the worktree) |
-| M2 | §4: stream-json adapters, `ops.progress`, `wait` progress, `ps`, `logs`, UI activity | adapter tests on recorded stream fixtures (agy probe of 2026-11-06, claude, codex); live smoke green on claude and agy; UI checked at 360 and 1440 px |
+| M2 | §4: `ops.progress`, `ops.activity`, `wait` progress, `ps [--line]`, `logs [-f]`, the loop skill's background reference, the UI Live tab and activity cells | adapter tests on recorded stream fixtures (agy probe of 2026-11-06, claude, codex); live smoke green on claude and agy; UI checked at 360 and 1440 px |
 | M3 | §5: command detection, the checks step, doctor and its fixes for old defaults, token default, agy permissions, fallbacks; docs | tests per detector, for `run_tests` (test then lint, either failing), and for doctor's old-default fixes keeping comments; `make check`; live probe for the agy `--settings` key |
 
 Each milestone ends with a critical review against this spec (hard rule 9).
