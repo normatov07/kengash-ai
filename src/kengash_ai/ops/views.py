@@ -32,6 +32,7 @@ from kengash_ai.model import (
 from kengash_ai.model import Gate as TicketGate
 from kengash_ai.ops import agent_config, agents, jobs, records
 from kengash_ai.ops import changes as changes_ops
+from kengash_ai.ops import loops as loop_ops
 from kengash_ai.ops import projects as project_ops
 from kengash_ai.ops import skills as skill_ops
 from kengash_ai.ops.agent_config import AgentDetail
@@ -139,6 +140,9 @@ class Overview:
     spend: dict[str, int] = field(default_factory=dict)
     conductors: list[ConductorPing] = field(default_factory=list)
     tail: list[dict[str, Any]] = field(default_factory=list)
+    loops: list[loop_ops.LeaseView] = field(default_factory=list)  # live loop leases (SP11)
+    auto_default: bool = False  # the defaults' `loop_start` is auto
+    auto: dict[str, bool] = field(default_factory=dict)  # each project's `loop_start` is auto
 
 
 @dataclass
@@ -482,6 +486,11 @@ def overview(paths: StorePaths | None = None, *, window: Window = "today") -> Ov
         found.agents_on = sum(agent.on for agent in resolved.agents.values())
         found.agents_total = len(resolved.agents)
         found.grant = resolved.loop_grant
+        found.auto_default = resolved.loop_start == "auto"
+    for slug in found.projects:
+        with contextlib.suppress(KengashError):
+            found.auto[slug] = settings.load(paths, slug).loop_start == "auto"
+    found.loops = loop_ops.views(paths, None)
     fresh = utc_now() - FRESH_PING
     found.conductors = [ping for ping in runtime.load_pings(paths) if ping.time >= fresh]
     for event in events[-TAIL:]:

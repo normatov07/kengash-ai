@@ -1,5 +1,6 @@
 """Read models for the UI screens (SP5 spec §3)."""
 
+import os
 import time
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
@@ -13,6 +14,7 @@ from kengash_ai.model import (
     ConductorPing,
     Doc,
     Event,
+    LoopLease,
     ProviderStatus,
     SlotEntry,
     SlotTable,
@@ -21,6 +23,7 @@ from kengash_ai.model import (
 )
 from kengash_ai.model.settings import SkillCaps
 from kengash_ai.ops import agent_config, agents, configure, skills, views
+from kengash_ai.ops.conductors import process_name
 from kengash_ai.store import StorePaths, documents, runtime
 
 Make = Callable[..., Doc[Ticket]]
@@ -537,3 +540,21 @@ def test_workflows_view_has_routing_and_picker(seeded: StorePaths) -> None:
         False,
     )
     assert (picks["approve"].role, picks["approve"].kind) == ("", "approve")
+
+
+def test_the_overview_lists_live_loops_and_auto_mode(seeded: StorePaths) -> None:
+    live = LoopLease(pid=os.getpid(), agent="claude", command=process_name(os.getpid()) or "")
+    stale = LoopLease(
+        pid=os.getppid(),
+        agent="codex",
+        project="payments-api",
+        seen=datetime.now(UTC) - timedelta(hours=2),
+    )
+    runtime.save_lease(seeded, live)
+    runtime.save_lease(seeded, stale)
+    configure.save_settings({"loop_start": "auto"}, project="payments-api", by="test")
+    found = views.overview(seeded, window="today")
+    assert [(lease.pid, lease.scope, lease.mine) for lease in found.loops] == [
+        (os.getpid(), "all projects", False)
+    ]
+    assert (found.auto_default, found.auto) == (False, {"payments-api": True})
