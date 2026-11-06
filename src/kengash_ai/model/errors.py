@@ -27,3 +27,9 @@ class WaitTimeout(KengashError):
     """A wait ran out of time; the work it waited for goes on."""
 
     exit_code = 3
+
+
+class LoopBusy(KengashError):
+    """Another conductor's live loop covers this scope (SP11 spec §4)."""
+
+    exit_code = 6

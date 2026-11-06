@@ -1,10 +1,7 @@
 """Wait for gates, find dead workers, record conductor pings (SP3 spec decisions 9, 24, 33)."""
 
-import os
-import subprocess
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 from kengash_ai import journal
@@ -17,7 +14,7 @@ from kengash_ai.model import (
     WorkerRecord,
     utc_now,
 )
-from kengash_ai.ops import jobs, lifecycle, records, steps
+from kengash_ai.ops import conductors, jobs, lifecycle, records, steps
 from kengash_ai.ops.workspace import GATES
 from kengash_ai.store import runtime
 from kengash_ai.store.paths import StorePaths
@@ -31,8 +28,6 @@ WAIT_TYPES = (
     "plan.reviewed",
 )
 NOT_RUNNING = (*GATES, "paused")
-AGENTS = ("claude", "codex", "agy")
-ANCESTORS = 20
 
 
 @dataclass
@@ -79,14 +74,9 @@ def check_workers(paths: StorePaths, *, fix: bool = True) -> list[str]:
 
 
 def ping(paths: StorePaths, project: str | None) -> None:
-    """Record the conductor: the nearest ancestor named claude, codex or agy, else the
-    parent; its agent is $KENGASH_AGENT ($HARNESS_AGENT before 0.2.0), else the detected
-    name, else `unknown`."""
-    pid, detected = _conductor()
-    agent = (
-        os.environ.get("KENGASH_AGENT") or os.environ.get("HARNESS_AGENT") or detected or "unknown"
-    )
-    runtime.save_ping(paths, ConductorPing(pid=pid, agent=agent, project=project))
+    """Record the conductor (`conductors.conductor`): its pid, agent and project filter."""
+    me = conductors.conductor()
+    runtime.save_ping(paths, ConductorPing(pid=me.pid, agent=me.agent, project=project))
 
 
 def wait(project: str | None, *, timeout: float, poll_s: float = 1.0) -> WaitResult:
@@ -198,38 +188,3 @@ def _ticket(paths: StorePaths, slug: str, ticket_id: str) -> Ticket | None:
 
 def _extra(event: Event, key: str) -> Any:
     return (event.model_extra or {}).get(key)
-
-
-def _conductor() -> tuple[int, str | None]:
-    """The nearest ancestor process named claude, codex or agy, else the parent."""
-    parent = os.getppid()
-    pid = parent
-    for _ in range(ANCESTORS):
-        if pid <= 1:
-            break
-        found = _ps(pid)
-        if found is None:
-            break
-        ppid, command = found
-        name = Path(command).name
-        if name in AGENTS:
-            return pid, name
-        pid = ppid
-    return parent, None
-
-
-def _ps(pid: int) -> tuple[int, str] | None:
-    try:
-        result = subprocess.run(
-            ["ps", "-o", "ppid=,comm=", "-p", str(pid)],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=5,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    fields = result.stdout.strip().split(None, 1)
-    if result.returncode != 0 or len(fields) != 2 or not fields[0].isdigit():
-        return None
-    return int(fields[0]), fields[1].strip()

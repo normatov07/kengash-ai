@@ -14,7 +14,14 @@ from kengash_ai.model.documents import (
     Ticket,
     TicketInput,
 )
-from kengash_ai.model.errors import KengashError, NeedsSetup, NeedsUser, UserError, WaitTimeout
+from kengash_ai.model.errors import (
+    KengashError,
+    LoopBusy,
+    NeedsSetup,
+    NeedsUser,
+    UserError,
+    WaitTimeout,
+)
 from kengash_ai.model.evals import EvalScenario, Expect, RecordsExpect, SetupStep
 from kengash_ai.model.events import Event
 from kengash_ai.model.registry import ProjectEntry, Registry
@@ -22,6 +29,7 @@ from kengash_ai.model.runtime import (
     Claims,
     ConductorPing,
     JournalCursor,
+    LoopLease,
     Running,
     SlotEntry,
     SlotTable,
@@ -95,6 +103,8 @@ __all__ = [
     "KengashError",
     "Kind",
     "Logs",
+    "LoopBusy",
+    "LoopLease",
     "NeedsSetup",
     "NeedsUser",
     "OutputKind",

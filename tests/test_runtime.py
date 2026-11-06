@@ -6,6 +6,8 @@ from kengash_ai.model import (
     Claims,
     JournalCursor,
     KengashError,
+    LoopBusy,
+    LoopLease,
     SlotEntry,
     SlotTable,
     TicketState,
@@ -76,3 +78,24 @@ def test_ticket_state_park_flags_and_cursors(store_paths: StorePaths) -> None:
     assert store_paths.worktree("payments-api", "7b55e0c1") == (
         store_paths.home / "worktrees" / "payments-api" / "kg-7b55e0c1"
     )
+
+
+def test_lease_round_trip(store_paths: StorePaths) -> None:
+    assert runtime.load_leases(store_paths) == []
+    assert runtime.load_lease(store_paths, 42) is None
+    first = LoopLease(
+        pid=42, agent="claude", command="claude", project="app", started=NOW, seen=NOW
+    )
+    second = LoopLease(pid=7, agent="codex", command="codex", started=NOW, seen=NOW)
+    runtime.save_lease(store_paths, first)
+    runtime.save_lease(store_paths, second)
+    assert runtime.load_lease(store_paths, 42) == first
+    assert [lease.pid for lease in runtime.load_leases(store_paths)] == [7, 42]
+    assert (store_paths.runtime / "loops" / "42.json").is_file()
+    runtime.drop_lease(store_paths, 42)
+    runtime.drop_lease(store_paths, 42)  # already gone: nothing happens
+    assert runtime.load_leases(store_paths) == [second]
+
+
+def test_loop_busy_exits_6() -> None:
+    assert LoopBusy("loop running: x").exit_code == 6

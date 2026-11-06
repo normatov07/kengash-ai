@@ -1,5 +1,5 @@
 """Engine bookkeeping under runtime/ (SP3 spec §4): slots, claims, flags, workers, ticket
-state, conductor pings and wait cursors, repo trust."""
+state, conductor pings and wait cursors, repo trust, loop leases (SP11)."""
 
 import threading
 from dataclasses import dataclass
@@ -12,6 +12,7 @@ from kengash_ai.model import (
     ConductorPing,
     JournalCursor,
     KengashError,
+    LoopLease,
     SlotTable,
     TicketState,
     Trust,
@@ -132,6 +133,27 @@ def load_pings(paths: StorePaths) -> list[ConductorPing]:
         if not path.name.startswith("cursor-")
     ]
     return sorted(pings, key=lambda ping: ping.time, reverse=True)
+
+
+def load_lease(paths: StorePaths, pid: int) -> LoopLease | None:
+    path = paths.loops / f"{pid}.json"
+    return _load(path, LoopLease) if path.exists() else None
+
+
+def load_leases(paths: StorePaths) -> list[LoopLease]:
+    """Every loop lease on record, by pid."""
+    if not paths.loops.is_dir():
+        return []
+    leases = [_load(path, LoopLease) for path in paths.loops.glob("*.json")]
+    return sorted(leases, key=lambda lease: lease.pid)
+
+
+def save_lease(paths: StorePaths, lease: LoopLease) -> None:
+    _save(paths.loops / f"{lease.pid}.json", lease)
+
+
+def drop_lease(paths: StorePaths, pid: int) -> None:
+    (paths.loops / f"{pid}.json").unlink(missing_ok=True)
 
 
 def load_ui(paths: StorePaths) -> UiRecord | None:

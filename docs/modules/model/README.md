@@ -10,14 +10,14 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 - `Doc[M]`: a frontmatter model plus ordered Markdown sections; `PLAN_SECTIONS` and `TICKET_SECTIONS` name them.
 - `Registry`, `ProjectEntry`: `registry.yaml`.
 - `SlotEntry`, `SlotTable`, `Claims`, `Trust`: `runtime/slots.json`, `runtime/claims.json` and `runtime/trust.json` (SP3 spec §4).
-- `WorkerRecord` (`runtime/workers/<id>.json`; `job`: `ticket`, `plan-review` or `compact`), `TicketState` with `Running` (`runtime/tickets/<id>.json`: stall streaks, plan-review rounds, pending approval, editing start commit, agy usage totals, the call in flight, call count), `ConductorPing` and `JournalCursor` (`runtime/conductors/`).
+- `WorkerRecord` (`runtime/workers/<id>.json`; `job`: `ticket`, `plan-review` or `compact`), `TicketState` with `Running` (`runtime/tickets/<id>.json`: stall streaks, plan-review rounds, pending approval, editing start commit, agy usage totals, the call in flight, call count), `ConductorPing` and `JournalCursor` (`runtime/conductors/`), `LoopLease` (`runtime/loops/<pid>.json`: pid, agent, process name, project or None for every project, started, seen; SP11).
 - `Importance`, `Gate`, `Folder`, `ShortId`, `Title`, `utc_now()`.
 - `TicketInput`: one item of `kengash ticket add` input (SP2 spec §4); unknown fields are rejected.
 - `SUB_STATUSES`: sub-statuses per folder, `in_process/paused` included (`in_process` also takes the step names of `status.names`); `Ticket.sub_status`.
 - `Settings`, `Agent`, `Workflow`, `CustomStep`, `ProviderOptions`, `STEP_ROLES`, `BUILTIN_KINDS`, `PROVIDERS`, `split_cli`: the SETTINGS.md schema; `steps.<name>: {role, kind, does}` adds a custom step (SP6: kind `read`, `edit` or `review`; not a built-in name; its role an agent on a model CLI (not `shell`) whose name follows the skill-name rule (`ROLE_NAME`: lowercase words joined by single hyphens, 2 to 31 characters); `does` one line ≤ 200 characters; only a custom review step may have an `on_fail` edge); `Settings.role_of(step)`, `kind_of(step)` (`Kind`: built-ins included, `run_tests` is `check`) and `step_names()` answer for built-in and custom steps alike; workflows may only use those steps, and their agents must exist; an agent's `cli` names a provider or `shell`, while fallbacks and `memory.compactor` name a provider, and `plan.reviewer` names one or is `different-provider`; `Settings.provider(name)` gives a provider's worker options, defaults included. SP10: `BUILTIN_SKILLS` fixes each built-in role's skill; `routing` maps an importance (`IMPORTANCES`) to an existing workflow and `Settings.workflow_for(importance)` falls back to the workflow of that name; workflow names match `WORKFLOW_NAME`, a workflow holds each step once, `on_fail` only sends back to an earlier step; a `provider/model` value needs a one-word model of at most 100 characters.
 - Step contract (SP3 spec §8): `StepRequest` (role, worktree, prompt, output kind, permission profile, timeout, raw-output log, model, session and resume, skill text, test and lint commands, provider options, the session's previous usage totals), `StepResult` (session, parsed output, text, usage, totals, duration, `error` kind, `retry_after`, detail; `ok` when `error` is None), `Usage` (`tokens` = input + output; `minus` subtracts running totals), outputs `WorkOutput`, `ReviewOutput` (a fail needs findings), `CompactOutput`, `Finding`, their strict `OUTPUT_SCHEMAS` and `parse_output`; `ProviderStatus` (installed, version, signed in, auth method, hint; `usable`).
 - `Event`: journal event with core fields `ts` (converted to UTC; naive times count as UTC), `type`, `project`, `ticket`, `plan` plus any extra detail.
-- Errors carry exit codes: `KengashError` and `UserError` 1, `WaitTimeout` 3, `NeedsSetup` 4, `NeedsUser` 5.
+- Errors carry exit codes: `KengashError` and `UserError` 1, `WaitTimeout` 3, `NeedsSetup` 4, `NeedsUser` 5, `LoopBusy` 6 (SP11).
 
 ## Invariants
 
@@ -28,6 +28,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Changes
 
+- 2026-11-06: `LoopLease`, `LoopBusy` (SP11 M1).
 - 2026-10-30: `ProviderStatus.models` (SP10 M3).
 - 2026-10-30: fixed built-in skills (`BUILTIN_SKILLS`), `routing` and `workflow_for`, workflow name and duplicate-step rules, send-back-only edges, one-word models (SP10 M2).
 - 2026-10-26: the base error is `KengashError` (was `HarnessError`); user-facing text names `kengash` (SP8).

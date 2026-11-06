@@ -6,7 +6,7 @@ Everything under `~/.kengash`: paths, atomic writes, frontmatter documents, ids,
 
 ## Interface
 
-- `StorePaths.default()` and `ProjectPaths`: the layout of system spec §4.1, plus `StorePaths.slots`, `claims`, `trust`, `flags`, `workers`, `ticket_states`, `conductors` and `logs` under `runtime/`, and `worktrees` with `worktree(slug, id)` (`worktrees/<slug>/kg-<id>`, or a ticket's existing 0.1.0 `hrn-<id>`); `KENGASH_HOME` (then 0.1.0's `HARNESS_HOME`) overrides `~/.kengash`.
+- `StorePaths.default()` and `ProjectPaths`: the layout of system spec §4.1, plus `StorePaths.slots`, `claims`, `trust`, `flags`, `workers`, `ticket_states`, `conductors`, `loops` and `logs` under `runtime/`, and `worktrees` with `worktree(slug, id)` (`worktrees/<slug>/kg-<id>`, or a ticket's existing 0.1.0 `hrn-<id>`); `KENGASH_HOME` (then 0.1.0's `HARNESS_HOME`) overrides `~/.kengash`.
 - `seed.ensure_store`, `seed.ensure_project`: create folders and copy default files only when missing; role skills are not seeded since SP10 (built-in ones always load from the package); `seed.link_memory(paths, project)` points a project's `memory` at `../../memory`, replacing a missing or stale link but never a real file or folder.
 - `documents`: `load_plan`, `load_ticket` (each parsed once per file content and returned as a copy, SP7), `load_any`, `save_plan`, `save_ticket` (a ticket lands in the folder its status names), `save_any`, `find_ticket`, `iter_documents`, `check_document`.
 - `frontmatter.parse`, `frontmatter.split_frontmatter` (mapping and the text after it), `frontmatter.render`, `files.atomic_write`, `ids.new_id`, `locks.locked`, `yamlio.load_yaml` (a per-thread YAML 1.2 safe loader, C-accelerated by `ruamel.yaml.clib`), `yamlio.dump_yaml`. `memo.Memo` (thread-safe LRU, `get_or_make`) and `memo.digest` key parse caches by file content, never by stat: an in-place rewrite within one timestamp tick keeps size and inode.
@@ -16,7 +16,7 @@ Everything under `~/.kengash`: paths, atomic writes, frontmatter documents, ids,
 - `links`: `link_state`, `state_of` (any folder link, e.g. a project's `memory`), `obstruction`, `make_link`, `ensure_excluded`, `is_excluded`.
 - `redact.redact`: masks private keys, API tokens and the values assigned to names ending in `password`, `secret`, `token` or `api_key` (also `access_key`, `secret_key`, `private_key`), in any form: `DB_PASSWORD=…`, `token: …`, `"api_key": "…"`; quoted values are masked whole. Applied before anything reaches the journal or memory.
 - `seed.package_default(name)`: a default file's text from the package.
-- `runtime`: `load_slots`/`save_slots` (`runtime/slots.json`), `load_claims`/`save_claims` (`runtime/claims.json`), `load_trust`/`save_trust` (`runtime/trust.json`), worker records (`load_worker`, `load_workers`, `save_worker`, `drop_worker`, `beat`, `set_worker_step`; thread-safe within a process), ticket state (`load_ticket_state`, `save_ticket_state`, `drop_ticket_state`), park requests (`set_park`, `park_requested`: `flags/park-<id>`), `save_ping`, `load_cursor`/`save_cursor`, `pause_state` → `Pause(everything, projects)` and `set_pause(paths, slug or None, on=)` (`runtime/flags/`); a damaged file raises an error naming it.
+- `runtime`: `load_slots`/`save_slots` (`runtime/slots.json`), `load_claims`/`save_claims` (`runtime/claims.json`), `load_trust`/`save_trust` (`runtime/trust.json`), worker records (`load_worker`, `load_workers`, `save_worker`, `drop_worker`, `beat`, `set_worker_step`; thread-safe within a process), ticket state (`load_ticket_state`, `save_ticket_state`, `drop_ticket_state`), park requests (`set_park`, `park_requested`: `flags/park-<id>`), `save_ping`, `load_cursor`/`save_cursor`, loop leases (`load_lease`, `load_leases`, `save_lease`, `drop_lease`: `runtime/loops/<pid>.json`), `pause_state` → `Pause(everything, projects)` and `set_pause(paths, slug or None, on=)` (`runtime/flags/`); a damaged file raises an error naming it.
 - `storegit.commit_store`: commits every change as `kengash`, never with the user's identity, hooks or signing.
 
 ## Invariants
@@ -29,6 +29,7 @@ Everything under `~/.kengash`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
+- 2026-11-06: `StorePaths.loops` and the loop lease files (SP11 M1).
 - 2026-10-30: `ensure_store` no longer seeds `defaults/roles/` (SP10 M2).
 - 2026-10-30: `defaults/SETTINGS.md` explains `routing` in a comment (SP10 M2).
 - 2026-10-26: the seeded MEMORY.md, DECISIONS.md and SETTINGS.md name `kengash` (SP8).
