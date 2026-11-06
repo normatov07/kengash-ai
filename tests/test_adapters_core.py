@@ -226,3 +226,32 @@ def test_stdout_lines_get_stamps(tmp_path: Path) -> None:
     assert result.stdout == "a\nb\n" and log.read_text() == "a\nb\n"
     stamps = [datetime.fromisoformat(line) for line in log.with_suffix(".ts").read_text().split()]
     assert len(stamps) == 2 and (stamps[1] - stamps[0]).total_seconds() >= 0.25
+
+
+def test_lint_runs_after_tests(tmp_path: Path) -> None:
+    result = Shell().run(_request(tmp_path, test_cmd="echo t", lint_cmd="echo l"))
+    assert result.output is not None and result.output.verdict == "pass"
+    assert isinstance(result.output, ReviewOutput)
+    assert result.output.summary == "tests and lint passed"
+
+
+def test_lint_failure_fails_the_step(tmp_path: Path) -> None:
+    result = Shell().run(_request(tmp_path, test_cmd="echo t", lint_cmd="echo bad; exit 3"))
+    assert isinstance(result.output, ReviewOutput) and result.output.verdict == "fail"
+    assert result.output.summary == "lint failed (exit 3)"
+    (finding,) = result.output.findings
+    assert "bad" in finding.issue and finding.fix == "make project.lint_cmd pass"
+
+
+def test_failing_tests_skip_lint(tmp_path: Path) -> None:
+    marker = tmp_path / "linted"
+    result = Shell().run(_request(tmp_path, test_cmd="exit 1", lint_cmd=f"touch {marker}"))
+    assert (
+        isinstance(result.output, ReviewOutput) and result.output.summary == "tests failed (exit 1)"
+    )
+    assert not marker.exists()
+
+
+def test_only_lint_set(tmp_path: Path) -> None:
+    result = Shell().run(_request(tmp_path, lint_cmd="echo l"))
+    assert isinstance(result.output, ReviewOutput) and result.output.summary == "lint passed"
