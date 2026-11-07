@@ -112,3 +112,12 @@ class JournalCursor(_Runtime):
 
     day: str = ""
     line: int = 0
+
+
+class ViewerRecord(_Runtime):
+    """runtime/viewers/<key>.json: a viewer tab's process (SP13); `pid` None while the tab
+    that will run it is opening."""
+
+    key: str
+    pid: int | None = None
+    since: datetime = Field(default_factory=utc_now)

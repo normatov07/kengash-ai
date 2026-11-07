@@ -3,7 +3,7 @@ journal, shared by `kengash logs` and the UI's Live tab (SP12 spec §4.4, §4.5)
 
 import json
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -19,6 +19,8 @@ from kengash_ai.store.paths import StorePaths
 type Kind = Literal["step", "read", "edit", "run", "reply", "error", "status"]
 TAIL_BYTES = 64 * 1024  # a long step's log is read from its end
 TEXT_MAX = 160
+TAILS_MAX = 64  # logs whose tail is kept between polls
+IDLE_POLL_S = 3.0  # `until_done` polls this slowly while the ticket waits at a gate
 
 # tool names per CLI → kind; anything else counts as `run`
 _AGY: dict[str, Kind] = {
@@ -75,14 +77,22 @@ def parse(
 
 
 def ticket(
-    paths: StorePaths, slug: str, ticket_id: str, *, root: Path | None = None
+    paths: StorePaths,
+    slug: str,
+    ticket_id: str,
+    *,
+    root: Path | None = None,
+    events: Sequence[Event] | None = None,
 ) -> list[Activity]:
     """The ticket's journal steps and statuses with every worker action of its logs, in
-    time order."""
+    time order; `events` is a journal already read (the dashboard reads it once)."""
     root = root or paths.worktree(slug, ticket_id)
-    doc = records.project_tickets(paths, slug).get(ticket_id)
-    since = doc.meta.created.date() if doc is not None else None
-    events = _journal(paths, slug, ticket_id, since)
+    if events is None:
+        doc = records.project_tickets(paths, slug).get(ticket_id)
+        since = doc.meta.created.date() if doc is not None else None
+        events = _journal(paths, slug, ticket_id, since)
+    else:
+        events = [e for e in events if e.project == slug and e.ticket == ticket_id]
     found = [item for event in events if (item := _from_event(event))]
     for log in _logs(paths, ticket_id):
         tail = _read(log)
@@ -104,12 +114,16 @@ def follow(
     poll_s: float = 1.0,
     root: Path | None = None,
     heartbeat: bool = False,
+    until_done: bool = False,
     sleep: Callable[[float], None] = time.sleep,
 ) -> Iterator[Activity | None]:
     """Every activity so far, then each new one as it happens, until the ticket stops
-    running; the last line is its status. With `heartbeat`, a poll that finds nothing new
-    yields None, so a stream can check that its client is still there."""
+    running; the last line is its status. `until_done` follows through gates instead (each
+    gate one status line, polled every IDLE_POLL_S) until the ticket is done (SP13). With
+    `heartbeat`, a poll that finds nothing new yields None, so a stream can check that its
+    client is still there."""
     seen: set[tuple[datetime | None, str, str]] = set()
+    shown = ""  # the gate status printed last; empty while a worker runs
     while True:
         status, running = _state(paths, slug, ticket_id)
         fresh = False
@@ -119,12 +133,16 @@ def follow(
                 seen.add(key)
                 fresh = True
                 yield item
-        if not running:
+        if not running and (not until_done or _ended(status)):
             yield Activity(datetime.now(UTC), "status", status)
             return
+        if not running and status != shown:
+            yield Activity(datetime.now(UTC), "status", status)
+            fresh = True
+        shown = "" if running else status
         if heartbeat and not fresh:
             yield None
-        sleep(poll_s)
+        sleep(poll_s if running else IDLE_POLL_S)
 
 
 def history(ticket_id: str, project: str | None) -> list[Activity]:
@@ -135,12 +153,22 @@ def history(ticket_id: str, project: str | None) -> list[Activity]:
 
 
 def watch(
-    ticket_id: str, project: str | None, *, poll_s: float = 1.0, heartbeat: bool = False
+    ticket_id: str,
+    project: str | None,
+    *,
+    poll_s: float = 1.0,
+    heartbeat: bool = False,
+    until_done: bool = False,
 ) -> Iterator[Activity | None]:
     """`follow` for a ticket of the user's store, found by id."""
     paths = StorePaths.default()
     slug, _ = records.locate_ticket(paths, ticket_id, project)
-    return follow(paths, slug, ticket_id, poll_s=poll_s, heartbeat=heartbeat)
+    return follow(paths, slug, ticket_id, poll_s=poll_s, heartbeat=heartbeat, until_done=until_done)
+
+
+def _ended(status: str) -> bool:
+    """The ticket will not run again: done, or gone from the store."""
+    return status == "gone" or status.partition("/")[0] == Folder.done.value
 
 
 def running_status(status: str) -> bool:
@@ -199,8 +227,25 @@ class _Tail:
     start: datetime | None  # the log's first stamp: a time that stays put as the log grows
 
 
+_tails: dict[Path, tuple[tuple[int, int], _Tail]] = {}  # log → (size, mtime) and its tail
+
+
 def _read(log: Path) -> _Tail:
-    """The log's last TAIL_BYTES, and the stamps of those lines (else the file's mtime)."""
+    """The log's last TAIL_BYTES, and the stamps of those lines (else the file's mtime);
+    read again only when the log changed, since viewers poll every second (SP13)."""
+    info = log.stat()
+    key = (info.st_size, info.st_mtime_ns)
+    cached = _tails.get(log)
+    if cached is not None and cached[0] == key:
+        return cached[1]
+    tail = _read_tail(log)
+    _tails[log] = (key, tail)
+    if len(_tails) > TAILS_MAX:
+        _tails.pop(next(iter(_tails)))
+    return tail
+
+
+def _read_tail(log: Path) -> _Tail:
     data = log.read_bytes()
     cut = len(data) > TAIL_BYTES
     skipped = data[: max(len(data) - TAIL_BYTES, 0)].count(b"\n")

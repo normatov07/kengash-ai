@@ -60,7 +60,10 @@ def test_a_ticket_goes_from_ready_to_merged(
     journal_events: Events,
 ) -> None:
     queue_happy_path(fake_clis)
-    assert runner.invoke(app, ["run", "7b55e0c1"]).stdout == "started 7b55e0c1 plan→claude\n"
+    assert (
+        runner.invoke(app, ["run", "7b55e0c1"]).stdout
+        == "started 7b55e0c1 plan→claude (watch: kengash logs 7b55e0c1 -f)\n"
+    )
     waited = runner.invoke(app, ["wait", "--timeout", "60"])
     assert waited.exit_code == 0
     assert waited.stdout.startswith("7b55e0c1 in_process/awaiting_merge loop 2/3")

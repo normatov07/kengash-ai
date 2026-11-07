@@ -51,6 +51,7 @@ def _hermetic_store(
     installed skills: kengash looks for them in a temporary home folder."""
     monkeypatch.setenv("KENGASH_HOME", str(tmp_path_factory.mktemp("store") / ".kengash"))
     monkeypatch.delenv("HARNESS_HOME", raising=False)
+    monkeypatch.setenv("KENGASH_WATCH", "off")  # no test opens a tab or notifies (SP13)
     home = tmp_path_factory.mktemp("home")
     monkeypatch.setattr(skills, "home_folder", lambda: home)
 

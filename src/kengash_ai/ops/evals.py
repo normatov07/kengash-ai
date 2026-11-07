@@ -385,6 +385,7 @@ def _env(agent: str, home: Path, work: Path) -> dict[str, str]:
     env.pop("HARNESS_HOME", None)  # the sandbox store, whatever the caller set
     env["PATH"] = os.pathsep.join([str(BIN), env.get("PATH", "")])
     env["BROWSER"] = "true"  # `kengash ui open` opens no window on the user's desktop
+    env["KENGASH_WATCH"] = "off"  # nor a viewer tab or a notification (SP13)
     return env
 
 

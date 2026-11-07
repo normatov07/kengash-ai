@@ -34,6 +34,9 @@ skill.max_words: 400
 memory.compact_at_lines: 200
 memory.compactor: claude/haiku   # provider/model that compacts MEMORY.md
 logs.keep_days: 30               # worker logs untouched this long are removed; 0 keeps all
+watch.tabs: auto                 # a terminal tab per worker and a dashboard per loop; off: print the command
+watch.terminal: ""               # a command with {title} and {command}; empty: Orca, tmux or gnome-terminal
+watch.notify: true               # a desktop notification when a ticket needs you
 review.diff_only: true
 
 # providers: allow_api_key keeps API-key variables in worker environments;

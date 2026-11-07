@@ -4,7 +4,7 @@ All notable changes to this project are written here. The format follows [Keep a
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-11-06
+## [0.4.0] - 2026-11-07
 
 ### Added
 
@@ -16,8 +16,13 @@ All notable changes to this project are written here. The format follows [Keep a
 - Overview names the running loop and reads again every 30 s.
 
 - Finished work survives a dropped connection: a worker CLI that returned a valid result and then lost its connection counts as done; a network error resumes the session once ("your edits are kept"), then hands the step to the agent's fallback.
-- Watch your workers: `kengash wait` prints a progress line per running worker every 5 minutes (step, CLI and model, elapsed, last activity, changed files, last action); `kengash ps [--line]`; `kengash logs <id> [-f]` follows a worker's reads, edits, commands and replies — in Claude Code the loop runs it as a background task you open like a subagent; the UI's ticket sheet has a Live tab, Overview rows show the last activity and running cards pulse.
+- Watch your workers: `kengash wait` prints a progress line per running worker every 5 minutes (step, CLI and model, elapsed, last activity, changed files, last action); `kengash ps [--line]`; `kengash logs <id> [-f]` follows a worker's reads, edits, commands and replies; the UI's ticket sheet has a Live tab, Overview rows show the last activity and running cards pulse.
 - `kengash init` detects test and lint commands (Flutter, Dart, uv, Node, Go, Rust) and adds a `run_tests` step that runs both after `implement`; `kengash doctor` names projects without them, settings still at an old default, and agents without a fallback, and `doctor --fix` repairs the first two.
+
+- Watch every worker: starting a ticket's worker opens a terminal tab (`kg <id>`) that follows it through its gates until it is done (`kengash logs <id> --watch`), and a new loop opens a dashboard tab, in Orca, tmux or gnome-terminal, or the command in `watch.terminal`; at most one tab per ticket, and `run`, `approve` and `loop claim` say where to watch.
+- `kengash watch [-p project] [--once]`: one live screen with the running loops, sessions and tokens per CLI, every running worker (step, model, elapsed, last activity, files, tokens of its cap, last action), the tickets that need you with the command that acts, and the latest actions across all workers. Nothing in it runs a model.
+- A desktop notification (`notify-send`, or `osascript` on macOS) when a ticket needs approval, stalls, fails or is ready to merge, and when a plan review finishes (`watch.notify`).
+- `kengash ticket attach <id> --tab` opens a role's own session in a tab once no worker drives it, so you can talk to that agent directly.
 
 ### Changed
 
@@ -26,6 +31,8 @@ All notable changes to this project are written here. The format follows [Keep a
 - Failures are one line naming the log and, for an editing step, the worktree and its changed files; a failed call keeps its session, so a retry resumes it.
 - Claude and Antigravity workers run with `--output-format stream-json`.
 - The loop skill's event table moved to `loop/references/events.md`. Run `kengash skills install --agent … [--global]` again to get the new skills.
+- With no terminal to open a tab in, `run` prints `(watch: kengash logs <id> -f)`; the loop skill starts that in the background only then, and repeats progress lines only when a worker is `quiet` or gone, which saves the conductor's tokens.
+- `KENGASH_WATCH=off` turns tabs and notifications off; tests and evals set it.
 
 ### Fixed
 

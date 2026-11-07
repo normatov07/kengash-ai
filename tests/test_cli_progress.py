@@ -69,3 +69,34 @@ def test_logs_follow_ends(busy: Engine) -> None:
     documents.save_ticket(busy.paths.project(busy.slug), doc)
     result = runner.invoke(app, ["logs", busy.ticket_id, "-f"])
     assert result.exit_code == 0 and result.stdout.splitlines()[-1].endswith(" done/merged")
+
+
+def test_logs_watch_registers_its_tab_and_ends_when_done(
+    busy: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from kengash_ai.ops import viewers
+
+    held: list[bool] = []
+    real = viewers.register
+
+    def register(paths: object, key: str) -> None:
+        real(paths, key)  # type: ignore[arg-type]
+        held.append(viewers.live(busy.paths, key))
+
+    monkeypatch.setattr(viewers, "register", register)
+    doc = busy.ticket()
+    doc.meta.status, doc.meta.step = "done/merged", None
+    documents.save_ticket(busy.paths.project(busy.slug), doc)
+    result = runner.invoke(app, ["logs", busy.ticket_id, "--watch"])
+    assert result.exit_code == 0 and result.stdout.splitlines()[-1].endswith(" done/merged")
+    assert held == [True] and not viewers.live(busy.paths, f"ticket-{busy.ticket_id}")
+
+
+def test_watch_once_prints_the_board(busy: Engine) -> None:
+    result = runner.invoke(app, ["watch", "--once"])
+    assert result.exit_code == 0
+    lines = result.stdout.splitlines()
+    assert lines[0] == "loops: no loop running" and lines[2] == "running:"
+    assert lines[3].startswith(f"  {busy.ticket_id} payments-api implement→antigravity/flash 12m")
+    data = json.loads(runner.invoke(app, ["watch", "--json"]).stdout)
+    assert data["workers"][0]["id"] == busy.ticket_id and data["total"][1] == 8

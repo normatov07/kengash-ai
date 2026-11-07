@@ -1,0 +1,41 @@
+skill: loop
+description: two independent tickets run side by side and both merge (SP13)
+notes: >-
+  SP13 2026-11-07: parallel tickets were proven only by the scheduler's unit tests; this
+  runs two tickets on disjoint files through real workers at once. merge.mode auto keeps
+  the scenario to one turn, so it measures the loop, not when the user is asked.
+files:
+  calc.py: "\"\"\"Small arithmetic helpers.\"\"\"\n\n\ndef sub(a: int, b: int) -> int:\n    return a - b\n"
+settings: |
+  merge.mode: auto
+  step_timeout_min: 10
+  plan.reviewer: {cli}
+  agents:
+    planner: {cli: {cli}, skill: plan, fallback: []}
+    plan-reviewer: {cli: {cli}, skill: review-plan, fallback: []}
+    implementer: {cli: {cli}, skill: implement, fallback: []}
+    code-reviewer: {cli: {cli}, skill: review-code, fallback: []}
+    security-reviewer: {cli: {cli}, skill: review-security, fallback: []}
+setup:
+  - args: [plan, new, --mode, quick, --title, "Add add() and mul()"]
+    stdin: "Add add(a, b) in add.py and mul(a, b) in mul.py."
+    save: plan
+  - args: [ticket, add, --plan, "{plan}"]
+    stdin: |
+      - title: Add add(a, b) in add.py
+        importance: simple
+        touches: [add.py]
+        scope: "Create add.py with add(a: int, b: int) -> int returning a + b. Touch no other file."
+        acceptance: ["add.add(2, 3) == 5"]
+      - title: Add mul(a, b) in mul.py
+        importance: simple
+        touches: [mul.py]
+        scope: "Create mul.py with mul(a: int, b: int) -> int returning a * b. Touch no other file."
+        acceptance: ["mul.mul(2, 3) == 6"]
+turns:
+  - "{kg}loop"
+expect:
+  journal: [ticket.claimed, ticket.merged]
+  tickets: {count: 2, fields: {status: done/merged}}
+  clean: true
+timeout_s: 2400

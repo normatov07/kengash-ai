@@ -29,6 +29,7 @@ Everything under `~/.kengash`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
+- 2026-11-07: `StorePaths.viewers`; `runtime.load_viewer` (None when missing or damaged), `save_viewer`, `drop_viewer`; the seeded SETTINGS.md gains `watch.tabs`, `watch.terminal`, `watch.notify` (SP13 M1).
 - 2026-11-06 (SP12 minors): `yamledit.rename_key` renames a top-level key on its own line, keeping its value and comment.
 - 2026-11-06: the seeded SETTINGS.md: `tokens.per_ticket_max: 1000000`, the doc-writer with `fallback: [claude/sonnet]` (SP12 M3).
 - 2026-11-06: the seeded SETTINGS.md names `fallback_on_error` (SP12 M1).
@@ -48,4 +49,3 @@ Everything under `~/.kengash`: paths, atomic writes, frontmatter documents, ids,
 - 2026-10-23: `yamledit` (SP5 M2 settings writes).
 - 2026-10-23: `links.state_of` (any folder link), `seed.link_memory` (system spec §4.2).
 - 2026-10-23: `runtime.load_pings`; `runtime/ui.json` (`load_ui`, `save_ui` at mode 0600, `drop_ui`) (SP5 M1).
-- 2026-10-23: role skills seeded into `defaults/roles/`; `split_frontmatter` (SP4 M1).

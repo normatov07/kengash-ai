@@ -104,7 +104,8 @@ $HARNESS_HOME (default ~/.harness, mode 0700, a git repo)
 ├── journal/YYYY-MM-DD.jsonl         events (§6.1)
 ├── worktrees/<slug>/hrn-<id8>/      ticket worktrees                          (git-ignored)
 └── runtime/                         locks, pids, heartbeats, conductor pings, logs  (git-ignored)
-    └── loops/<pid>.json             loop leases, one per conductor; locks/loops.lock guards them (SP11)
+    ├── loops/<pid>.json             loop leases, one per conductor; locks/loops.lock guards them (SP11)
+    └── viewers/<key>.json           viewer tabs: one per ticket (`ticket-<id>`) or loop scope (`watch-<scope>`); locks/viewers.lock (SP13)
 
 <repo>/.harness -> $HARNESS_HOME/projects/<slug>     listed in <repo>/.git/info/exclude
 ```
@@ -258,6 +259,7 @@ loop_ask_at_cap: true         # false: park the ticket instead of asking
 loop_count_rejected_review: true   # false: plan-review rejections count only toward plan.review_max
 stall_repeat: 2               # the same finding fails this many loops in a row → stalled
 loop_start: ask              # auto: start the loop as soon as tickets are added (Auto mode, SP11)
+watch: {tabs: auto, terminal: "", notify: true}   # SP13: a tab per worker and a dashboard per loop (Orca, tmux, gnome-terminal or the template); desktop notifications at gates
 
 # planning
 grill.round_size: 3
@@ -349,7 +351,8 @@ Status and action commands print at most 5 lines; `context` and `show` print the
 | `harness run <id>… [--steps N]` | Claim tickets (→ `in_process`), start detached workers, return at once |
 | `harness wait [project] [--timeout 300]` | Block until a ticket or plan needs the conductor: `done`, `needs_approval`, `stalled`, `failed`, `awaiting_merge`, plan review finished, or `queued` (a ticket became ready: added, or unblocked by a merge); on timeout (exit 3) one progress line per running ticket (SP12) |
 | `kengash ps [project] [--line]` | One progress line per running ticket: step, CLI and model, elapsed, last activity, files changed, last action (SP12) |
-| `kengash logs ID [-f]` | The ticket's workers' actions as readable lines, parsed from their stream logs; `-f` follows until the ticket stops (SP12) |
+| `kengash logs ID [-f\|--watch]` | The ticket's workers' actions as readable lines, parsed from their stream logs; `-f` follows until the ticket stops (SP12); `--watch` follows through gates until it is done, as the ticket's viewer tab (SP13) |
+| `kengash watch [project] [--once]` | One live dashboard: loops, slots and tokens per CLI, running workers, tickets that need the user, the latest actions (SP13) |
 | `kengash loop claim [project] [--take-over]\|release [--force]\|status [project]` | The loop lease (SP11 spec §4): one live loop per project |
 | `harness approve\|park\|stop\|pause\|resume\|merge` | Gates and controls; `pause` and `resume` act on one project or on everything |
 | `harness memory add\|compact\|show` | Memory writes, attributed in the journal |
@@ -361,6 +364,8 @@ Status and action commands print at most 5 lines; `context` and `show` print the
 Every `--project`/`-p` takes a project name or a folder inside a registered repo (SP9 spec decision 1). `harness next` orders round-robin across projects, then by importance (critical first), then by age. A ticket is runnable when every `depends_on` ticket is merged or closed, its `touches` do not overlap any `in_process` ticket of the same project (two paths overlap when one is a prefix of the other, compared segment by segment, so `services/web` and `services/webhooks` do not; empty `touches` overlaps everything), and its next step's provider has a free slot within `sessions.max` and `sessions.per_provider`. Workers take slots per step, not per ticket.
 
 `next` and `wait` record a conductor ping in `runtime/conductors/` (process id, agent if detectable, project filter); the UI shows these as live conductors.
+
+Viewer tabs (SP13 spec §3): starting a ticket's worker (`run`, an approval, `resume`) opens a tab running `kengash logs <id> --watch`, and a new loop lease opens one running `kengash watch`, in Orca, tmux, gnome-terminal or `watch.terminal`; one tab per key (`runtime/viewers`); `run`, `approve` and `loop claim` end their line with `(watch: <tab or command>)`; `ticket attach --tab` opens a role's session in a tab while no worker drives it. A gate event (`ticket.needs_approval`, `stalled`, `failed`, `awaiting_merge`) or `plan.reviewed` sends one desktop notification from `records.record` (`watch.notify`). `KENGASH_WATCH=off` turns tabs and notifications off.
 
 Loop leases (SP11 spec §4): `runtime/loops/<pid>.json` records the conductor running a loop over one project or every project. A lease is live while its process runs under the same name and was seen within an hour; `wait` and `next` refresh it. `kengash loop claim` and a detected agent's `wait` take a lease, refused with exit 6 while another conductor's live lease overlaps the scope (every project overlaps any project) unless `--take-over`. `kengash loop release` refuses while `next` would list runnable tickets in the lease's scope, or while its ready tickets wait for a slot a live worker holds, so tickets added while a loop winds down are never left unrun. `wait` folds `queued` events into one line and is not `idle` while ready tickets wait on a held slot.
 
@@ -440,7 +445,7 @@ Errors: `auth` stops the ticket with "sign in to <cli> interactively"; `rate_lim
 | `grill` | user | `harness context` → `harness plan new` → look up facts yourself (code, docs, memory; a subagent if the host has one) → grill rounds of at most `grill.round_size` questions, each with a recommended answer, using the host's multiple-choice tool if it has one, until nothing is left to ask and nothing is silently assumed → restate the shared understanding; the user confirms → `harness plan save` → `harness plan review` → show open findings → the user approves, edits or rejects → `harness plan approve` → `kengash skills show ticket`, followed for the plan (SP11) |
 | `plan` | user | the same without grilling; every unasked decision becomes an `## Assumptions` line; approval also hands over to `ticket` |
 | `ticket` | user | an approved plan id, or a short prompt (creates a `quick` plan) → vertical slices: end to end, verifiable alone, one fresh context window each; wide refactors split expand → migrate → contract → importance by rubric → numbered list (title · importance · blockers · touches); a quick plan waits for the user's yes, an approved plan does not (SP11) → `harness ticket add --plan <id>`, each scope 3–8 lines → `kengash loop status`: a covering loop runs → stop; else `loop_start: auto` → follow `kengash skills show loop`, `ask` → ask once |
-| `loop` | user | `harness doctor --quiet` → `kengash loop claim` (exit 6: another loop covers the scope → stop) → loop: `harness next` → `harness run` → `harness wait` → act on each event (`queued` first: next and run; ask the user to grant loops, re-plan stalled tickets, approve merges) until nothing is runnable → `kengash loop release`, or the user stops → `release --force` |
+| `loop` | user | `harness doctor --quiet` → `kengash loop claim` (exit 6: another loop covers the scope → stop) → loop: `harness next` → `harness run` → `harness wait` (each `started` line ends `(watch: …)`: a tab shows the worker, else run `kengash logs <id> -f` in the background; SP13) → act on each event (`queued` first: next and run; ask the user to grant loops, re-plan stalled tickets, approve merges) until nothing is runnable → `kengash loop release`, or the user stops → `release --force` |
 | `ui` | user | `harness ui open`; on exit 4, ask to install the UI extra, install it, open |
 | `memory` | model | triggered when the user states a lasting preference or goal, rejects an approach, or a design decision is made → `harness memory add` |
 

@@ -1,10 +1,14 @@
 """Command-line entry point for `kengash` (0.1.0's `harness` and `hrn` until 0.3.0)."""
 
+import contextlib
 import dataclasses
 import json
+import signal
 import sys
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any
@@ -36,6 +40,9 @@ from kengash_ai.ops import (
     workflows,
     workspace,
 )
+from kengash_ai.ops import watch as watching
+
+REFRESH_S = 2.0  # how often `kengash watch` redraws (SP13)
 
 app = typer.Typer(
     name="kengash",
@@ -689,7 +696,7 @@ def run_tickets(
     if as_json:
         _emit_json(result)
     else:
-        lines = [f"started {s.id} {s.step}→{s.provider}" for s in result.started]
+        lines = [_watched(f"started {s.id} {s.step}→{s.provider}", s.watch) for s in result.started]
         lines += [f"skipped {tid}: {reason}" for tid, reason in result.skipped.items()]
         for line in _capped(lines, "kengash run --json"):
             typer.echo(line)
@@ -715,7 +722,8 @@ def approve_ticket(
         _emit_json(approved)
         return
     running = approved.status.split("/", 1)[1] not in workspace.GATES
-    typer.echo(f"ticket {approved.id} approved; {'running' if running else approved.status}")
+    state = "running" if running else approved.status
+    typer.echo(_watched(f"ticket {approved.id} approved; {state}", approved.watch))
 
 
 @app.command("park")
@@ -801,7 +809,7 @@ def loop_claim(
     """Take the loop for this conductor; exit 6 while another loop covers the scope."""
     with _errors():
         result = loops.claim(project, take_over=take_over)
-    _emit(result, as_json, f"loop claimed: {result.scope}")
+    _emit(result, as_json, _watched(f"loop claimed: {result.scope}", result.watch))
 
 
 @loop_app.command("release")
@@ -896,24 +904,125 @@ def show_logs(
     follow: Annotated[
         bool, typer.Option("--follow", "-f", help="Keep printing until the ticket stops.")
     ] = False,
+    watch: Annotated[
+        bool,
+        typer.Option("--watch", help="Follow through gates until the ticket is done (its tab)."),
+    ] = False,
     project: Only = None,
     as_json: AsJson = False,
 ) -> None:
     """What the ticket's workers did, one line per action; -f follows it live."""
     with _errors():
+        if watch:
+            _viewer(f"kg {ticket_id}")
+            with watching.viewing(f"ticket-{ticket_id}"):
+                _print_activity(activity.watch(ticket_id, project, until_done=True), as_json)
+            _hold(f"{ticket_id} is done; press Enter to close")
+            return
         items = (
             activity.watch(ticket_id, project)
             if follow
             else iter(activity.history(ticket_id, project))
         )
-        for item in items:
-            if item is None:
-                continue
-            if as_json:
-                typer.echo(json.dumps(dataclasses.asdict(item), default=str))
-            else:
-                clock = item.ts.astimezone().strftime("%H:%M:%S") if item.ts else "--:--:--"
-                typer.echo(f"{clock} {item.text}")
+        _print_activity(items, as_json)
+
+
+@app.command("watch")
+def watch_board(
+    project: Every = None,
+    once: Annotated[bool, typer.Option("--once", help="Print one snapshot and exit.")] = False,
+    as_json: AsJson = False,
+) -> None:
+    """One live screen: loops, slots and tokens, running workers, what needs you, the latest
+    actions; refreshed every 2 s until Ctrl-C."""
+    with _errors():
+        if as_json:
+            _emit_json(watching.snapshot(project))
+            return
+        if once or not sys.stdout.isatty():
+            for line in watching.lines(watching.snapshot(project)):
+                typer.echo(line)
+            return
+        _viewer(f"kg watch {project}" if project else "kg watch")
+        with watching.viewing(f"watch-{project or 'all'}"):
+            _live_board(project)
+
+
+def _live_board(project: str | None) -> None:
+    """Redraw the board every REFRESH_S seconds on the terminal's alternate screen."""
+    from rich.live import Live
+
+    live = Live(_rendered(project), refresh_per_second=1, screen=True)
+    with contextlib.suppress(KeyboardInterrupt), live:
+        while True:
+            time.sleep(REFRESH_S)
+            live.update(_rendered(project))
+
+
+def _rendered(project: str | None) -> Any:
+    """The board in colour: section heads bold, gates yellow, quiet or gone workers red."""
+    from rich.console import Group
+    from rich.text import Text
+
+    stamp = datetime.now().astimezone().strftime("%H:%M:%S")
+    rows = [Text(f"kengash watch · {project or 'all projects'} · {stamp}", style="bold cyan")]
+    for line in watching.lines(watching.snapshot(project)):
+        if not line.startswith("  "):
+            style = "bold"
+        elif line.endswith((" · quiet", " · worker gone")) or " · quiet · " in line:
+            style = "red"
+        elif " → kengash " in line:
+            style = "yellow"
+        else:
+            style = ""
+        rows.append(Text(line, style=style, overflow="ellipsis", no_wrap=True))
+    return Group(*rows)
+
+
+def _print_activity(items: Iterator[activity.Activity | None], as_json: bool) -> None:
+    for item in items:
+        if item is None:
+            continue
+        if as_json:
+            typer.echo(json.dumps(dataclasses.asdict(item), default=str))
+        else:
+            clock = item.ts.astimezone().strftime("%H:%M:%S") if item.ts else "--:--:--"
+            typer.echo(f"{clock} {item.text}")
+
+
+def _viewer(title: str) -> None:
+    """Start a viewer tab: name it, and turn a closed tab (SIGHUP) or a kill (SIGTERM) into
+    an orderly exit, so it drops its viewer record on the way out."""
+    _title(title)
+    if not sys.stdout.isatty():
+        return  # piped or under test: the caller's own signal handling stands
+    for sig in (signal.SIGTERM, getattr(signal, "SIGHUP", None)):
+        if sig is not None:
+            signal.signal(sig, _exit_quietly)
+
+
+def _exit_quietly(signum: int, frame: object) -> None:
+    raise SystemExit(0)
+
+
+def _title(text: str) -> None:
+    """Name the terminal tab: every terminal reads this escape, and a shell's own title
+    (which Orca and gnome-terminal show) would otherwise replace the opener's."""
+    if sys.stdout.isatty():
+        sys.stdout.write(f"\x1b]0;{text}\x07")
+        sys.stdout.flush()
+
+
+def _hold(prompt: str) -> None:
+    """Keep a viewer tab's last lines on screen until the user presses Enter."""
+    if sys.stdin.isatty():
+        with contextlib.suppress(EOFError, KeyboardInterrupt):
+            input(prompt)
+
+
+def _watched(line: str, watch: str) -> str:
+    """`line`, then where to watch it: a tab, or the command to run (SP13)."""
+    return f"{line} (watch: {watch})" if watch else line
 
 
 def _wait_line(event: waiting.WaitEvent) -> str:
@@ -951,11 +1060,17 @@ def ticket_changes(
 def ticket_attach(
     ticket_id: TicketId,
     role: Annotated[str | None, typer.Option("--role", help="Role whose session to open.")] = None,
+    tab: Annotated[
+        bool, typer.Option("--tab", help="Open the session in a new terminal tab.")
+    ] = False,
     project: Only = None,
     as_json: AsJson = False,
 ) -> None:
     """Print the command that opens a role's live CLI session in the ticket's worktree."""
     with _errors():
+        if tab:
+            typer.echo(f"attach: {watching.attach_tab(ticket_id, role=role, project=project)}")
+            return
         found = changes.attach_command(ticket_id, role=role, project=project)
     if as_json:
         _emit_json(found)

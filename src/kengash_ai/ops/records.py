@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from kengash_ai import journal
 from kengash_ai.model import Doc, Event, Plan, Ticket, UserError
+from kengash_ai.ops import notify
 from kengash_ai.store import documents, storegit
 from kengash_ai.store.paths import ProjectPaths, StorePaths
 from kengash_ai.store.registry import load_registry
@@ -137,10 +138,11 @@ def one_line(text: str, what: str) -> str:
 
 
 def record(paths: StorePaths, message: str, *events: Event) -> None:
-    """Journal each event, then commit the store."""
+    """Journal each event, commit the store, then notify the user of any gate (SP13)."""
     for event in events:
         journal.append(paths, event)
     storegit.commit_store(paths, message)
+    notify.send(paths, events)
 
 
 def _only(kind: str, item_id: str, found: list[tuple[str, Path]]) -> tuple[str, Path]:
