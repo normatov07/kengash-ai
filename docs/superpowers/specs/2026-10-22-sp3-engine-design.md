@@ -173,11 +173,12 @@ A new session gets the role skill (project `roles/` → `defaults/roles/` → pa
 ```
 You are the <role> for ticket <id> "<title>", loop <n> of <max>, step <step>.
 <step instruction>
-## Goal (plan <plan id>)   ## Scope   ## Acceptance   ## Handoff   ## Findings   (inline, empty ones left out)
+<why it runs again, when a step sent it back: `<step> sent this back: <summary>. Fix every Finding below[, then run the failing check].` or `The user answered: <note>.`> (SP15)
+## Goal (plan <plan id>)   ## Scope   ## Acceptance   ## Handoff   ## Findings   ## Check output (editing steps)   ## Checks   (inline, empty ones left out)
 Reply with JSON that matches the schema.
 ```
 
-A resumed session gets only `Loop <n>, step <step>: <step instruction>` plus the Handoff or Findings written since its last turn. Review steps get `git diff --stat <base>...HEAD` inline and read the full diff with read-only git (`review.diff_only`). Step instructions are one line each, kept in `ops`.
+A resumed session gets only `Loop <n>, step <step>: <step instruction>` (a sent-back line in place of the instruction; the user's answer after it) plus the Handoff or Findings written since its last turn, `## Check output` on editing steps and `## Checks` (`kengash runs these in the worktree after editing steps; each must exit 0:` and one line per set command; SP15). A fix turn after failing in-step checks says `kengash ran the checks after your reply (fix turn <t> of <n>): <headline>` with the Check output. Review steps get `git diff --stat <base>...HEAD` inline and read the full diff with read-only git (`review.diff_only`). Step instructions are one line each, kept in `ops`.
 
 ## 9. Git operations
 

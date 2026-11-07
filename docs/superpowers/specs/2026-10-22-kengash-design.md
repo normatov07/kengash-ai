@@ -206,6 +206,7 @@ updated: 2026-10-22T12:05:00Z
 ## Acceptance     - [ ] checkable criteria
 ## Handoff        latest step's notes for the next agent; replaced each step; at most 15 lines
 ## Findings       open review findings: severity · file:line · issue · fix
+## Check output   the last failing check's digest (headline, fenced excerpt); cleared when checks pass; at most 62 lines (SP15)
 ## Log            one line per step: time · step · role · provider/model · verdict · tokens
 ```
 
@@ -259,6 +260,7 @@ loop_ask_at_cap: true         # false: park the ticket instead of asking
 loop_count_rejected_review: true   # false: plan-review rejections count only toward plan.review_max
 stall_repeat: 2               # the same finding fails this many loops in a row → stalled
 loop_start: ask              # auto: start the loop as soon as tickets are added (Auto mode, SP11)
+checks.turns: 2              # fix turns an editing step gets when kengash's checks fail after it; 0 = off (SP15)
 watch: {tabs: auto, terminal: "", notify: true}   # SP13: a tab per worker and a dashboard per loop (Orca, tmux, gnome-terminal or the template); desktop notifications at gates
 
 # planning
@@ -334,6 +336,7 @@ Steps map to roles: `plan` → planner, `review_plan` → plan-reviewer, `implem
 - If a failing verdict arrives when `loop` already equals `loop_max`, the ticket goes to `needs_approval` (or `parked` when `loop_ask_at_cap: false`) instead of recirculating. `harness approve <id> [--loops N]` raises `loop_max` by N (default `loop_grant`), and the recirculation proceeds.
 - Before every step, `tokens ≥ tokens_max` (empty: `tokens.per_ticket_max`) also sends the ticket to `needs_approval`. A step adds its input and output tokens; cache reads and writes are journaled only.
 - Review steps return schema-validated JSON: `{verdict: pass|fail, findings: [{severity, file, line, issue, fix}], summary}`. Each finding gets a fingerprint (normalised file plus issue text). The same fingerprint failing `stall_repeat` loops in a row → `stalled`. Planner and plan reviewer disagreeing beyond `plan.review_max` rounds → `stalled`; the same limit applies to plan-level reviews (`harness plan review`) and to tickets' `review_plan` steps.
+- A plan or edit step whose Handoff has a line starting `BLOCKED:` commits its work and goes to `needs_approval` (approval `blocked`, reason `blocked: <text>`) without adding a loop; `kengash approve <id> [--note TEXT]` runs an editing step again in the same loop, or moves a plan step on, and the next prompt carries the user's answer (SP15).
 - `gate: hitl` tickets add an `approve` step after `plan` (first, when the workflow has no `plan` step) and always require approval before merge, whatever `merge.mode` says.
 - After the last step: `merge.mode: ask` → `awaiting_merge`; `auto` → merge at once if the repo's main working tree is clean and on the base branch, otherwise `awaiting_merge`; `branch` → `done/branch_ready`.
 - `harness merge <id>` rebases the ticket branch onto the base branch inside its worktree (a conflict sends the ticket back to `implement` with loop + 1), runs `git merge --ff-only` in the main working tree (refused unless it is clean and on the base branch), removes the worktree, deletes the branch, and moves the ticket to `done/merged`. Harness never pushes.
@@ -355,7 +358,7 @@ Status and action commands print at most 5 lines; `context` and `show` print the
 | `kengash forget PROJECT [--yes]` | Remove a project: its registry entry, store folder, ticket worktrees and states, and its repo's `.kengash` link; refused while a worker or a loop of its runs; asks for the name unless `--yes` (exit 5 off a terminal); the store's git history keeps every removed file (SP14) |
 | `kengash watch [project] [--once]` | One live dashboard: loops, slots and tokens per CLI, running workers, tickets that need the user, the latest actions (SP13) |
 | `kengash loop claim [project] [--take-over]\|release [--force]\|status [project]` | The loop lease (SP11 spec §4): one live loop per project |
-| `harness approve\|park\|stop\|pause\|resume\|merge` | Gates and controls; `pause` and `resume` act on one project or on everything |
+| `harness approve\|park\|stop\|pause\|resume\|merge` | Gates and controls; `pause` and `resume` act on one project or on everything; `approve --note TEXT` answers a BLOCKED line (SP15) |
 | `harness memory add\|compact\|show` | Memory writes, attributed in the journal |
 | `harness status [project]` | Board summary; how a fresh conductor picks up where another stopped |
 | `harness init\|doctor\|link\|adopt` | Links and repair (§4.2); `init` detects test and lint commands and adds a `run_tests` step; `doctor` names projects without a test command and settings still at an old default, and `--fix` updates them (SP12) |
@@ -380,7 +383,7 @@ One JSON object per line in `journal/YYYY-MM-DD.jsonl`:
 {"ts":"2026-10-22T12:04:11Z","type":"step.end","project":"payments-api","ticket":"4f2a1b7c","step":"implement","role":"implementer","provider":"codex","model":"default","session":"019a…","loop":2,"verdict":"pass","tokens":{"in":12000,"out":3400,"cache_read":80000},"duration_s":252,"files":3,"added":128,"removed":14,"commit":"abc1234"}
 ```
 
-Types: `plan.created`, `plan.saved`, `plan.reviewed`, `plan.approved`, `plan.rejected`, `ticket.created`, `ticket.claimed`, `step.start`, `step.end`, `ticket.recirculated`, `ticket.needs_approval`, `ticket.approved`, `ticket.stalled`, `ticket.failed`, `ticket.awaiting_merge`, `ticket.merged`, `ticket.moved`, `ticket.updated`, `ticket.paused`, `ticket.resumed`, `ticket.stopped`, `memory.write`, `memory.compacted`, `session.created`, `session.resumed`, `worker.started`, `worker.exited`, `settings.changed`, `link.broken`, `link.repaired`, `link.adopted`, `loop.started`, `loop.ended` (reason `released`, `taken_over` or `gone`; SP11), `project.forgotten` (SP14). Secrets are redacted before writing.
+Types: `plan.created`, `plan.saved`, `plan.reviewed`, `plan.approved`, `plan.rejected`, `ticket.created`, `ticket.claimed`, `step.start`, `step.end`, `ticket.recirculated`, `ticket.needs_approval`, `ticket.approved`, `ticket.stalled`, `ticket.failed`, `ticket.awaiting_merge`, `ticket.merged`, `ticket.moved`, `ticket.updated`, `ticket.paused`, `ticket.resumed`, `ticket.stopped`, `memory.write`, `memory.compacted`, `session.created`, `session.resumed`, `worker.started`, `worker.exited`, `settings.changed`, `link.broken`, `link.repaired`, `link.adopted`, `loop.started`, `loop.ended` (reason `released`, `taken_over` or `gone`; SP11), `project.forgotten` (SP14), `checks.end` (`step`, `turn`, `verdict` pass, fail, timeout or error, `summary`, `duration_s`, `log`; SP15). Secrets are redacted before writing.
 
 ## 7. Workers and provider adapters
 
@@ -393,7 +396,7 @@ A worker runs one job: a ticket's steps, a plan review, or a memory compaction. 
 3. Before an editing step (`implement`, `docs`): records the start commit.
 4. Builds the prompt. A new session gets the role skill (Claude: `--append-system-prompt`; others: prepended to the prompt), the step instruction, the ticket's Scope, Acceptance, Handoff and open Findings and the plan's Goal inline, and the output schema; agents never read store files. A resumed session gets only the delta, e.g. "loop 2: fix these findings".
 5. Calls the adapter; records session id, usage and verdict; writes `## Handoff`, `## Findings` and `## Log`; emits `step.end`.
-6. After an editing step: if the agent committed, `git reset --soft <start>`; then harness commits all changes with trailers.
+6. After an editing step whose workflow has a check step after it: kengash runs `test_cmd` and `lint_cmd` in the worktree; while they fail and `checks.turns` remain, it resumes the step's session with the failing command's digest, then checks again (no loop added; SP15). Then: if the agent committed, `git reset --soft <start>`; harness commits all changes with trailers. A shell `run_tests` on the commit those checks passed on, with a clean worktree, passes from them without running.
 7. Routes (pass → next step; fail → `on_fail` target with loop + 1) and releases the slot.
 8. At a gate or at the end: sets the status, emits the event, exits.
 

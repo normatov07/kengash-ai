@@ -11,6 +11,7 @@ Formats of the files in the `~/.kengash` store. They are the contract sub-projec
 | `PROCESS.md` | project | workers of that project | user, conductor | 100 lines |
 | `SETTINGS.md` | project | `kengash` only | user, UI | schema-validated |
 | ticket `## Handoff` | ticket | the next worker | `kengash`, from worker JSON | 15 lines |
+| ticket `## Check output` | ticket | the implementer, the user | `kengash`, from a failing check's digest | 62 lines |
 
 ## Line formats
 
@@ -47,4 +48,4 @@ Formats are in spec §4.4.
 - One plan file per request (`plans/<id8>.md`) holds the user's prompt verbatim; tickets reference it by id and never copy it.
 - One file per ticket (`tasks/<folder>/<id8>.md`) moves between `in_queue/`, `in_process/` and `done/` as its status changes.
 - Agents never edit frontmatter; `kengash` writes it.
-- `## Handoff` is replaced at every step; `## Log` gains one line per step.
+- `## Handoff` is replaced at every step; `## Check output` holds the last failing check and is cleared when checks pass; `## Log` gains one line per step and per in-step check run.

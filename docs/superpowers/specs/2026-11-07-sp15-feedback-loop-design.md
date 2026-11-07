@@ -1,6 +1,6 @@
 # SP15: Feedback loop — checks inside the editing step, failures agents can act on (design)
 
-Date: 2026-11-07. Status: from the user's report on chess-samurai ("tickets fail test or review again and again… agents must know why it fails") and the investigation below; the user chose kengash running the checks itself inside the editing step, and a `BLOCKED:` handoff stopping the ticket for them. Calls marked *call* are the builder's.
+Date: 2026-11-07. Status: built (plan `docs/superpowers/plans/2026-11-07-sp15-feedback-loop.md`), from the user's report on chess-samurai ("tickets fail test or review again and again… agents must know why it fails") and the investigation below; the user chose kengash running the checks itself inside the editing step, and a `BLOCKED:` handoff stopping the ticket for them. Calls marked *call* are the builder's.
 
 ## 1. Why
 
