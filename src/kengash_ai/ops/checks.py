@@ -20,6 +20,18 @@ def wanted(resolved: Settings, ticket: Ticket, step: str) -> bool:
     return any(resolved.kind_of(later) == "check" for later in order[order.index(step) + 1 :])
 
 
+def configured(resolved: Settings, ticket: Ticket) -> bool:
+    """The project has a test or lint command and the ticket's workflow an enabled `check`
+    step: a merge onto a moved base reruns them (SP16 spec §3.9)."""
+    project = resolved.project
+    if not (project.test_cmd.strip() or project.lint_cmd.strip()):
+        return False
+    if ticket.workflow not in resolved.workflows:
+        return False
+    order = workflow.steps_for(resolved, ticket.workflow, hitl=ticket.gate is Gate.hitl)
+    return any(resolved.kind_of(step) == "check" for step in order)
+
+
 def request(resolved: Settings, worktree: Path, log: Path) -> StepRequest:
     """The shell request that runs `test_cmd`, then `lint_cmd`, in the worktree."""
     return StepRequest(

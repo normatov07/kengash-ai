@@ -130,6 +130,11 @@ def catch_up(worktree: Path, base: str) -> bool:
     return head(worktree) != before
 
 
+def contains(repo: Path, ancestor: str, ref: str) -> bool:
+    """`ancestor` is reachable from `ref`: a fast-forward from `ancestor` to `ref` works."""
+    return _run(repo, "merge-base", "--is-ancestor", ancestor, ref).returncode == 0
+
+
 def merge_ff(repo: Path, branch: str, base: str) -> int:
     """Fast-forward `base` to `branch` in the main working tree; returns the commits merged."""
     current = current_branch(repo)
