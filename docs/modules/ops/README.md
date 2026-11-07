@@ -61,6 +61,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-07: `steps._finish` writes `## Check output` for a check step (its digest on a fail, cleared on a pass) and stores `TicketState.sent_back` when a failing verdict routes the ticket back; the next step consumes it (SP15).
 - 2026-11-07: prompts name the project's checks and say which step sent a ticket back (`prompts.Feedback`, SP15).
 - 2026-11-07: `records.main_repo` (a folder's repo by its git common dir) and `records.worktree_owner`; `workspace.resolve_slug` and `project_slug` fall back to them, and `projects.init_project` in a worktree of a registered repo registers nothing; `projects.forget_preview`, `forget_project` (`Forgotten`, `dirty`: worktrees with uncommitted changes, which are lost; commits the store first, removes registry entry, store folder, worktrees and branches, ticket states and the repo's link; journals `project.forgotten`); doctor's missing-repo line names `kengash forget`; `hygiene.route_fixes`: a check step after a review, or without an `on_fail` way back to its edit step, is named by doctor and fixed by `--fix` and `check_changes` (SP14).
 - 2026-11-07 (SP13 review): `terminals.open_tab` starts the opener detached and waits at most `OPEN_WAIT_S` (5 s), leaving one that still runs (an `xterm -e` template) alive as opened; `activity._read` keeps each log's tail until the log's size or mtime changes (`TAILS_MAX` logs), so polling viewers re-read nothing; macOS notifications keep non-ASCII text.

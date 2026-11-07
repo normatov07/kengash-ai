@@ -557,6 +557,7 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
             slots.release(paths, job.ticket_id)  # the user moved it: their status stands
             return JobEnd(ticket.status, "changed while the step ran")
         state = runtime.load_ticket_state(paths, job.ticket_id)
+        state.sent_back = None  # this step's prompt carried it
         output = result.output
         fingerprints: tuple[str, ...] = ()
         if isinstance(output, ReviewOutput):
@@ -564,6 +565,8 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
             failing = output.findings if verdict == "fail" else []
             doc.sections["Findings"] = prompts.findings_text(failing)
             fingerprints = tuple(workflow.fingerprint(f.file, f.issue) for f in failing)
+            if resolved.kind_of(step) == "check":
+                doc.sections["Check output"] = result.check_output if failing else ""
         else:
             verdict = "pass"
             if isinstance(output, WorkOutput):
@@ -595,6 +598,8 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
         if isinstance(decision, workflow.Run):
             if ticket.loop > ran.loop:
                 events.append(_recirculated(job, ticket, step, decision.step))
+            if verdict == "fail" and isinstance(output, ReviewOutput):
+                state.sent_back = SentBack(step=step, summary=output.summary)
             ticket.status = lifecycle.step_status(resolved, decision.step)
             ticket.updated = utc_now()
             documents.save_ticket(paths.project(job.slug), doc)

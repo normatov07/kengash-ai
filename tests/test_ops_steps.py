@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from conftest import Engine, Events, FakeClis, write_settings
 
-from kengash_ai.model import Running, TicketState
+from kengash_ai.model import Running, SentBack, TicketState
 from kengash_ai.ops import calls, prompts, steps
 from kengash_ai.ops.steps import JobEnd
 from kengash_ai.store import StorePaths, documents, runtime
@@ -543,3 +543,66 @@ def test_a_failed_hook_repair_names_the_worktree_and_keeps_the_session(
     end = steps.run_job("7b55e0c1", steps=2)
     assert end.reason.endswith(f"; work kept in {engine.worktree} (1 files changed)")
     assert engine.ticket().meta.sessions["implementer"].id == "th-9"
+
+
+def checks_settings(test_cmd: str, *, turns: int | None = None, run_tests: bool = True) -> str:
+    """Settings with `test_cmd`, the shell test-runner on, and run_tests after implement."""
+    if run_tests:
+        flow = "[plan, implement, run_tests, review_code], on_fail: {run_tests: implement, "
+    else:
+        flow = "[plan, implement, review_code], on_fail: {"
+    text = (
+        f"project.test_cmd: {json.dumps(test_cmd)}\n"
+        "agents:\n  test-runner: {on: true, cli: shell, skill: run-tests}\n"
+        f"workflows:\n  simple: {{steps: {flow}review_code: implement}}}}\n"
+    )
+    return text + (f"checks.turns: {turns}\n" if turns is not None else "")
+
+
+BOOM = "echo 'error: boom' && exit 1"
+BOOM_HEADLINE = f"`{BOOM}` exit 1: error: boom"
+
+
+def test_a_failing_check_writes_check_output_and_sends_it_back(
+    engine: Engine, fake_clis: FakeClis
+) -> None:
+    write_settings(engine.paths, checks_settings(BOOM, turns=0))
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "retries = 3\n"})
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "retries = 4\n"})
+    steps.run_job("7b55e0c1", steps=3)
+    doc = engine.ticket()
+    assert (doc.meta.step, doc.meta.loop) == ("implement", 2)
+    assert doc.sections["Findings"].startswith(f"- high · -:0 · {BOOM_HEADLINE} · ")
+    assert doc.sections["Check output"].startswith(f"{BOOM_HEADLINE}\n```text\n")
+    assert engine.state().sent_back == SentBack(step="run_tests", summary="tests failed (exit 1)")
+    doc.meta.status = "in_process/under_implementation"  # what `kengash run` does
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    steps.run_job("7b55e0c1", steps=1)
+    prompt = fake_clis.calls("codex")[1]["argv"][-1]
+    assert "run_tests sent this back: tests failed (exit 1). Fix every Finding below" in prompt
+    assert "## Check output" in prompt
+
+
+def test_a_passing_check_clears_check_output(engine: Engine, fake_clis: FakeClis) -> None:
+    write_settings(
+        engine.paths,
+        checks_settings("test -f fixed.txt || { echo 'error: boom'; exit 1; }", turns=0),
+    )
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "r = 3\n"})
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"fixed.txt": "ok\n"})
+    steps.run_job("7b55e0c1", steps=5)
+    doc = engine.ticket()
+    assert doc.meta.step == "review_code"
+    assert doc.sections.get("Check output", "") == ""
+
+
+def test_the_next_step_consumes_sent_back(engine: Engine, fake_clis: FakeClis) -> None:
+    write_settings(engine.paths, checks_settings(BOOM, turns=0))
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "r = 3\n"})
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "r = 4\n"})
+    steps.run_job("7b55e0c1", steps=4)
+    assert engine.ticket().meta.step == "run_tests"
+    assert engine.state().sent_back is None
