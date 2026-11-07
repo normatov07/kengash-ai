@@ -19,7 +19,7 @@ from kengash_ai.model import (
     WorkerRecord,
     utc_now,
 )
-from kengash_ai.ops import agents, jobs, lifecycle, merging, records, slots, steps, watch
+from kengash_ai.ops import agents, jobs, lifecycle, merging, prompts, records, slots, steps, watch
 from kengash_ai.store import documents, runtime, storegit
 from kengash_ai.store.locks import locked
 from kengash_ai.store.paths import StorePaths
@@ -148,6 +148,10 @@ def approve_ticket(
         if approval == "blocked":
             answer = records.one_line(note, "note") if note is not None else RESOLVED
             state.sent_back = SentBack(step="user", summary=answer)
+            said = prompts.sent_back_line(state.sent_back, check=False)
+            # the Handoff keeps the answer for every later step, not only the next one
+            handoff = doc.sections.get("Handoff", "").rstrip("\n")
+            doc.sections["Handoff"] = f"{handoff}\n{said}" if handoff else said
         progress = lifecycle.progress_for(resolved, ticket, state)
         routed = workflow.approve(resolved, progress, approval, loops=loops, tokens=tokens)
         lifecycle.apply_progress(resolved, doc, state, routed.progress)

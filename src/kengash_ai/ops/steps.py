@@ -9,7 +9,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 from uuid import uuid4
 
 from kengash_ai import adapters, gitops, journal, settings, workflow
@@ -41,6 +41,7 @@ from kengash_ai.ops.workspace import GATES
 from kengash_ai.store import documents, runtime
 from kengash_ai.store.locks import locked
 from kengash_ai.store.paths import StorePaths
+from kengash_ai.store.redact import redact
 from kengash_ai.store.registry import load_registry
 
 SLOT_POLL_S = 5
@@ -201,9 +202,7 @@ def _step(job: _Job, ready: _Ready) -> JobEnd | None:
     if isinstance(ran, JobEnd):
         return ran
     if ready.resolved.kind_of(ready.step) == "edit":
-        verified = _verify(job, ready, ran)
-        if verified is not None:
-            return verified
+        _verify(job, ready, ran)
         committed = _commit(job, ready, ran)
         if isinstance(committed, JobEnd):
             return committed
@@ -491,34 +490,50 @@ def _request(
     )
 
 
-def _verify(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
+def _verify(job: _Job, ready: _Ready, ran: _Ran) -> None:
     """Run the project's checks after an editing step's reply; while they fail and fix turns
-    remain, resume the step's session with what failed (SP15 spec §3.1). Running out of turns,
-    a timeout or a moved ticket ends the checks; the step then goes on as before."""
+    remain, resume the step's session with what failed (SP15 spec §3.1). Fix turns only add
+    chances: running out of them, a timeout, an unusable reply, a park request or a moved
+    ticket ends the checks, and the step goes on as before. A reply that says it is BLOCKED
+    goes straight to the user instead."""
     resolved, step = ready.resolved, ready.step
-    if not checks.wanted(resolved, ready.doc.meta, step):
-        return None
+    output = ran.result.output
+    blocked = isinstance(output, WorkOutput) and prompts.blocked_line(output.handoff)
+    if blocked or not checks.wanted(resolved, ready.doc.meta, step):
+        return
+    if ran.result.session_id:  # a worker killed during the checks keeps the session
+        _keep_session(job, step, ran.pick, ran.result.session_id)
+    try:
+        _check_and_fix(job, ready, ran)
+    finally:
+        pick = ran.pick
+        working = Running(
+            role=pick.role, provider=pick.provider, model=pick.model, log=ran.request.log
+        )
+        _set_running(job, step, working)
+
+
+def _check_and_fix(job: _Job, ready: _Ready, ran: _Ran) -> None:
+    resolved, step = ready.resolved, ready.step
     turns = resolved.checks.turns
     shell = adapters.get("shell", runtime=job.paths.runtime)
     for turn in range(turns + 1):
         log = _next_log(job)
         _set_running(job, step, Running(role="test-runner", provider="shell", log=log))
+        before = set(gitops.untracked_files(job.worktree))
         result = shell.run(checks.request(resolved, job.worktree, log))
+        gitops.drop_untracked(job.worktree, keep=before)  # what the checks wrote is no work
         verdict, summary = checks.outcome(result)
         if not _record_check(job, step, turn, result, (verdict, summary), log):
-            return None  # the user moved the ticket: their status stands
+            return  # the user moved the ticket: their status stands
         if verdict == "pass":
             ran.checked = summary
-            return None
-        if verdict != "fail" or turn == turns:
-            return None
-        prompt = prompts.fix_prompt(result.check_output, turn=turn + 1, turns=turns)
-        fixed = _fix_turn(job, ready, ran, prompt)
-        if isinstance(fixed, JobEnd):
-            return fixed
-        if fixed == "unusable":
-            return None
-    return None
+            return
+        if verdict != "fail" or turn == turns or runtime.park_requested(job.paths, job.ticket_id):
+            return
+        prompt = prompts.fix_prompt(redact(result.check_output), turn=turn + 1, turns=turns)
+        if not _fix_turn(job, ready, ran, prompt):
+            return
 
 
 def _set_running(job: _Job, step: str, running: Running) -> None:
@@ -538,7 +553,7 @@ def _record_check(
     verdict, summary = said
 
     def write(doc: Doc[Ticket], state: TicketState) -> None:
-        doc.sections["Check output"] = result.check_output if verdict == "fail" else ""
+        doc.sections["Check output"] = redact(result.check_output) if verdict == "fail" else ""
         line = prompts.check_log_line(utc_now(), verdict, summary)
         doc.sections["Log"] = "\n".join(filter(None, [doc.sections.get("Log", "").strip(), line]))
 
@@ -561,12 +576,11 @@ def _record_check(
     return True
 
 
-def _fix_turn(
-    job: _Job, ready: _Ready, ran: _Ran, prompt: str
-) -> Literal["replied", "unusable"] | JobEnd:
-    """One resumed turn telling the session what the checks found: `replied` with a valid
-    reply (it replaces `ran`'s), `unusable` for a `schema` or `empty` reply (the last valid
-    reply stands), a JobEnd when the call failed. A `network` error gets one resumed turn."""
+def _fix_turn(job: _Job, ready: _Ready, ran: _Ran, prompt: str) -> bool:
+    """One resumed turn telling the session what the checks found; True once it replied
+    validly (its reply replaces `ran`'s). Any other end keeps the last valid reply, because a
+    fix turn only adds a chance: a `network` error gets one resumed turn, then any error ends
+    the fix turns, carrying the CLI's usage totals so the next resume counts from them."""
     pick = ran.pick
     working = Running(role=pick.role, provider=pick.provider, model=pick.model, log=ran.request.log)
     _set_running(job, ready.step, working)
@@ -578,13 +592,13 @@ def _fix_turn(
         request = _resume(job, request, result, prompts.NETWORK_PROMPT)
         result = provider.run(request)
         ran.usage = calls.plus(ran.usage, result.usage)
-    if result.error in ("schema", "empty"):
-        return "unusable"
-    if result.error is not None:
-        return _call_failed(job, ready, pick, request, result, ran.usage)
     session = result.session_id or ran.result.session_id
+    if result.error is not None:
+        totals = result.total_usage or ran.result.total_usage
+        ran.result = ran.result.model_copy(update={"session_id": session, "total_usage": totals})
+        return False
     ran.request, ran.result = request, result.model_copy(update={"session_id": session})
-    return "replied"
+    return True
 
 
 def _remember_checks(job: _Job, ready: _Ready, ran: _Ran) -> None:
@@ -700,7 +714,7 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
             doc.sections["Findings"] = prompts.findings_text(failing)
             fingerprints = tuple(workflow.fingerprint(f.file, f.issue) for f in failing)
             if resolved.kind_of(step) == "check":
-                doc.sections["Check output"] = result.check_output if failing else ""
+                doc.sections["Check output"] = redact(result.check_output) if failing else ""
         else:
             verdict = "pass"
             if isinstance(output, WorkOutput):
@@ -728,13 +742,13 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
             workflow.Outcome(verdict, fingerprints, blocked),
         )
         lifecycle.apply_progress(resolved, doc, state, routed.progress)
+        if verdict == "fail" and isinstance(output, ReviewOutput) and routed.progress.step != step:
+            state.sent_back = SentBack(step=step, summary=output.summary)  # also at a cap
         decision = routed.decision
         end: JobEnd | None = None
         if isinstance(decision, workflow.Run):
             if ticket.loop > ran.loop:
                 events.append(_recirculated(job, ticket, step, decision.step))
-            if verdict == "fail" and isinstance(output, ReviewOutput):
-                state.sent_back = SentBack(step=step, summary=output.summary)
             ticket.status = lifecycle.step_status(resolved, decision.step)
             ticket.updated = utc_now()
             documents.save_ticket(paths.project(job.slug), doc)

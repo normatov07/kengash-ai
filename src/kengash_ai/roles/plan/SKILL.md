@@ -18,5 +18,4 @@ Files: <path>: <what changes>
 Interfaces: <signature>: <behaviour>
 Tests: <test name>: <what it proves>
 Risks: <one line each>
-BLOCKED: <only when the work cannot be done without it>
 ```

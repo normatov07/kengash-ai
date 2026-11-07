@@ -206,3 +206,18 @@ def test_a_note_on_a_loop_cap_is_refused(
         controls.approve_ticket(
             "7b55e0c1", loops=None, tokens=None, project=None, by="user", note="x"
         )
+
+
+def test_the_answer_to_a_blocked_plan_stays_in_the_handoff(
+    engine: Engine, spawned: list[tuple[str, int | None]]
+) -> None:
+    # review finding: review_plan consumes sent_back before the implementer runs
+    doc = engine.ticket()
+    doc.meta.status, doc.meta.step = "in_process/needs_approval", "plan"
+    doc.sections["Handoff"] = "Files: a.py\nBLOCKED: the assets need a login"
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    runtime.save_ticket_state(engine.paths, "7b55e0c1", TicketState(approval="blocked"))
+    note = "assets are in raw/"
+    controls.approve_ticket("7b55e0c1", loops=None, tokens=None, project=None, by="user", note=note)
+    handoff = engine.ticket().sections["Handoff"]
+    assert handoff.splitlines()[-1] == "The user answered: assets are in raw/."

@@ -20,7 +20,6 @@ You implement one ticket in this worktree. The Handoff holds the plan; the Findi
 Changed: <what changed, one line each>
 Checked: <each check you ran and its result, or "checks not run">
 Left: <what is left>
-BLOCKED: <only when step 7 applies>
 ```
 
 Never report a check you did not run.

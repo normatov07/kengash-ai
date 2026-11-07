@@ -148,6 +148,21 @@ def _current(key: str) -> str:
     return TRAILER + key.removeprefix(LEGACY_TRAILER) if key.startswith(LEGACY_TRAILER) else key
 
 
+def untracked_files(cwd: Path) -> list[str]:
+    """Untracked paths in `cwd` that `.gitignore` does not hide, sorted."""
+    out = _git(cwd, "ls-files", "--others", "--exclude-standard", "-z")
+    return sorted(path for path in out.split("\0") if path)
+
+
+def drop_untracked(cwd: Path, *, keep: set[str]) -> list[str]:
+    """Remove untracked files that appeared since `keep` was listed (a check's output, such
+    as flutter's golden failures), so they never reach a commit; returns what went."""
+    gone = [path for path in untracked_files(cwd) if path not in keep]
+    for path in gone:
+        (cwd / path).unlink(missing_ok=True)
+    return gone
+
+
 def changed_files(cwd: Path) -> list[str]:
     """Uncommitted paths in `cwd`, tracked or not, sorted (SP12: where failed work is kept)."""
     entries = _git(cwd, "status", "--porcelain=v1", "-z", "--untracked-files=all").split("\0")

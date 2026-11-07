@@ -62,6 +62,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-07: review fixes (SP15): any error in a fix turn ends the fix turns and keeps the last valid reply (usage totals carried); a park request stops them; a reply with a `BLOCKED:` line skips the checks; files a check run leaves untracked are removed (`gitops.drop_untracked`); `## Check output` is redacted; `sent_back` is stored at a loop cap too; the implementer's session is stored before the checks and `state.running` names it again after; `blocked_line` allows list markers and bold and ignores `none`, `n/a`, `-`; a blocked approval appends `The user answered: …` to `## Handoff`.
 - 2026-11-07: `views` timeline rows for `checks.end` (`checks`, the step, `<verdict> · <summary> · turn <n>`); the agent chain still counts `step.end` only (SP15).
 - 2026-11-07: a work step whose handoff has a `BLOCKED:` line (`prompts.blocked_line`, redacted, 160 characters) stops at `needs_approval`; `controls.approve_ticket(…, note=)` puts the user's answer, or `the user resolved what you were blocked on`, in `TicketState.sent_back`; `--note` on another gate is refused (SP15).
 - 2026-11-07: `run_tests` reuses in-step checks that passed on the same commit (SP15).

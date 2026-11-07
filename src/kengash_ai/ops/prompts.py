@@ -92,13 +92,20 @@ BLOCKED = "BLOCKED:"
 BLOCKED_CHARS = 160
 
 
+NOT_BLOCKED = frozenset({"", "none", "n/a", "na", "no", "nothing", "nil", "-"})
+
+
 def blocked_line(handoff: str) -> str:
     """What a handoff says the step is blocked on: the text after `BLOCKED:` on the first
-    line that starts with it; empty when no line does (SP15 spec §3.8)."""
+    line that starts with it (a list marker or bold allowed); empty when no line does or the
+    text only says there is no block (`none`, `n/a`) (SP15 spec §3.8)."""
     for line in handoff.splitlines():
-        text = line.strip()
-        if text.startswith(BLOCKED):
-            return redact(_flat(text.removeprefix(BLOCKED)))[:BLOCKED_CHARS] or "no reason given"
+        text = line.strip().lstrip("-*• ").strip()
+        if not text.startswith(BLOCKED):
+            continue
+        said = text.removeprefix(BLOCKED).strip(" *_`")
+        if said.lower().rstrip(".") not in NOT_BLOCKED:
+            return redact(_flat(said))[:BLOCKED_CHARS]
     return ""
 
 

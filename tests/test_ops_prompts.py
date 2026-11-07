@@ -3,6 +3,8 @@
 from collections.abc import Callable
 from datetime import UTC, datetime
 
+import pytest
+
 from kengash_ai.model import Doc, Finding, SentBack, Settings, Ticket
 from kengash_ai.ops import prompts
 from kengash_ai.store import StorePaths
@@ -212,3 +214,21 @@ def test_check_log_line() -> None:
     assert prompts.check_log_line(at, "fail", "lint failed (exit 1)") == (
         "- 2026-11-07 10:01 · checks · kengash · shell/default · fail · 0 · lint failed (exit 1)"
     )
+
+
+@pytest.mark.parametrize(
+    ("handoff", "said"),
+    [
+        ("Files: x\nBLOCKED: needs the login", "needs the login"),
+        ("- BLOCKED: needs the login", "needs the login"),
+        ("**BLOCKED:** needs the login", "needs the login"),
+        ("BLOCKED: none", ""),
+        ("BLOCKED: n/a", ""),
+        ("BLOCKED: -", ""),
+        ("BLOCKED: Nothing.", ""),
+        ("BLOCKED:", ""),
+        ("Not blocked at all", ""),
+    ],
+)
+def test_blocked_line_reads_real_blocks_only(handoff: str, said: str) -> None:
+    assert prompts.blocked_line(handoff) == said

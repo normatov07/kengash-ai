@@ -409,6 +409,8 @@ def test_role_skills_carry_the_sp15_rules() -> None:
         assert phrase in implement, phrase
     plan = (skills.roles_dir() / "plan" / "SKILL.md").read_text(encoding="utf-8")
     assert "BLOCKED:" in plan
+    for text in (implement, plan):  # a template line invites "BLOCKED: none"
+        assert not any(line.startswith("BLOCKED: <") for line in text.splitlines())
     events = (Path(__file__).parents[1] / "skills" / "loop" / "references" / "events.md").read_text(
         encoding="utf-8"
     )

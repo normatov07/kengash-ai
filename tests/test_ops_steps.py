@@ -1,9 +1,11 @@
 """The step loop: one ticket through its workflow with fake CLIs (SP3 spec §5)."""
 
 import json
+import os
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 from conftest import Engine, Events, FakeClis, write_settings
@@ -817,3 +819,123 @@ def test_blocked_implement_commits_its_work_first(
     assert end == JobEnd("in_process/needs_approval", "blocked: no pyftsubset")
     assert "a.py" in run_git(engine.worktree, "show", "--name-only", "--format=", "HEAD")
     assert engine.ticket().meta.step == "implement"
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [{"stdout": "", "stderr": "segfault", "exit": 1}, {"fixture": "codex/usage_limit.jsonl"}],
+)
+def test_a_failed_fix_turn_keeps_the_step(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events, reply: dict[str, Any]
+) -> None:
+    # review finding: fix turns only add chances; an error in one never fails the step
+    write_settings(engine.paths, checks_settings(FIXED, turns=1) + "fallback_on_error: false\n")
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"})
+    fake_clis.queue("codex", **reply)
+    steps.run_job("7b55e0c1", steps=2)
+    doc = engine.ticket()
+    assert doc.meta.status != "in_process/failed" and doc.meta.step == "run_tests"
+    assert doc.sections["Handoff"] == "retry.py retries 3 times with exponential backoff."
+    assert check_runs(journal_events) == [(0, "fail")]
+
+
+def test_a_park_during_checks_stops_the_fix_turns(
+    engine: Engine, fake_clis: FakeClis, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # review finding: with a live worker, park only sets a flag
+    from kengash_ai.adapters.shell import Shell
+    from kengash_ai.model import WorkerRecord
+    from kengash_ai.ops import controls
+
+    runtime.save_worker(
+        engine.paths, WorkerRecord(id="7b55e0c1", project=engine.slug, pid=os.getpid())
+    )
+    real = Shell.run
+
+    def park_then_run(self: Shell, req: StepRequest) -> StepResult:
+        assert controls.park_ticket("7b55e0c1", "user took it", project=None, by="t").deferred
+        return real(self, req)
+
+    monkeypatch.setattr(Shell, "run", park_then_run)
+    write_settings(engine.paths, checks_settings(FIXED))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"})
+    steps.run_job("7b55e0c1", steps=3)
+    assert len(fake_clis.calls("codex")) == 1
+    assert engine.ticket().meta.status == "in_queue/parked"
+
+
+def test_a_blocked_reply_skips_the_checks(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events
+) -> None:
+    write_settings(engine.paths, checks_settings(FIXED))
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    blocked = fake_clis.codex_output({"summary": "Partial", "handoff": "BLOCKED: no assets"})
+    fake_clis.queue("codex", stdout=blocked)
+    assert steps.run_job("7b55e0c1").status == "in_process/needs_approval"
+    assert check_runs(journal_events) == []
+
+
+def test_a_check_failure_at_the_loop_cap_still_says_why(
+    engine: Engine, fake_clis: FakeClis
+) -> None:
+    write_settings(engine.paths, checks_settings(BOOM, turns=0))
+    doc = engine.ticket()
+    doc.meta.loop_max = 1
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"})
+    assert steps.run_job("7b55e0c1").status == "in_process/needs_approval"
+    assert engine.state().sent_back == SentBack(step="run_tests", summary="tests failed (exit 1)")
+
+
+@pytest.mark.parametrize(("turns", "budget"), [(0, 3), (1, 2)])
+def test_check_output_is_redacted(
+    engine: Engine, fake_clis: FakeClis, turns: int, budget: int
+) -> None:
+    leaky = "echo 'error: token=abc123def456ghi789'; exit 1"
+    write_settings(engine.paths, checks_settings(leaky, turns=turns))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"}, {"b.txt": "b\n"})
+    steps.run_job("7b55e0c1", steps=budget)
+    output = engine.ticket().sections["Check output"]
+    assert "abc123def456ghi789" not in output and "[REDACTED]" in output
+
+
+def test_files_the_checks_create_are_not_committed(
+    engine: Engine, fake_clis: FakeClis, run_git: Callable[..., str]
+) -> None:
+    golden = "mkdir -p test/failures && echo png > test/failures/golden.png; "
+    write_settings(engine.paths, checks_settings(golden + FIXED))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"}, {"fixed.txt": "ok\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    files = run_git(engine.worktree, "show", "--name-only", "--format=", "HEAD").split()
+    assert "fixed.txt" in files and "test/failures/golden.png" not in files
+    assert not (engine.worktree / "test" / "failures" / "golden.png").exists()
+
+
+def test_the_implementer_session_survives_a_check_run(
+    engine: Engine, fake_clis: FakeClis, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # review finding: a worker killed during checks must not lose the new session
+    from kengash_ai import gitops
+    from kengash_ai.adapters.shell import Shell
+
+    sessions: list[Any] = []
+    roles: list[str] = []
+    real_run, real_commit = Shell.run, gitops.commit_all
+
+    def spy_run(self: Shell, req: StepRequest) -> StepResult:
+        sessions.append(engine.ticket().meta.sessions.get("implementer"))
+        return real_run(self, req)
+
+    def spy_commit(*args: Any, **kwargs: Any) -> Any:
+        running = engine.state().running
+        roles.append(running.role if running else "")
+        return real_commit(*args, **kwargs)
+
+    monkeypatch.setattr(Shell, "run", spy_run)
+    monkeypatch.setattr(gitops, "commit_all", spy_commit)
+    write_settings(engine.paths, checks_settings(FIXED))
+    queue_plan_and_implement(fake_clis, {"fixed.txt": "ok\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    assert sessions and sessions[0] is not None
+    assert sessions[0].id == "0199a213-81c0-7800-8aa1-bbab2a035a53"
+    assert roles == ["implementer"]
