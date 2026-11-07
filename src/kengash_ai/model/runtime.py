@@ -65,17 +65,35 @@ class Running(_Runtime):
     log: Path
 
 
+class SentBack(_Runtime):
+    """The step that sent a ticket back and its summary, or `user` and the answer given at a
+    blocked gate; the next step's prompt says so (SP15 spec §3.4)."""
+
+    step: str
+    summary: str
+
+
+class Checked(_Runtime):
+    """Checks that passed inside `step` on `commit`, so `run_tests` can reuse them (SP15)."""
+
+    commit: str
+    step: str
+    summary: str
+
+
 class TicketState(_Runtime):
     """runtime/tickets/<id>.json: engine bookkeeping for one ticket; losing it only
     restarts stall counting."""
 
     streaks: dict[str, dict[str, int]] = Field(default_factory=dict)
     plan_rounds: int = 0
-    approval: Literal["loop_cap", "token_cap", "approve_step"] | None = None
+    approval: Literal["loop_cap", "token_cap", "approve_step", "blocked"] | None = None
     start_commit: str | None = None
     totals: dict[str, Usage] = Field(default_factory=dict)
     running: Running | None = None
     calls: int = 0
+    sent_back: SentBack | None = None
+    checked: Checked | None = None
 
 
 class ConductorPing(_Runtime):

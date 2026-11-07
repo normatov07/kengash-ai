@@ -10,7 +10,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 - `Doc[M]`: a frontmatter model plus ordered Markdown sections; `PLAN_SECTIONS` and `TICKET_SECTIONS` name them.
 - `Registry`, `ProjectEntry`: `registry.yaml`.
 - `SlotEntry`, `SlotTable`, `Claims`, `Trust`: `runtime/slots.json`, `runtime/claims.json` and `runtime/trust.json` (SP3 spec §4).
-- `WorkerRecord` (`runtime/workers/<id>.json`; `job`: `ticket`, `plan-review` or `compact`), `TicketState` with `Running` (`runtime/tickets/<id>.json`: stall streaks, plan-review rounds, pending approval, editing start commit, agy usage totals, the call in flight, call count), `ConductorPing` and `JournalCursor` (`runtime/conductors/`), `LoopLease` (`runtime/loops/<pid>.json`: pid, agent, process name, project or None for every project, started, seen; SP11).
+- `WorkerRecord` (`runtime/workers/<id>.json`; `job`: `ticket`, `plan-review` or `compact`), `TicketState` with `Running` (`runtime/tickets/<id>.json`: stall streaks, plan-review rounds, pending approval, editing start commit, agy usage totals, the call in flight, call count; SP15: `sent_back` (`SentBack`: the step that sent the ticket back and its summary, or `user` and the answer at a blocked gate) and `checked` (`Checked`: commit, step, summary of in-step checks that passed); approval may be `blocked`), `ConductorPing` and `JournalCursor` (`runtime/conductors/`), `LoopLease` (`runtime/loops/<pid>.json`: pid, agent, process name, project or None for every project, started, seen; SP11).
 - `Importance`, `Gate`, `Folder`, `ShortId`, `Title`, `utc_now()`.
 - `TicketInput`: one item of `kengash ticket add` input (SP2 spec §4); unknown fields are rejected.
 - `SUB_STATUSES`: sub-statuses per folder, `in_process/paused` included (`in_process` also takes the step names of `status.names`); `Ticket.sub_status`.
@@ -28,6 +28,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Changes
 
+- 2026-11-07: `TICKET_SECTIONS` gains `Check output` before `Log`; `Settings.checks.turns` (default 2, 0–5); `SentBack`, `Checked`, `TicketState.sent_back`, `TicketState.checked`, approval `blocked` (SP15).
 - 2026-11-07: `StepResult.check_output` (SP15).
 - 2026-11-07: `ViewerRecord` (`runtime/viewers/<key>.json`: key, pid or None while its tab opens, since); `Settings.watch` (`Watch`: `tabs` auto|off, `terminal` template, `notify`) (SP13 M1).
 - 2026-11-06: `Tokens.per_ticket_max` defaults to 1,000,000 (SP12 M3).

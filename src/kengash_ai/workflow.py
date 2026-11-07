@@ -11,7 +11,7 @@ from typing import Literal
 
 from kengash_ai.model import Settings
 
-Approval = Literal["loop_cap", "token_cap", "approve_step"]
+Approval = Literal["loop_cap", "token_cap", "approve_step", "blocked"]
 Verdict = Literal["pass", "fail"]
 
 NEEDS_APPROVAL = "in_process/needs_approval"

@@ -3,11 +3,13 @@ from datetime import UTC, datetime
 import pytest
 
 from kengash_ai.model import (
+    Checked,
     Claims,
     JournalCursor,
     KengashError,
     LoopBusy,
     LoopLease,
+    SentBack,
     SlotEntry,
     SlotTable,
     TicketState,
@@ -99,3 +101,20 @@ def test_lease_round_trip(store_paths: StorePaths) -> None:
 
 def test_loop_busy_exits_6() -> None:
     assert LoopBusy("loop running: x").exit_code == 6
+
+
+def test_ticket_state_loads_old_files_and_round_trips_the_new_fields(
+    store_paths: StorePaths,
+) -> None:
+    path = store_paths.runtime / "tickets" / "7b55e0c1.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('{"plan_rounds": 1, "approval": "loop_cap"}', encoding="utf-8")
+    old = runtime.load_ticket_state(store_paths, "7b55e0c1")
+    assert (old.sent_back, old.checked, old.plan_rounds) == (None, None, 1)
+    state = TicketState(
+        approval="blocked",
+        sent_back=SentBack(step="run_tests", summary="lint failed (exit 1)"),
+        checked=Checked(commit="abc1234", step="implement", summary="tests passed"),
+    )
+    runtime.save_ticket_state(store_paths, "7b55e0c1", state)
+    assert runtime.load_ticket_state(store_paths, "7b55e0c1") == state
