@@ -83,6 +83,23 @@ def memory_block(memory: str) -> list[tuple[str, str]]:
     return [("Memory", f"{MEMORY_LEAD}\n\n{memory}")] if memory.strip() else []
 
 
+MAX_FILES = 40
+
+
+def narrowed(files: Sequence[str]) -> list[str] | None:
+    """A planner's `files` as the ticket's new touches (SP16 spec §3.12): repo-relative,
+    normalised, deduplicated and sorted; None (keep the touches) for an empty list, more than
+    40 paths, or any path that is empty, absolute or climbs out with `..`."""
+    found: set[str] = set()
+    for raw in files:
+        path = raw.strip()
+        parts = [part for part in path.split("/") if part not in ("", ".")]
+        if not parts or path.startswith(("/", "~", "\\")) or ".." in parts or ":" in parts[0]:
+            return None
+        found.add("/".join(parts))
+    return sorted(found) if 0 < len(found) <= MAX_FILES else None
+
+
 DECISIONS_PER_REPLY = 3
 DECISIONS_PER_TICKET = 6
 

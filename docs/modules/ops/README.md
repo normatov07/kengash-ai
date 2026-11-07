@@ -62,6 +62,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-07: a planning step's `files` (`PlanOutput`) narrow the ticket's touches when `prompts.narrowed` accepts them (1–40 repo-relative paths, normalised, deduplicated, sorted; any absolute, empty or `..` path keeps the touches); the Log line says `touches narrowed to N files` (SP16).
 - 2026-11-07: before an `edit`-kind step's call, `steps._catch_up` fast-forwards a branch with no work yet to the newest base under the repo lock (SP16).
 - 2026-11-07: `queue.compute` counts only path holders (`lifecycle.holds_paths`) as busy and passes each candidate's editing phase and chain weight; `controls._claim` checks paths only for a start in the editing phase, against holders; a job routed from planning into the editing phase moves to `waiting_paths` and `steps._begin` takes the paths under the project lock, or journals `ticket.waiting` (once per holder) and polls every `PATH_POLL_S` (5 s) honouring park and pause; `views` show `waiting paths`; `progress` says what a waiting job waits for and never calls it quiet (SP16).
 - 2026-11-07: `lifecycle.holds_paths(resolved, ticket)`: an in_process ticket in its editing phase and not at `needs_approval`, `stalled`, `failed`, `paused` or `waiting_paths`, or one at `awaiting_merge`, keeps others off its touches (SP16).

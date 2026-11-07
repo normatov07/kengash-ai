@@ -105,6 +105,27 @@ def test_review_prompts_show_decisions(make_ticket: Make) -> None:
     assert "## Decisions\n- keep X. why: y." in resumed
 
 
+def test_narrowed_normalises_and_dedupes() -> None:
+    files = ["./lib/a.dart", "lib//b.dart", "lib/a.dart", " test/a_test.dart "]
+    assert prompts.narrowed(files) == ["lib/a.dart", "lib/b.dart", "test/a_test.dart"]
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        [],
+        ["/etc/passwd"],
+        ["../outside.py"],
+        ["lib/../../x"],
+        ["", "lib/a"],
+        ["~/x"],
+        [f"f{n}.py" for n in range(41)],
+    ],
+)
+def test_narrowed_rejects_unsafe_or_empty_lists(files: list[str]) -> None:
+    assert prompts.narrowed(files) is None
+
+
 def test_sections_and_log_lines() -> None:
     assert prompts.handoff_text("\n".join(f"l{i}" for i in range(20))).splitlines()[-1] == "l14"
     finding = Finding(severity="high", file="", line=0, issue="token=abc123def456ghi789", fix="f")

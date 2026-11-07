@@ -1051,3 +1051,19 @@ def test_implement_starts_from_newest_base(
     assert (engine.worktree / "merged.py").exists()
     log = run_git(engine.worktree, "log", "--format=%s", "-2").splitlines()
     assert log[1] == "another ticket merged"
+
+
+def test_plan_reply_files_narrow_touches(engine: Engine, fake_clis: FakeClis) -> None:
+    reply = {"summary": "Planned.", "handoff": "h", "files": ["./retry.py", "tests/test_retry.py"]}
+    fake_clis.queue("claude", stdout=fake_clis.claude_output({**reply, "decisions": []}))
+    steps.run_job("7b55e0c1", steps=1)
+    doc = engine.ticket()
+    assert doc.meta.touches == ["retry.py", "tests/test_retry.py"]
+    assert doc.sections["Log"].splitlines()[-1].endswith(" · touches narrowed to 2 files")
+
+
+def test_plan_reply_without_files_keeps_touches(engine: Engine, fake_clis: FakeClis) -> None:
+    before = engine.ticket().meta.touches
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    steps.run_job("7b55e0c1", steps=1)
+    assert engine.ticket().meta.touches == before

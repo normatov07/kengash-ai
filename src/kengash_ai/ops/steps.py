@@ -22,6 +22,7 @@ from kengash_ai.model import (
     Gate,
     KengashError,
     NeedsSetup,
+    PlanOutput,
     ProviderOptions,
     ProviderStatus,
     ReviewOutput,
@@ -216,6 +217,17 @@ def _begin(job: _Job, *, budget_left: bool) -> _Ready | JobEnd | _WaitPaths:
         runtime.save_ticket_state(paths, job.ticket_id, state)
         runtime.set_worker_step(paths, job.ticket_id, decision.step)
         return _Ready(doc, state, resolved, decision.step)
+
+
+def _narrow(resolved: Settings, ticket: Ticket, step: str, files: list[str]) -> int:
+    """Narrow the ticket's touches to a planning step's files; the new count, or 0 when the
+    touches stay (SP16 spec §3.12)."""
+    hitl = ticket.gate is Gate.hitl
+    paths = prompts.narrowed(files)
+    if paths is None or workflow.edit_phase(resolved, ticket.workflow, step, hitl=hitl):
+        return 0
+    ticket.touches = paths
+    return len(paths)
 
 
 def _catch_up(job: _Job) -> None:
@@ -768,6 +780,7 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
         output = result.output
         fingerprints: tuple[str, ...] = ()
         blocked = ""
+        narrowed = 0
         if isinstance(output, ReviewOutput):
             verdict = output.verdict
             failing = output.findings if verdict == "fail" else []
@@ -780,6 +793,8 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
             if isinstance(output, WorkOutput):
                 doc.sections["Handoff"] = prompts.handoff_text(output.handoff)
                 blocked = prompts.blocked_line(output.handoff)
+                if isinstance(output, PlanOutput):
+                    narrowed = _narrow(resolved, ticket, step, output.files)
                 if output.decisions:  # recorded only when the ticket merges (SP16 §3.3)
                     existing = doc.sections.get("Decisions", "")
                     doc.sections["Decisions"] = prompts.decision_lines(existing, output.decisions)
@@ -788,6 +803,8 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
         line = prompts.log_line(
             utc_now(), step, pick.role, pick.provider, pick.model, verdict, tokens
         )
+        if narrowed:
+            line += f" · touches narrowed to {narrowed} files"
         if result.warning:  # the CLI's error after a valid output (SP12 spec §3.1)
             line += f" · warning: {result.warning.strip().splitlines()[0][:160]}"
         doc.sections["Log"] = "\n".join(filter(None, [doc.sections.get("Log", "").strip(), line]))
