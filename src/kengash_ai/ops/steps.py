@@ -9,7 +9,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from kengash_ai import adapters, gitops, journal, settings, workflow
@@ -35,7 +35,7 @@ from kengash_ai.model import (
     WorkOutput,
     utc_now,
 )
-from kengash_ai.ops import agents, calls, lifecycle, merging, prompts, records, slots
+from kengash_ai.ops import agents, calls, checks, lifecycle, merging, prompts, records, slots
 from kengash_ai.ops.workspace import GATES
 from kengash_ai.store import documents, runtime
 from kengash_ai.store.locks import locked
@@ -89,6 +89,7 @@ class _Ran:
     loop: int
     commit: str | None = None
     files: list[gitops.FileChange] | None = None
+    checked: str | None = None  # the summary of in-step checks whose last run passed (SP15)
 
 
 def run_job(ticket_id: str, *, project: str | None = None, steps: int | None = None) -> JobEnd:
@@ -198,6 +199,9 @@ def _step(job: _Job, ready: _Ready) -> JobEnd | None:
     if isinstance(ran, JobEnd):
         return ran
     if ready.resolved.kind_of(ready.step) == "edit":
+        verified = _verify(job, ready, ran)
+        if verified is not None:
+            return verified
         committed = _commit(job, ready, ran)
         if isinstance(committed, JobEnd):
             return committed
@@ -481,6 +485,102 @@ def _request(
     )
 
 
+def _verify(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
+    """Run the project's checks after an editing step's reply; while they fail and fix turns
+    remain, resume the step's session with what failed (SP15 spec §3.1). Running out of turns,
+    a timeout or a moved ticket ends the checks; the step then goes on as before."""
+    resolved, step = ready.resolved, ready.step
+    if not checks.wanted(resolved, ready.doc.meta, step):
+        return None
+    turns = resolved.checks.turns
+    shell = adapters.get("shell", runtime=job.paths.runtime)
+    for turn in range(turns + 1):
+        log = _next_log(job)
+        _set_running(job, step, Running(role="test-runner", provider="shell", log=log))
+        result = shell.run(checks.request(resolved, job.worktree, log))
+        verdict, summary = checks.outcome(result)
+        if not _record_check(job, step, turn, result, (verdict, summary), log):
+            return None  # the user moved the ticket: their status stands
+        if verdict == "pass":
+            ran.checked = summary
+            return None
+        if verdict != "fail" or turn == turns:
+            return None
+        prompt = prompts.fix_prompt(result.check_output, turn=turn + 1, turns=turns)
+        fixed = _fix_turn(job, ready, ran, prompt)
+        if isinstance(fixed, JobEnd):
+            return fixed
+        if fixed == "unusable":
+            return None
+    return None
+
+
+def _set_running(job: _Job, step: str, running: Running) -> None:
+    """Name the call in flight, so `kengash ps`, `logs -f` and the Live tab follow it."""
+
+    def put(doc: Doc[Ticket], state: TicketState) -> None:
+        state.running = running
+
+    _update(job, step, put)
+
+
+def _record_check(
+    job: _Job, step: str, turn: int, result: StepResult, said: tuple[str, str], log: Path
+) -> bool:
+    """Write a check run's Log line and Check output and journal `checks.end`; False when
+    the user moved the ticket off the step. `said` is the run's verdict and summary."""
+    verdict, summary = said
+
+    def write(doc: Doc[Ticket], state: TicketState) -> None:
+        doc.sections["Check output"] = result.check_output if verdict == "fail" else ""
+        line = prompts.check_log_line(utc_now(), verdict, summary)
+        doc.sections["Log"] = "\n".join(filter(None, [doc.sections.get("Log", "").strip(), line]))
+
+    if not _update(job, step, write):
+        return False
+    event = Event.model_validate(
+        {
+            "type": "checks.end",
+            "project": job.slug,
+            "ticket": job.ticket_id,
+            "step": step,
+            "turn": turn,
+            "verdict": verdict,
+            "summary": summary,
+            "duration_s": result.duration_s,
+            "log": str(log),
+        }
+    )
+    records.record(job.paths, f"kengash: {job.ticket_id} checks", event)
+    return True
+
+
+def _fix_turn(
+    job: _Job, ready: _Ready, ran: _Ran, prompt: str
+) -> Literal["replied", "unusable"] | JobEnd:
+    """One resumed turn telling the session what the checks found: `replied` with a valid
+    reply (it replaces `ran`'s), `unusable` for a `schema` or `empty` reply (the last valid
+    reply stands), a JobEnd when the call failed. A `network` error gets one resumed turn."""
+    pick = ran.pick
+    working = Running(role=pick.role, provider=pick.provider, model=pick.model, log=ran.request.log)
+    _set_running(job, ready.step, working)
+    provider = adapters.get(pick.provider, runtime=job.paths.runtime)
+    request = _resume(job, ran.request, ran.result, prompt)
+    result = provider.run(request)
+    ran.usage = calls.plus(ran.usage, result.usage)
+    if result.error == "network":
+        request = _resume(job, request, result, prompts.NETWORK_PROMPT)
+        result = provider.run(request)
+        ran.usage = calls.plus(ran.usage, result.usage)
+    if result.error in ("schema", "empty"):
+        return "unusable"
+    if result.error is not None:
+        return _call_failed(job, ready, pick, request, result, ran.usage)
+    session = result.session_id or ran.result.session_id
+    ran.request, ran.result = request, result.model_copy(update={"session_id": session})
+    return "replied"
+
+
 def _feedback(resolved: Settings, step: str, sent: SentBack | None) -> prompts.Feedback:
     """The checks, and why the step runs again, for its prompt (SP15 spec §3.4)."""
     project = resolved.project
@@ -661,17 +761,19 @@ def _status(doc: Doc[Ticket], status: str) -> None:
     doc.meta.updated = utc_now()
 
 
-def _update(job: _Job, step: str, change: Callable[[Doc[Ticket], TicketState], None]) -> None:
+def _update(job: _Job, step: str, change: Callable[[Doc[Ticket], TicketState], None]) -> bool:
     """Reload the ticket and its state under the project lock, change both, save both;
-    nothing changes once the user has moved the ticket off `step` (decision 26)."""
+    nothing changes once the user has moved the ticket off `step` (decision 26), and then
+    the answer is False."""
     with locked(_lock(job.paths, job.slug)):
         doc = _load(job.paths, job.slug, job.ticket_id)
         if doc.meta.folder is not Folder.in_process or doc.meta.step != step:
-            return
+            return False
         state = runtime.load_ticket_state(job.paths, job.ticket_id)
         change(doc, state)
         documents.save_ticket(job.paths.project(job.slug), doc)
         runtime.save_ticket_state(job.paths, job.ticket_id, state)
+        return True
 
 
 def _recover(job: _Job) -> None:

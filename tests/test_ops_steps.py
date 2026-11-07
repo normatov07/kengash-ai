@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from conftest import Engine, Events, FakeClis, write_settings
 
-from kengash_ai.model import Running, SentBack, TicketState
+from kengash_ai.model import Running, SentBack, StepRequest, StepResult, TicketState
 from kengash_ai.ops import calls, prompts, steps
 from kengash_ai.ops.steps import JobEnd
 from kengash_ai.store import StorePaths, documents, runtime
@@ -606,3 +606,128 @@ def test_the_next_step_consumes_sent_back(engine: Engine, fake_clis: FakeClis) -
     steps.run_job("7b55e0c1", steps=4)
     assert engine.ticket().meta.step == "run_tests"
     assert engine.state().sent_back is None
+
+
+FIXED = "test -f fixed.txt || { echo 'error: fixed.txt missing'; exit 1; }"
+
+
+def check_runs(events: Events) -> list[tuple[int, str]]:
+    return [(e["turn"], e["verdict"]) for e in events() if e["type"] == "checks.end"]
+
+
+def queue_plan_and_implement(fake_clis: FakeClis, *edits: dict[str, str]) -> None:
+    """The plan reply, then one implementer reply per `edits` (first turn, then fix turns)."""
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    for change in edits:
+        fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits=change)
+
+
+def test_checks_pass_first_time_with_no_fix_turn(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events
+) -> None:
+    write_settings(engine.paths, checks_settings(FIXED))
+    queue_plan_and_implement(fake_clis, {"fixed.txt": "ok\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    assert check_runs(journal_events) == [(0, "pass")]
+    log = engine.ticket().sections["Log"]
+    assert "· checks · kengash · shell/default · pass · 0 · tests passed" in log
+    assert len(fake_clis.calls("codex")) == 1
+
+
+def test_a_failing_check_gets_a_fix_turn_in_the_same_loop(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events, run_git: Callable[..., str]
+) -> None:
+    write_settings(engine.paths, checks_settings(FIXED))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"}, {"fixed.txt": "ok\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    _, fix = fake_clis.calls("codex")
+    assert fix["argv"][:2] == ["exec", "resume"]
+    assert "fix turn 1 of 2" in fix["argv"][-1] and "error: fixed.txt missing" in fix["argv"][-1]
+    assert check_runs(journal_events) == [(0, "fail"), (1, "pass")]
+    doc = engine.ticket()
+    assert (doc.meta.step, doc.meta.loop) == ("run_tests", 1)
+    assert doc.sections.get("Check output", "") == ""
+    files = run_git(engine.worktree, "show", "--name-only", "--format=", "HEAD").split()
+    assert {"a.txt", "fixed.txt"} <= set(files)
+
+
+def test_when_fix_turns_run_out_run_tests_sends_it_back(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events
+) -> None:
+    write_settings(engine.paths, checks_settings(FIXED, turns=1))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"}, {"b.txt": "b\n"})
+    steps.run_job("7b55e0c1", steps=3)
+    doc = engine.ticket()
+    assert (doc.meta.step, doc.meta.loop) == ("implement", 2)
+    assert "error: fixed.txt missing" in doc.sections["Findings"]
+    assert check_runs(journal_events)[:2] == [(0, "fail"), (1, "fail")]
+
+
+@pytest.mark.parametrize(
+    "settings_text", [checks_settings(FIXED, run_tests=False), checks_settings(FIXED, turns=0)]
+)
+def test_no_check_step_or_zero_turns_means_no_in_step_checks(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events, settings_text: str
+) -> None:
+    write_settings(engine.paths, settings_text)
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    assert check_runs(journal_events) == []
+    assert len(fake_clis.calls("codex")) == 1
+
+
+def test_a_network_error_in_a_fix_turn_resumes_once(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events
+) -> None:
+    write_settings(engine.paths, checks_settings(FIXED))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"})
+    fake_clis.queue("codex", stdout=_codex_cut(), exit=1)
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"fixed.txt": "ok\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    assert fake_clis.calls("codex")[2]["argv"][-1] == prompts.NETWORK_PROMPT
+    assert check_runs(journal_events) == [(0, "fail"), (1, "pass")]
+
+
+def test_an_invalid_fix_reply_keeps_the_last_valid_one(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events
+) -> None:
+    write_settings(engine.paths, checks_settings(FIXED))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"})
+    fake_clis.queue("codex", stdout=fake_clis.codex_output({"summary": "s"}))
+    steps.run_job("7b55e0c1", steps=2)
+    doc = engine.ticket()
+    assert doc.meta.status != "in_process/failed" and doc.meta.step == "run_tests"
+    handoff = fake_clis.fixture("codex/work_resume.jsonl")
+    assert doc.sections["Handoff"] and doc.sections["Handoff"] in handoff
+    assert check_runs(journal_events) == [(0, "fail")]
+
+
+def test_a_hanging_check_ends_the_in_step_checks(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(calls, "step_timeout", lambda resolved: 1)
+    write_settings(engine.paths, checks_settings("sleep 5"))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    assert check_runs(journal_events) == [(0, "timeout")]
+    assert len(fake_clis.calls("codex")) == 1
+
+
+def test_a_ticket_moved_during_checks_gets_no_fix_turn(
+    engine: Engine, fake_clis: FakeClis, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from kengash_ai.adapters.shell import Shell
+    from kengash_ai.ops import controls
+
+    real = Shell.run
+
+    def park_then_fail(self: Shell, req: StepRequest) -> StepResult:
+        controls.park_ticket("7b55e0c1", "user took it", project=None, by="test")
+        return real(self, req)
+
+    monkeypatch.setattr(Shell, "run", park_then_fail)
+    write_settings(engine.paths, checks_settings(FIXED))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    assert len(fake_clis.calls("codex")) == 1
+    assert engine.ticket().meta.status == "in_queue/parked"
