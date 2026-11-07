@@ -78,7 +78,7 @@ def test_huge_output_is_fast(tmp_path: Path) -> None:
     lines[100_000] = "error: boom"
     began = time.perf_counter()
     d = digest("\n".join(lines), tmp_path)
-    assert time.perf_counter() - began < 1.0
+    assert time.perf_counter() - began < 3.0  # 0.5 s alone; the bound tolerates a busy machine
     assert "error: boom" in d.text
 
 

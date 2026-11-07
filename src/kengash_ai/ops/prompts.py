@@ -1,6 +1,7 @@
 """What a step's CLI reads and what kengash writes back (SP3 spec §8.2, decision 25)."""
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 
 from kengash_ai.model import (
@@ -12,6 +13,7 @@ from kengash_ai.model import (
     Plan,
     Profile,
     ReviewOutput,
+    SentBack,
     Settings,
     Ticket,
 )
@@ -48,6 +50,60 @@ PLAN_REVIEW = (
 )
 
 
+CHECKS_HEAD = "kengash runs these in the worktree after editing steps; each must exit 0:"
+SUMMARY_CHARS = 300
+
+
+@dataclass(frozen=True)
+class Feedback:
+    """What a step's prompt says about the checks (SP15 spec §3.4): the Checks block, the
+    sent-back line, whether that line is the user's answer, and whether the step edits (only
+    editing steps get `## Check output`)."""
+
+    checks: str = ""
+    sent_back: str = ""
+    user: bool = False
+    editing: bool = False
+
+
+NO_FEEDBACK = Feedback()
+
+
+def checks_block(test_cmd: str, lint_cmd: str) -> str:
+    """The `## Checks` body naming the commands that are set; empty when neither is."""
+    rows = [
+        f"- {name}: `{command.strip()}`"
+        for name, command in (("tests", test_cmd), ("lint", lint_cmd))
+        if command.strip()
+    ]
+    return "\n".join([CHECKS_HEAD, *rows]) if rows else ""
+
+
+def sent_back_line(sent: SentBack, *, check: bool) -> str:
+    """Why the step runs again: the failing step and its summary, or the user's answer."""
+    summary = redact(_flat(sent.summary))[:SUMMARY_CHARS].rstrip(" .")
+    if sent.step == "user":
+        return f"The user answered: {summary}."
+    then = ", then run the failing check" if check else ""
+    return f"{sent.step} sent this back: {summary}. Fix every Finding below{then}."
+
+
+def fix_prompt(check_output: str, *, turn: int, turns: int) -> str:
+    """A fix turn's prompt: the failing check's headline, then its Check output."""
+    headline = check_output.split("\n", 1)[0]
+    return (
+        f"kengash ran the checks after your reply (fix turn {turn} of {turns}): {headline}\n\n"
+        f"## Check output\n{check_output}\n\n"
+        "Fix the cause, then rerun that command if your tools allow. Reply again with JSON that "
+        "matches the schema."
+    )
+
+
+def check_log_line(at: datetime, verdict: str, summary: str) -> str:
+    """The ticket Log line of one in-step check run."""
+    return f"- {at:%Y-%m-%d %H:%M} · checks · kengash · shell/default · {verdict} · 0 · {summary}"
+
+
 def kind(step: str, settings: Settings | None = None) -> Kind | None:
     """What `step` does; without settings only the built-in steps are known."""
     return settings.kind_of(step) if settings is not None else BUILTIN_KINDS.get(step)
@@ -79,6 +135,7 @@ def new_prompt(
     step: str,
     diff_stat: str,
     instruction: str | None = None,
+    feedback: Feedback = NO_FEEDBACK,
 ) -> str:
     """A new session's prompt: who it is, the step, and the ticket inline; `instruction`
     defaults to the built-in step's."""
@@ -92,10 +149,12 @@ def new_prompt(
         ("Acceptance", sections.get("Acceptance", "")),
         ("Handoff", sections.get("Handoff", "")),
         ("Findings", sections.get("Findings", "")),
+        *_check_blocks(sections, feedback),
         ("Diff stat", diff_stat),
     ]
     told = INSTRUCTIONS.get(step, "") if instruction is None else instruction
-    return _join(f"{head}\n{told}", blocks, REPLY)
+    lines = [head, told, *([feedback.sent_back] if feedback.sent_back else [])]
+    return _join("\n".join(lines), blocks, REPLY)
 
 
 def resumed_prompt(
@@ -106,16 +165,30 @@ def resumed_prompt(
     diff_stat: str,
     instruction: str | None = None,
     review: bool | None = None,
+    feedback: Feedback = NO_FEEDBACK,
 ) -> str:
     """A resumed session's prompt: the step, plus Findings to fix or a Handoff to review;
-    `instruction` and `review` default to the built-in step's."""
+    `instruction` and `review` default to the built-in step's. A step sent back says why in
+    place of its instruction; the user's answer follows the instruction."""
     told = INSTRUCTIONS.get(step, "") if instruction is None else instruction
-    head = f"Loop {ticket.loop}, step {step}: {told}"
+    if feedback.sent_back and not feedback.user:
+        head = f"Loop {ticket.loop}, step {step}: {feedback.sent_back}"
+    else:
+        head = f"Loop {ticket.loop}, step {step}: {told}"
+        if feedback.sent_back:
+            head = f"{head}\n{feedback.sent_back}"
     if review if review is not None else kind(step) == "review":
         blocks = [("Handoff", sections.get("Handoff", "")), ("Diff stat", diff_stat)]
+        blocks += _check_blocks(sections, feedback)
     else:
-        blocks = [("Findings", sections.get("Findings", ""))]
+        blocks = [("Findings", sections.get("Findings", "")), *_check_blocks(sections, feedback)]
     return _join(head, blocks, None)
+
+
+def _check_blocks(sections: Mapping[str, str], feedback: Feedback) -> list[tuple[str, str]]:
+    """`## Check output` for editing steps, then `## Checks`; empty ones drop out in `_join`."""
+    output = sections.get("Check output", "") if feedback.editing else ""
+    return [("Check output", output), ("Checks", feedback.checks)]
 
 
 def plan_review_prompt(

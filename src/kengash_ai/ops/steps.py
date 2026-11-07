@@ -22,6 +22,7 @@ from kengash_ai.model import (
     ProviderStatus,
     ReviewOutput,
     Running,
+    SentBack,
     SessionRef,
     Settings,
     SlotEntry,
@@ -432,9 +433,16 @@ def _request(
     review = resolved.kind_of(step) == "review"
     told = prompts.instruction(resolved, step)
     diff_stat = gitops.diff(job.worktree, job.base, stat=True) if review else ""
+    feedback = _feedback(resolved, step, ready.state.sent_back)
     if resume:
         prompt = prompts.resumed_prompt(
-            ticket, sections, step=step, diff_stat=diff_stat, instruction=told, review=review
+            ticket,
+            sections,
+            step=step,
+            diff_stat=diff_stat,
+            instruction=told,
+            review=review,
+            feedback=feedback,
         )
         skill = None
     else:
@@ -446,6 +454,7 @@ def _request(
             step=step,
             diff_stat=diff_stat,
             instruction=told,
+            feedback=feedback,
         )
         skill = prompts.role_skill(job.paths, job.slug, resolved.agents[pick.role].skill)
     if resolved.kind_of(step) == "edit" and gitops.changed_files(job.worktree):
@@ -469,6 +478,19 @@ def _request(
         user_config=options.user_config,
         bypass=resolved.agents[pick.role].bypass_permissions,
         prior_usage=ready.state.totals.get(pick.role) if resume else None,
+    )
+
+
+def _feedback(resolved: Settings, step: str, sent: SentBack | None) -> prompts.Feedback:
+    """The checks, and why the step runs again, for its prompt (SP15 spec §3.4)."""
+    project = resolved.project
+    return prompts.Feedback(
+        checks=prompts.checks_block(project.test_cmd, project.lint_cmd),
+        sent_back=prompts.sent_back_line(sent, check=resolved.kind_of(sent.step) == "check")
+        if sent is not None
+        else "",
+        user=sent is not None and sent.step == "user",
+        editing=resolved.kind_of(step) == "edit",
     )
 
 
