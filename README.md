@@ -37,7 +37,7 @@ The skills install as the `kengash` plugin: in Claude Code and Antigravity you t
 
 ### Upgrading from 0.3.0
 
-`uv tool upgrade kengash-ai`, then `kengash skills install --agent … --global` again (an approved plan now flows into tickets and the loop, and the loop watches its workers), and `kengash doctor --fix`: it renames `fallback_on_rate_limit` to `fallback_on_error`, raises a token cap still at the old 250,000 to 1,000,000, gives the docs agent a fallback where you left it as seeded, and adds the detected test and lint commands with a `run_tests` step to each project that has none. Switch Auto mode on in Settings or on Overview to have the loop start by itself.
+`uv tool upgrade kengash-ai`, then `kengash skills install --agent … --global` again (an approved plan now flows into tickets and the loop, and the loop watches its workers), and `kengash doctor --fix`: it renames `fallback_on_rate_limit` to `fallback_on_error`, raises a token cap still at the old 250,000 to 1,000,000, gives the docs agent a fallback where you left it as seeded, and adds the detected test and lint commands with a `run_tests` step to each project that has none. Switch Auto mode on in Settings or on Overview to have the loop start by itself. Each worker now opens its own terminal tab and each loop a dashboard tab (`kengash watch`), with desktop notifications when a ticket needs you; `watch.tabs: off` and `watch.notify: false` turn them off.
 
 ### Upgrading from 0.2.0
 
