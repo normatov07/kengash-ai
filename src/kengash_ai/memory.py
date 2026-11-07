@@ -17,6 +17,19 @@ from kengash_ai.store.redact import redact
 
 SECTIONS = ("Working style", "Goals", "Preferences", "Turned down")
 DECISIONS_CAP = 300
+PROCESS_CAP = 100
+RECORD_HINT = (
+    "Record what later sessions must respect once the user settles it; one line each, no "
+    "secrets, nothing the code or plan already says:\n"
+    "- a design decision (architecture, interfaces, data formats, libraries and tools, "
+    "design-system values, platform or performance targets, a source of truth, naming): "
+    'kengash memory add "<decision>" --why "<reason>" --decision [--rejected "<alternative>"]\n'
+    "- how the user works (preferences, working style, goals, approaches turned down for good): "
+    'kengash memory add "<fact>" --why "<why>" --section "<Preferences|Working style|Goals|'
+    'Turned down>"\n'
+    '- how this project builds, tests or ships: kengash memory add "<rule>" --why "<why>" '
+    "--process"
+)
 ARCHIVE_HEADER = (
     "# DECISIONS archive\n\n"
     "Entries moved out of DECISIONS.md once it passed 300 lines, oldest first. "
@@ -73,7 +86,7 @@ def add(
     path = paths.memory / name
     with locked(paths.locks / "memory.lock"):
         lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-        if entry in lines:
+        if key(entry) in {key(line) for line in lines if line.startswith("- ")}:
             return AddResult(name, entry, len(lines), cap, added=False)
         lines = [*lines, entry] if decision else _insert(lines, section, entry)
         moved: list[str] = []
@@ -184,6 +197,47 @@ def show(paths: StorePaths, *, decisions: bool = False, project: str | None = No
         if not line.startswith("- ") or any(tag in line for tag in tags)
     ]
     return "\n".join(kept) + "\n"
+
+
+def add_process(paths: StorePaths, text: str, *, why: str = "", project: str, by: str) -> AddResult:
+    """Append one line under `## Process notes` in the project's PROCESS.md (SP16 spec §3.4)."""
+    path = paths.project(project).process
+    if not path.parent.is_dir():
+        raise NeedsSetup("no store yet; run: kengash init")
+    entry, reason = redact(f"- {_one_line(text)}"), _one_line(why) if why.strip() else ""
+    with locked(paths.locks / "memory.lock"):
+        lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else ["# PROCESS.md"]
+        if key(entry) in {key(line) for line in lines if line.startswith("- ")}:
+            return AddResult("PROCESS.md", entry, len(lines), PROCESS_CAP, added=False)
+        lines = _insert(lines, "Process notes", entry)
+        if len(lines) > PROCESS_CAP:
+            raise UserError(
+                f"PROCESS.md is at its {PROCESS_CAP}-line cap; edit it in the UI or by hand"
+            )
+        atomic_write(path, "\n".join(lines) + "\n")
+    event = {
+        "type": "memory.write",
+        "project": project,
+        "file": "PROCESS.md",
+        "line": entry,
+        "why": reason,
+        "by": by,
+    }
+    journal.append(paths, Event.model_validate(event))
+    storegit.commit_store(paths, "kengash: memory add PROCESS.md")
+    return AddResult("PROCESS.md", entry, len(lines), PROCESS_CAP, added=True)
+
+
+def key(line: str) -> str:
+    """What makes two memory lines the same (SP16 spec §3.6): the text lowercased, spaces
+    collapsed, trailing punctuation dropped; for a decision, its tag and decision only (the
+    date, why and rejected do not count)."""
+    found = _TAG.match(line)
+    if found:
+        text = f"[{found.group(1)}] {line[found.end() :].split(' why: ', 1)[0]}"
+    else:
+        text = line.removeprefix("- ")
+    return " ".join(text.lower().split()).rstrip(".!;:, ")
 
 
 def digest(paths: StorePaths, project: str | None) -> str:

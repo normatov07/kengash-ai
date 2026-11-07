@@ -1,5 +1,6 @@
 import json
 from collections.abc import Callable
+from datetime import date
 
 import pytest
 
@@ -287,3 +288,39 @@ def test_digest_empty_store_is_empty(store: StorePaths) -> None:
 def test_digest_is_redacted(store: StorePaths) -> None:
     _process(store, "app", "## Process notes\n\n- token=abc123def456ghi789jkl\n")
     assert "abc123def456ghi789jkl" not in memory.digest(store, "app")
+
+
+def test_add_treats_case_and_punctuation_variants_as_recorded(store: StorePaths) -> None:
+    assert memory.add(store, "Likes small diffs.", "x").added is True
+    assert memory.add(store, "likes   small diffs", "y", section="Working style").added is False
+
+
+def test_add_decision_dedupe_ignores_date_and_why(store: StorePaths) -> None:
+    memory.add(store, "keyring over env var", "rotation", decision=True, project="app")
+    path = store.memory / "DECISIONS.md"
+    path.write_text(path.read_text().replace(date.today().isoformat(), "1999-01-01"))
+    again = memory.add(store, "Keyring over env var.", "other", decision=True, project="app")
+    assert again.added is False
+    other = memory.add(store, "keyring over env var", "rotation", decision=True, project="web")
+    assert other.added is True
+
+
+def test_add_keeps_decisions_sharing_a_prefix(store: StorePaths) -> None:
+    assert memory.add(store, "use flutter_scene", "x", decision=True, project="app").added
+    assert memory.add(
+        store, "use flutter_scene for 3D boards", "x", decision=True, project="app"
+    ).added
+
+
+def test_add_process_appends_under_process_notes(store: StorePaths) -> None:
+    _process(store, "app", "## Process notes\n\n- first rule\n\n## Later\n\n- other\n")
+    result = memory.add_process(store, "second rule", project="app", by="test")
+    text = store.project("app").process.read_text(encoding="utf-8")
+    assert result.added and "- first rule\n- second rule\n\n## Later" in text
+    assert memory.add_process(store, "Second rule.", project="app", by="test").added is False
+
+
+def test_add_process_refuses_at_cap(store: StorePaths) -> None:
+    _process(store, "app", "## Process notes\n\n" + "".join(f"- r{n}\n" for n in range(95)))
+    with pytest.raises(UserError, match=r"PROCESS\.md is at its 100-line cap; edit it"):
+        memory.add_process(store, "one too many", project="app", by="test")

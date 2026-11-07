@@ -277,9 +277,13 @@ def memory_add(
     text: Annotated[str, typer.Argument(help="One fact, one line, about 20 words.")],
     why: Annotated[str, typer.Option("--why", help="Why this is worth remembering.")],
     section: Annotated[
-        str, typer.Option(help="Working style, Goals, Preferences or Turned down.")
-    ] = "Preferences",
+        str | None,
+        typer.Option(help="Working style, Goals, Preferences (the default) or Turned down."),
+    ] = None,
     decision: Annotated[bool, typer.Option("--decision", help="Write to DECISIONS.md.")] = False,
+    process: Annotated[
+        bool, typer.Option("--process", help="Append to the project's PROCESS.md notes.")
+    ] = False,
     rejected: Annotated[
         str | None, typer.Option(help="With --decision: the alternative turned down.")
     ] = None,
@@ -298,6 +302,7 @@ def memory_add(
             project=project,
             cwd=Path.cwd(),
             by=by,
+            process=process,
         )
     if as_json:
         typer.echo(
@@ -365,6 +370,7 @@ def context(project: Project = None, as_json: AsJson = False) -> None:
         parts.append(f"# PROCESS.md ({digest.project})\n{headings}")
         gates = [f"- {gate.id} {gate.sub_status}: {gate.title}" for gate in digest.gates]
         parts.append("# Open gates\n" + ("\n".join(gates) or "none"))
+    parts.append(f"# Record\n{digest.record}")
     typer.echo("\n\n".join(parts))
 
 

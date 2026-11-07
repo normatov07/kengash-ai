@@ -25,12 +25,16 @@ class OpenGate:
     title: str
 
 
+RECORD = memory.RECORD_HINT
+
+
 @dataclass
 class Context:
     memory: str
     project: str | None = None
     process: list[str] = field(default_factory=list)
     gates: list[OpenGate] = field(default_factory=list)
+    record: str = RECORD  # when to record what (SP16 spec §3.5)
 
 
 def resolve_slug(project: str | None, cwd: Path, paths: StorePaths | None = None) -> str | None:
@@ -93,16 +97,25 @@ def remember(
     text: str,
     why: str,
     *,
-    section: str,
+    section: str | None,
     decision: bool,
     rejected: str | None,
     project: str | None,
     cwd: Path,
     by: str,
+    process: bool = False,
 ) -> memory.AddResult:
-    """Add a memory line; MEMORY.md past its cap starts a compaction in the background."""
+    """Add a memory line, or a process note with `process`; MEMORY.md past its cap starts a
+    compaction in the background."""
     paths = StorePaths.default()
     slug = resolve_slug(project, cwd, paths)
+    if process:
+        if decision or rejected or section is not None:
+            raise UserError("--process cannot be combined with --decision, --rejected or --section")
+        if slug is None:
+            raise UserError("--process needs a project: run it inside one or pass -p <project>")
+        return memory.add_process(paths, text, why=why, project=slug, by=by)
+    section = section or "Preferences"
     result = memory.add(
         paths, text, why, section=section, decision=decision, rejected=rejected, project=slug, by=by
     )

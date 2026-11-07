@@ -62,6 +62,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-07: `workspace.remember(…, process=)` writes a process note (a project is required); `Context.record` carries `memory.RECORD_HINT` (SP16).
 - 2026-11-07: read steps reply with output kind `plan`; `prompts.MEMORY_LEAD` and `memory_block`: every new session's prompt (and a new plan review) starts with `## Memory` from `memory.digest`; resumed sessions do not repeat it (SP16).
 - 2026-11-07: review fixes (SP15): any error in a fix turn ends the fix turns and keeps the last valid reply (usage totals carried); a park request stops them; a reply with a `BLOCKED:` line skips the checks; files a check run leaves untracked are removed (`gitops.drop_untracked`); `## Check output` is redacted; `sent_back` is stored at a loop cap too; the implementer's session is stored before the checks and `state.running` names it again after; `blocked_line` allows list markers and bold and ignores `none`, `n/a`, `-`; a blocked approval appends `The user answered: …` to `## Handoff`.
 - 2026-11-07: `views` timeline rows for `checks.end` (`checks`, the step, `<verdict> · <summary> · turn <n>`); the agent chain still counts `step.end` only (SP15).
