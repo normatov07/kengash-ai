@@ -37,7 +37,7 @@ The code reviewer works: it read the diff and its findings were real and specifi
 2. **A failure digest instead of the tail.** A new pure function `adapters.digest.excerpt(output, *, log)` returns `(headline, text)`:
    - strips ANSI escapes; finds marker lines: case-insensitive `error|fail(ed|ure)?|exception|traceback|assert|expected|actual|panic|not found|undefined|cannot|can't`, the tokens `[E]`, `✗`, `✘`, `FAILED`, `ERROR`, analyzer rows `^\s*(info|warning|error) •`, and `<path>.<ext>:<line>` references;
    - keeps each marker with 2 lines before and 8 after, merges overlaps, keeps order, and always adds the last 2 non-empty lines (the runner's summary);
-   - caps at 60 lines and 4,000 characters, each line at 300, keeping the earliest blocks (the first error is usually the cause) and ending with `… <n> more lines; full output: <log>`;
+   - caps at 60 lines (the overflow note included) and 4,000 characters, each line at 300, keeping the earliest blocks (the first error is usually the cause); what is cut becomes `… <n> more lines; full output: <log>`, placed just before the summary lines so they stay last;
    - with no marker, keeps the last 30 lines;
    - `headline`: `` `<command>` exit <code>: <first marker line, trimmed to 160> ``.
    The marker list and window sizes are *call* within these bounds; tests pin them on real fixtures.
