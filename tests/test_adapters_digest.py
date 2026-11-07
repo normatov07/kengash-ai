@@ -97,3 +97,34 @@ def test_paths_outside_the_worktree_are_not_locations(tmp_path: Path) -> None:
 def test_section_fences_the_digest(tmp_path: Path) -> None:
     d = digest("error: one\n```\nerror: two", tmp_path)
     assert section(d) == f"{d.headline}\n```text\nerror: one\n ```\nerror: two\n```"
+
+
+def test_a_passing_test_named_after_an_error_is_not_a_marker(tmp_path: Path) -> None:
+    # review finding: flutter repeats each test's name on its progress line
+    renamed = load("flutter_test_assertion.txt", tmp_path).replace(
+        "HallCamera equality and hashCode match over camera properties",
+        "shows an error banner when the engine fails",
+    )
+    d = digest(renamed, tmp_path)
+    assert "shows an error banner" not in d.text and "shows an error banner" not in d.headline
+    assert "[E]" in d.text and "red: 0.9961" in d.text
+
+
+def test_the_headline_prefers_a_strong_marker(tmp_path: Path) -> None:
+    output = "warming the cache: expected 3 entries\nsetup ok\nFAILED tests/test_a.py::test_x"
+    assert digest(output, tmp_path, command="pytest").headline == (
+        "`pytest` exit 1: FAILED tests/test_a.py::test_x"
+    )
+
+
+def test_long_lines_stay_fast(tmp_path: Path) -> None:
+    name = "very_long_widget_test_name_" * 4
+    lines = [
+        f"00:{n % 60:02d} +{n}: {tmp_path}/test/ui/screens/{name}{n}.dart: Widget renders {name}"
+        for n in range(100_000)
+    ]
+    lines += ["Expected: 1", "  Actual: 2", "Some tests failed."]
+    began = time.perf_counter()
+    d = digest("\n".join(lines), tmp_path)
+    assert time.perf_counter() - began < 3.0
+    assert "Actual: 2" in d.text

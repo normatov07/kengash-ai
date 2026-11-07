@@ -31,6 +31,7 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 
 ## Changes
 
+- 2026-11-07: digest review fixes: a dart/flutter progress line is a marker only with `[E]` (test names hold marker words); the headline prefers a strong marker (`[E]`, FAILED, EXCEPTION, `Expected:`, `Error:`, analyzer rows); every pattern starts at a token boundary, so long lines cost linear time (100,000 long lines: 22.7 s → 0.7 s) (SP15).
 - 2026-11-07: agy editing steps may run the project's checks and read-only git (`command(...)` allow rules, `edit_line`); a check with a shell operator is left out (SP15).
 - 2026-11-07: `Shell` failures carry the digest: the headline as the finding, `check_output` for the ticket (SP15).
 - 2026-11-07: `digest`: failure digests for check output (SP15).

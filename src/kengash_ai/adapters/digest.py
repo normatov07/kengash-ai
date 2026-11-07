@@ -21,14 +21,24 @@ NO_MARKER_LINES = 30
 
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 _REPEATS = re.compile(r"([^\w\s])\1{3,}")  # ════ rules and ---- bars shrink to three
+# Whole marker words; `error` and `exception` also end longer names (TypeError). Every
+# pattern starts at a token boundary, so a long line costs linear time.
 _WORDS = (
-    r"\b(?:\w*(?:error|exception)s?|fail(?:s|ed|ure|ures)?|traceback|assert(?:ion)?"
+    r"(?:error|exception)s?\b|\b(?:fail(?:s|ed|ure|ures)?|traceback|assert(?:ion)?"
     r"|expected|actual|panic(?:ked)?|undefined|cannot|can't|not found)\b"
 )
 _MARKER = re.compile(
-    rf"{_WORDS}|\[E\]|✗|✘|^\s*(?:info|warning|error) •|[\w./~-]+\.\w+:\d+", re.IGNORECASE
+    rf"{_WORDS}|\[E\]|✗|✘|^\s*(?:info|warning|error) •|(?<![\w./~-])[\w./~-]+\.\w+:\d+",
+    re.IGNORECASE,
 )
-_LOCATION = re.compile(r"([\w./~-]+\.\w+):(\d+)")
+# Runner lines that only say what failed, preferred for the headline.
+_STRONG = re.compile(
+    r"\[E\]|✗|✘|\bFAIL(?:ED|URES?)?\b|\bERROR\b|EXCEPTION|Traceback|^\s*Expected:"
+    r"|\bError:|^E\s|^\s*(?:info|warning|error) •"
+)
+# A dart/flutter test progress line names the running test; its name is no marker.
+_PROGRESS = re.compile(r"^\d+:\d+ \+\d+(?: ~\d+)?(?: -\d+)?: ")
+_LOCATION = re.compile(r"(?<![\w./~-])([\w./~-]+\.\w+):(\d+)")
 
 
 @dataclass(frozen=True)
@@ -44,10 +54,11 @@ def excerpt(output: str, *, command: str, exit_code: int, cwd: Path, log: Path) 
     lines = [_clean(line) for line in output.splitlines()]
     while lines and not lines[-1].strip():
         lines.pop()
-    markers = [index for index, line in enumerate(lines) if _MARKER.search(line)]
+    markers = [index for index, line in enumerate(lines) if _marker(line)]
     if markers:
         kept = _windows(markers, len(lines))
-        first = lines[markers[0]].strip()
+        strong = next((i for i in markers if _STRONG.search(lines[i])), markers[0])
+        first = lines[strong].strip()
     else:
         kept = list(range(max(len(lines) - NO_MARKER_LINES, 0), len(lines)))
         first = lines[-1].strip() if lines else ""
@@ -69,6 +80,12 @@ def section(digest: Digest) -> str:
         f" {line}" if line.startswith("```") else line for line in digest.text.split("\n")
     )
     return f"{digest.headline}\n```text\n{body}\n```"
+
+
+def _marker(line: str) -> bool:
+    if _PROGRESS.match(line):
+        return "[E]" in line
+    return _MARKER.search(line) is not None
 
 
 def _clean(line: str) -> str:
