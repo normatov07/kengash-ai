@@ -27,6 +27,7 @@ classifiers = [
 dependencies = [
     "filelock>=3.16",
     "pydantic>=2.9",
+    "rich>=13",
     "ruamel-yaml>=0.18",
     "ruamel-yaml-clib>=0.2.12; platform_python_implementation == 'CPython'",
     "typer>=0.12",

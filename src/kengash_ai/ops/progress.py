@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from kengash_ai import gitops, journal
-from kengash_ai.model import Folder, utc_now
+from kengash_ai import gitops, journal, settings
+from kengash_ai.model import Folder, KengashError, utc_now
 from kengash_ai.ops import activity, lifecycle, records
 from kengash_ai.store import runtime
 from kengash_ai.store.paths import StorePaths
@@ -30,6 +30,8 @@ class Progress:
     action: str
     changed: int
     quiet: bool
+    tokens: int = 0  # used by the ticket so far (SP13)
+    tokens_max: int = 0  # the ticket's cap
 
 
 def running(paths: StorePaths, slugs: list[str]) -> list[Progress]:
@@ -63,6 +65,8 @@ def running(paths: StorePaths, slugs: list[str]) -> list[Progress]:
                     action=_action(run.log, worktree) if run is not None else "",
                     changed=changed,
                     quiet=active is not None and active >= QUIET_S,
+                    tokens=ticket.tokens,
+                    tokens_max=ticket.tokens_max or _cap(paths, slug),
                 )
             )
     return found
@@ -88,17 +92,23 @@ def short(found: list[Progress]) -> str:
 def line(p: Progress) -> str:
     """`<id> <step>→<provider>/<model> <elapsed> · active <age> ago · <N> files changed ·
     <action>`, then ` · quiet` and ` · worker gone` when they apply."""
+    return " · ".join(parts(p))
+
+
+def parts(p: Progress, *, project: bool = False) -> list[str]:
+    """`line`'s parts; `project` names the ticket's project after its id (the dashboard)."""
     who = f"{p.step}→{p.provider}/{p.model}" if p.provider else _between(p)
-    parts = [f"{p.id} {who} {_span(p.elapsed_s)}"]
-    parts.append(f"active {_span(p.active_s)} ago" if p.active_s is not None else "no activity yet")
-    parts.append(f"{p.changed} files changed")
+    head = f"{p.id} {p.project} {who}" if project else f"{p.id} {who}"
+    found = [f"{head} {_span(p.elapsed_s)}"]
+    found.append(f"active {_span(p.active_s)} ago" if p.active_s is not None else "no activity yet")
+    found.append(f"{p.changed} files changed")
     if p.action:
-        parts.append(p.action)
+        found.append(p.action)
     if p.quiet:
-        parts.append("quiet")
+        found.append("quiet")
     if not p.alive:
-        parts.append("worker gone")
-    return " · ".join(parts)
+        found.append("worker gone")
+    return found
 
 
 def forget() -> None:
@@ -114,6 +124,13 @@ def _starts(paths: StorePaths, slugs: list[str]) -> dict[str, datetime]:
         if event.type == "step.start" and event.project in slugs and event.ticket:
             found[event.ticket] = event.ts
     return found
+
+
+def _cap(paths: StorePaths, slug: str) -> int:
+    try:
+        return settings.load(paths, slug).tokens.per_ticket_max
+    except KengashError:
+        return 0
 
 
 def _alive(paths: StorePaths, ticket_id: str, now: datetime) -> bool:

@@ -3,7 +3,7 @@ journal, shared by `kengash logs` and the UI's Live tab (SP12 spec §4.4, §4.5)
 
 import json
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -76,14 +76,22 @@ def parse(
 
 
 def ticket(
-    paths: StorePaths, slug: str, ticket_id: str, *, root: Path | None = None
+    paths: StorePaths,
+    slug: str,
+    ticket_id: str,
+    *,
+    root: Path | None = None,
+    events: Sequence[Event] | None = None,
 ) -> list[Activity]:
     """The ticket's journal steps and statuses with every worker action of its logs, in
-    time order."""
+    time order; `events` is a journal already read (the dashboard reads it once)."""
     root = root or paths.worktree(slug, ticket_id)
-    doc = records.project_tickets(paths, slug).get(ticket_id)
-    since = doc.meta.created.date() if doc is not None else None
-    events = _journal(paths, slug, ticket_id, since)
+    if events is None:
+        doc = records.project_tickets(paths, slug).get(ticket_id)
+        since = doc.meta.created.date() if doc is not None else None
+        events = _journal(paths, slug, ticket_id, since)
+    else:
+        events = [e for e in events if e.project == slug and e.ticket == ticket_id]
     found = [item for event in events if (item := _from_event(event))]
     for log in _logs(paths, ticket_id):
         tail = _read(log)

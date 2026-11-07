@@ -3,9 +3,12 @@
 import contextlib
 import dataclasses
 import json
+import signal
 import sys
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any
@@ -38,6 +41,8 @@ from kengash_ai.ops import (
     workspace,
 )
 from kengash_ai.ops import watch as watching
+
+REFRESH_S = 2.0  # how often `kengash watch` redraws (SP13)
 
 app = typer.Typer(
     name="kengash",
@@ -909,7 +914,7 @@ def show_logs(
     """What the ticket's workers did, one line per action; -f follows it live."""
     with _errors():
         if watch:
-            _title(f"kg {ticket_id}")
+            _viewer(f"kg {ticket_id}")
             with watching.viewing(f"ticket-{ticket_id}"):
                 _print_activity(activity.watch(ticket_id, project, until_done=True), as_json)
             _hold(f"{ticket_id} is done; press Enter to close")
@@ -922,6 +927,58 @@ def show_logs(
         _print_activity(items, as_json)
 
 
+@app.command("watch")
+def watch_board(
+    project: Every = None,
+    once: Annotated[bool, typer.Option("--once", help="Print one snapshot and exit.")] = False,
+    as_json: AsJson = False,
+) -> None:
+    """One live screen: loops, slots and tokens, running workers, what needs you, the latest
+    actions; refreshed every 2 s until Ctrl-C."""
+    with _errors():
+        if as_json:
+            _emit_json(watching.snapshot(project))
+            return
+        if once or not sys.stdout.isatty():
+            for line in watching.lines(watching.snapshot(project)):
+                typer.echo(line)
+            return
+        _viewer(f"kg watch {project}" if project else "kg watch")
+        with watching.viewing(f"watch-{project or 'all'}"):
+            _live_board(project)
+
+
+def _live_board(project: str | None) -> None:
+    """Redraw the board every REFRESH_S seconds on the terminal's alternate screen."""
+    from rich.live import Live
+
+    live = Live(_rendered(project), refresh_per_second=1, screen=True)
+    with contextlib.suppress(KeyboardInterrupt), live:
+        while True:
+            time.sleep(REFRESH_S)
+            live.update(_rendered(project))
+
+
+def _rendered(project: str | None) -> Any:
+    """The board in colour: section heads bold, gates yellow, quiet or gone workers red."""
+    from rich.console import Group
+    from rich.text import Text
+
+    stamp = datetime.now().astimezone().strftime("%H:%M:%S")
+    rows = [Text(f"kengash watch · {project or 'all projects'} · {stamp}", style="bold cyan")]
+    for line in watching.lines(watching.snapshot(project)):
+        if not line.startswith("  "):
+            style = "bold"
+        elif line.endswith((" · quiet", " · worker gone")) or " · quiet · " in line:
+            style = "red"
+        elif " → kengash " in line:
+            style = "yellow"
+        else:
+            style = ""
+        rows.append(Text(line, style=style, overflow="ellipsis", no_wrap=True))
+    return Group(*rows)
+
+
 def _print_activity(items: Iterator[activity.Activity | None], as_json: bool) -> None:
     for item in items:
         if item is None:
@@ -931,6 +988,21 @@ def _print_activity(items: Iterator[activity.Activity | None], as_json: bool) ->
         else:
             clock = item.ts.astimezone().strftime("%H:%M:%S") if item.ts else "--:--:--"
             typer.echo(f"{clock} {item.text}")
+
+
+def _viewer(title: str) -> None:
+    """Start a viewer tab: name it, and turn a closed tab (SIGHUP) or a kill (SIGTERM) into
+    an orderly exit, so it drops its viewer record on the way out."""
+    _title(title)
+    if not sys.stdout.isatty():
+        return  # piped or under test: the caller's own signal handling stands
+    for sig in (signal.SIGTERM, getattr(signal, "SIGHUP", None)):
+        if sig is not None:
+            signal.signal(sig, _exit_quietly)
+
+
+def _exit_quietly(signum: int, frame: object) -> None:
+    raise SystemExit(0)
 
 
 def _title(text: str) -> None:

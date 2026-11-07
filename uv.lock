@@ -339,6 +339,7 @@ source = { editable = "." }
 dependencies = [
     { name = "filelock" },
     { name = "pydantic" },
+    { name = "rich" },
     { name = "ruamel-yaml" },
     { name = "ruamel-yaml-clib", marker = "platform_python_implementation == 'CPython'" },
     { name = "typer" },
@@ -368,6 +369,7 @@ requires-dist = [
     { name = "fastapi", marker = "extra == 'ui'", specifier = ">=0.115" },
     { name = "filelock", specifier = ">=3.16" },
     { name = "pydantic", specifier = ">=2.9" },
+    { name = "rich", specifier = ">=13" },
     { name = "ruamel-yaml", specifier = ">=0.18" },
     { name = "ruamel-yaml-clib", marker = "platform_python_implementation == 'CPython'", specifier = ">=0.2.12" },
     { name = "typer", specifier = ">=0.12" },
