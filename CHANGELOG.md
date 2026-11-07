@@ -4,6 +4,15 @@ All notable changes to this project are written here. The format follows [Keep a
 
 ## [Unreleased]
 
+### Added
+
+- `kengash forget <project> [--yes]` removes a project kengash should no longer know: its plans, tickets, worktrees and `.kengash` link; the store's git history keeps every removed file. `kengash doctor` names it for a repo that is gone.
+
+### Fixed
+
+- A git worktree of a registered repo, such as an Orca workspace, belongs to that repo's project: commands run inside it work on the project, and `kengash init` there no longer registers a second project.
+- `kengash doctor` names a workflow whose `run_tests` runs after the code review or has no way back to `implement` (a failing test then failed the ticket), and `doctor --fix` moves it right after `implement` and routes failures back to it.
+
 ## [0.4.0] - 2026-11-07
 
 ### Added

@@ -121,3 +121,58 @@ def test_a_users_doc_writer_is_not_an_old_default(store_paths: StorePaths) -> No
     mine = "version: 1\nagents:\n  doc-writer: {on: true, cli: claude/sonnet, skill: sync-docs}\n"
     defaults.write_text(mine, encoding="utf-8")
     assert hygiene.old_defaults(store_paths, None) == []
+
+
+UNROUTED = """\
+project.test_cmd: "flutter test"
+agents:
+  test-runner: {on: true}
+workflows:
+  simple:   {steps: [plan, implement, review_code, run_tests], on_fail: {review_code: implement}}
+  standard: {steps: [plan, review_plan, implement, review_code, run_tests],
+             on_fail: {review_plan: plan, review_code: implement}}
+  hotfix:   {steps: [implement, run_tests], on_fail: {run_tests: implement}}
+"""
+
+
+def test_a_check_after_review_without_a_route_is_named_and_fixed(
+    store_paths: StorePaths, repo: Path
+) -> None:
+    # chess-samurai, 2026-11-07: the workflow editor appended run_tests after the review
+    # with no on_fail edge, so a failing test failed the ticket (SP14 spec §2.3)
+    slug = projects.init_project(repo).slug
+    store_paths.project(slug).settings.write_text(UNROUTED, encoding="utf-8")
+    messages = [problem.message for problem in projects.doctor().problems]
+    for name in ("simple", "standard"):
+        assert (
+            f"project {slug}: workflow {name} runs run_tests after review_code with no way back "
+            "to implement; run: kengash doctor --fix"
+        ) in messages
+    assert not [m for m in messages if "hotfix" in m]  # routed and in place: fine
+    projects.doctor(fix=True)
+    flows = settings.load(store_paths, slug).workflows
+    assert flows["simple"].steps == ["plan", "implement", "run_tests", "review_code"]
+    assert flows["simple"].on_fail == {"review_code": "implement", "run_tests": "implement"}
+    assert flows["standard"].steps == [
+        "plan",
+        "review_plan",
+        "implement",
+        "run_tests",
+        "review_code",
+    ]
+    assert flows["hotfix"].steps == ["implement", "run_tests"]
+    assert not [p for p in projects.doctor().problems if "workflow" in p.message]
+
+
+def test_a_routed_check_after_a_review_is_only_moved(store_paths: StorePaths, repo: Path) -> None:
+    slug = projects.init_project(repo).slug
+    text = UNROUTED.replace(
+        "on_fail: {review_code: implement}}",
+        "on_fail: {review_code: implement, run_tests: implement}}",
+    )
+    store_paths.project(slug).settings.write_text(text, encoding="utf-8")
+    messages = [problem.message for problem in projects.doctor().problems]
+    assert (
+        f"project {slug}: workflow simple runs run_tests after review_code; "
+        "run: kengash doctor --fix"
+    ) in messages

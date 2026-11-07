@@ -99,3 +99,55 @@ def test_context_outside_a_project_has_memory_only(store_paths: StorePaths, repo
 def test_context_needs_a_store(store_paths: StorePaths, repo: Path) -> None:
     with pytest.raises(NeedsSetup, match="kengash init"):
         workspace.context(None, repo)
+
+
+def _worktree(repo: Path, name: str) -> Path:
+    """A linked worktree of `repo` elsewhere, as Orca makes one per workspace."""
+    folder = repo.parent / "orca" / "workspaces" / name
+    folder.parent.mkdir(parents=True, exist_ok=True)
+    git(repo, "worktree", "add", "-q", "-b", f"normatov13/{name}", str(folder))
+    return Path(git(folder, "rev-parse", "--show-toplevel").strip())
+
+
+def test_main_repo_of_a_checkout_a_worktree_and_a_stranger(repo: Path) -> None:
+    from kengash_ai.ops import records
+
+    worktree = _worktree(repo, "sculpin")
+    assert records.main_repo(repo) == repo
+    assert records.main_repo(worktree / "lib" if (worktree / "lib").is_dir() else worktree) == repo
+    stranger = repo.parent / "stranger"
+    stranger.mkdir()
+    assert records.main_repo(stranger) is None
+
+
+def test_a_broken_worktree_has_no_main_repo(repo: Path) -> None:
+    from kengash_ai.ops import records
+
+    worktree = _worktree(repo, "saithe")
+    git(repo, "worktree", "remove", "--force", str(worktree))
+    worktree.mkdir(parents=True)
+    (worktree / ".git").write_text(f"gitdir: {repo}/.git/worktrees/gone\n", encoding="utf-8")
+    assert records.main_repo(worktree) is None
+
+
+def test_a_worktree_resolves_to_its_repos_project(store_paths: StorePaths, repo: Path) -> None:
+    projects.init_project(repo)
+    worktree = _worktree(repo, "sculpin")
+    (worktree / "lib").mkdir()
+    assert workspace.resolve_slug(None, worktree / "lib") == "payments-api"
+    assert workspace.project_slug(str(worktree), repo.parent) == "payments-api"
+    assert workspace.project_slug(".", worktree / "lib") == "payments-api"
+
+
+def test_init_in_a_worktree_registers_nothing(store_paths: StorePaths, repo: Path) -> None:
+    from kengash_ai.store.registry import load_registry
+
+    projects.init_project(repo)
+    worktree = _worktree(repo, "main-ws")
+    found = projects.init_project(worktree)
+    assert (found.slug, found.created) == ("payments-api", False)
+    assert found.warnings == [
+        f"{worktree} is a worktree of payments-api; kengash uses payments-api here"
+    ]
+    assert list(load_registry(store_paths).projects) == ["payments-api"]
+    assert not (worktree / ".kengash").exists()
