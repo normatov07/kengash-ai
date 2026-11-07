@@ -230,6 +230,16 @@ def add_process(paths: StorePaths, text: str, *, why: str = "", project: str, by
     return AddResult("PROCESS.md", entry, len(lines), PROCESS_CAP, added=True)
 
 
+def decision_text(decision: str, why: str, rejected: str = "") -> str:
+    """`- <decision>. why: <why>. rejected: <rejected>.`, the parts that are set."""
+    text = f"- {decision.rstrip('.')}."
+    if why:
+        text += f" why: {why.rstrip('.')}."
+    if rejected:
+        text += f" rejected: {rejected.rstrip('.')}."
+    return text
+
+
 def parse_decision(line: str) -> tuple[str, str, str]:
     """A `Lasting decisions` or ticket `Decisions` line, `<decision>. why: <reason>. rejected:
     <alternative>.`, as (decision, why, rejected); a missing part is ""."""

@@ -4,9 +4,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
+from kengash_ai import memory
 from kengash_ai.model import (
     BUILTIN_KINDS,
     PLAN_SECTIONS,
+    Decision,
     Finding,
     Kind,
     OutputKind,
@@ -79,6 +81,30 @@ MEMORY_LEAD = (
 def memory_block(memory: str) -> list[tuple[str, str]]:
     """The `## Memory` block of a new session (SP16 spec §3.1); none when memory is empty."""
     return [("Memory", f"{MEMORY_LEAD}\n\n{memory}")] if memory.strip() else []
+
+
+DECISIONS_PER_REPLY = 3
+DECISIONS_PER_TICKET = 6
+
+
+def decision_lines(existing: str, proposed: Sequence[Decision]) -> str:
+    """The ticket's `## Decisions` after a reply proposed `proposed` (SP16 spec §3.3): new
+    ones (near-duplicates dropped) up to 3 per reply and 6 per ticket, redacted."""
+    lines = [line for line in existing.splitlines() if line.strip()]
+    seen = {memory.key(f"- {memory.parse_decision(line)[0]}") for line in lines}
+    added = 0
+    for item in proposed:
+        if added == DECISIONS_PER_REPLY or len(lines) == DECISIONS_PER_TICKET:
+            break
+        found = memory.key(f"- {_flat(item.decision)}")
+        if not found or found in seen:
+            continue
+        seen.add(found)
+        lines.append(
+            redact(memory.decision_text(*map(_flat, (item.decision, item.why, item.rejected))))
+        )
+        added += 1
+    return "\n".join(lines)
 
 
 def checks_block(test_cmd: str, lint_cmd: str) -> str:
@@ -187,6 +213,7 @@ def new_prompt(
         ("Scope", sections.get("Scope", "")),
         ("Acceptance", sections.get("Acceptance", "")),
         ("Handoff", sections.get("Handoff", "")),
+        ("Decisions", sections.get("Decisions", "")),
         ("Findings", sections.get("Findings", "")),
         *_check_blocks(sections, feedback),
         ("Diff stat", diff_stat),
@@ -217,7 +244,11 @@ def resumed_prompt(
         if feedback.sent_back:
             head = f"{head}\n{feedback.sent_back}"
     if review if review is not None else kind(step) == "review":
-        blocks = [("Handoff", sections.get("Handoff", "")), ("Diff stat", diff_stat)]
+        blocks = [
+            ("Handoff", sections.get("Handoff", "")),
+            ("Decisions", sections.get("Decisions", "")),
+            ("Diff stat", diff_stat),
+        ]
         blocks += _check_blocks(sections, feedback)
     else:
         blocks = [("Findings", sections.get("Findings", "")), *_check_blocks(sections, feedback)]

@@ -99,3 +99,14 @@ def test_a_ticket_claimed_before_0_2_shows_its_changes_and_merges(
     documents.save_ticket(engine.paths.project(engine.slug), doc)
     assert merging.merge_ticket("7b55e0c1", project=None, by="user").commits == 1
     assert not legacy.exists() and (engine.repo / "retry.py").exists()
+
+
+def test_merge_records_ticket_decisions(engine: Engine, run_git: Callable[..., str]) -> None:
+    ready_to_merge(engine, run_git)
+    doc = engine.ticket()
+    doc.sections["Decisions"] = "- retries use full jitter. why: herd. rejected: fixed delay."
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    merged = merging.merge_ticket("7b55e0c1", project=None, by="user")
+    assert merged.decisions == 1
+    text = (engine.paths.memory / "DECISIONS.md").read_text(encoding="utf-8")
+    assert "[payments-api] retries use full jitter. why: herd. rejected: fixed delay." in text

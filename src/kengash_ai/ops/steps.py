@@ -730,6 +730,9 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
             if isinstance(output, WorkOutput):
                 doc.sections["Handoff"] = prompts.handoff_text(output.handoff)
                 blocked = prompts.blocked_line(output.handoff)
+                if output.decisions:  # recorded only when the ticket merges (SP16 §3.3)
+                    existing = doc.sections.get("Decisions", "")
+                    doc.sections["Decisions"] = prompts.decision_lines(existing, output.decisions)
         tokens = ran.usage.tokens
         ticket.tokens += tokens
         line = prompts.log_line(

@@ -62,6 +62,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-07: a work reply's `decisions` go to the ticket's `## Decisions` (`prompts.decision_lines`: near-duplicates dropped, 3 per reply, 6 per ticket, redacted); new prompts and resumed review prompts show the section; `merging.merge_ticket` records it in DECISIONS.md after the merge (`Merged.decisions`); a parked or closed ticket's proposals are never recorded (SP16).
 - 2026-11-07: `plans.approve_plan` records each `## Lasting decisions` line in DECISIONS.md tagged with the project (a missing why becomes `plan <id>`); `PlanResult.decisions` counts them, a line memory refuses becomes a warning (SP16).
 - 2026-11-07: `workspace.remember(…, process=)` writes a process note (a project is required); `Context.record` carries `memory.RECORD_HINT` (SP16).
 - 2026-11-07: read steps reply with output kind `plan`; `prompts.MEMORY_LEAD` and `memory_block`: every new session's prompt (and a new plan review) starts with `## Memory` from `memory.digest`; resumed sessions do not repeat it (SP16).

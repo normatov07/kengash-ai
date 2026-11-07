@@ -950,3 +950,13 @@ def test_new_session_prompt_carries_project_memory(engine: Engine, fake_clis: Fa
     prompt = fake_clis.calls("claude")[0]["argv"][1]
     assert prompt.index("## Memory") < prompt.index("## Goal")
     assert "- money is integer cents" in prompt
+
+
+def test_work_reply_decisions_wait_for_the_merge(engine: Engine, fake_clis: FakeClis) -> None:
+    proposal = {"decision": "retries use full jitter", "why": "herd", "rejected": ""}
+    reply = {"summary": "Planned.", "handoff": "h", "files": [], "decisions": [proposal]}
+    fake_clis.queue("claude", stdout=fake_clis.claude_output(reply))
+    steps.run_job("7b55e0c1", steps=1)
+    assert engine.ticket().sections["Decisions"] == "- retries use full jitter. why: herd."
+    decisions = (engine.paths.memory / "DECISIONS.md").read_text(encoding="utf-8")
+    assert "full jitter" not in decisions

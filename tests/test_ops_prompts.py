@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from kengash_ai.model import Doc, Finding, SentBack, Settings, Ticket
+from kengash_ai.model import Decision, Doc, Finding, SentBack, Settings, Ticket
 from kengash_ai.ops import prompts
 from kengash_ai.store import StorePaths
 from kengash_ai.store.seed import ensure_project, ensure_store
@@ -75,6 +75,34 @@ def test_resumed_prompt_has_no_memory(make_ticket: Make) -> None:
     assert "## Memory" not in prompts.resumed_prompt(
         ticket, SECTIONS, step="implement", diff_stat=""
     )
+
+
+def test_decision_lines_dedupe_then_cap() -> None:
+    def proposal(text: str, rejected: str = "") -> Decision:
+        return Decision(decision=text, why="y", rejected=rejected)
+
+    proposed = [proposal("A"), proposal("b", "c"), proposal("c"), proposal("d"), proposal("e")]
+    assert prompts.decision_lines("- a. why: x.", proposed).splitlines() == [
+        "- a. why: x.",
+        "- b. why: y. rejected: c.",
+        "- c. why: y.",
+        "- d. why: y.",
+    ]
+    full = "\n".join(f"- old {n}. why: x." for n in range(5))
+    last = prompts.decision_lines(full, proposed[1:]).splitlines()[-1]
+    assert last == "- b. why: y. rejected: c."
+    assert len(prompts.decision_lines(full, proposed[1:]).splitlines()) == 6
+
+
+def test_review_prompts_show_decisions(make_ticket: Make) -> None:
+    ticket = make_ticket().meta
+    sections = {**SECTIONS, "Decisions": "- keep X. why: y."}
+    new = prompts.new_prompt(
+        ticket, sections, "Goal.", role="code-reviewer", step="review_code", diff_stat="d"
+    )
+    assert new.index("## Handoff") < new.index("## Decisions\n- keep X. why: y.")
+    resumed = prompts.resumed_prompt(ticket, sections, step="review_code", diff_stat="d")
+    assert "## Decisions\n- keep X. why: y." in resumed
 
 
 def test_sections_and_log_lines() -> None:

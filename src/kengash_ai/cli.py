@@ -808,6 +808,9 @@ def merge_ticket(
         _emit_json(merged)
         return
     typer.echo(f"merged {merged.id}: {merged.commits} commits into {merged.base}")
+    if merged.decisions:
+        plural = "" if merged.decisions == 1 else "s"
+        typer.echo(f"DECISIONS.md +{merged.decisions} line{plural}")
 
 
 loop_app = typer.Typer(

@@ -8,7 +8,7 @@ pushes.
 import contextlib
 from dataclasses import dataclass
 
-from kengash_ai import gitops, settings, workflow
+from kengash_ai import gitops, memory, settings, workflow
 from kengash_ai.model import Doc, Event, Settings, Ticket, UserError, utc_now
 from kengash_ai.ops import lifecycle, records, slots, tickets
 from kengash_ai.store import documents, runtime
@@ -25,6 +25,7 @@ class Merged:
     project: str
     commits: int
     base: str
+    decisions: int = 0  # ticket Decisions recorded in DECISIONS.md (SP16 spec §3.3)
 
 
 def merge_ticket(ticket_id: str, *, project: str | None, by: str) -> Merged:
@@ -63,7 +64,29 @@ def merge_ticket(ticket_id: str, *, project: str | None, by: str) -> Merged:
         events = [merged.model_copy(update={"commits": commits})]
         events += [_unblocked(slug, dependent, ticket_id) for dependent in ready]
         records.record(paths, f"kengash: merge {ticket_id}", *events)
-    return Merged(ticket_id, slug, commits, entry.base)
+    recorded = _record_decisions(paths, slug, ticket_id, doc.sections.get("Decisions", ""), by)
+    return Merged(ticket_id, slug, commits, entry.base, recorded)
+
+
+def _record_decisions(paths: StorePaths, slug: str, ticket_id: str, section: str, by: str) -> int:
+    """Record the merged ticket's proposed decisions in DECISIONS.md: an ADR lands with its
+    code (SP16 spec §3.3). A line memory refuses is skipped; the merge already stands."""
+    recorded = 0
+    for line in section.splitlines():
+        decision, why, rejected = memory.parse_decision(line)
+        if not decision:
+            continue
+        with contextlib.suppress(UserError):
+            recorded += memory.add(
+                paths,
+                decision,
+                why or f"ticket {ticket_id}",
+                decision=True,
+                rejected=rejected or None,
+                project=slug,
+                by=by,
+            ).added
+    return recorded
 
 
 def merge_if_clean(paths: StorePaths, slug: str, ticket_id: str, *, by: str) -> str:
