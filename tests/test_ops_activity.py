@@ -177,3 +177,27 @@ def test_the_journal_names_each_steps_model(engine: Engine, fake_clis: FakeClis)
     steps.run_job(engine.ticket_id)
     found = activity.ticket(engine.paths, engine.slug, engine.ticket_id)
     assert found[0].text == "plan → claude/opus"
+
+
+def test_watch_follows_through_a_gate_until_the_ticket_is_done(engine: Engine) -> None:
+    project = engine.paths.project(engine.slug)
+    doc = engine.ticket()
+    doc.meta.status, doc.meta.step = "in_process/needs_approval", "implement"
+    documents.save_ticket(project, doc)
+    _event(engine, T0, "step.start", step="implement", provider="antigravity")
+    naps: list[float] = []
+
+    def nap(seconds: float) -> None:  # the user approves, the ticket runs, then merges
+        naps.append(seconds)
+        later = engine.ticket()
+        later.meta.status = ["in_process/under_implementation", "done/merged"][
+            min(len(naps), 2) - 1
+        ]
+        documents.save_ticket(project, later)
+
+    found = activity.follow(
+        engine.paths, engine.slug, engine.ticket_id, until_done=True, sleep=nap, root=WORK
+    )
+    texts = [item.text for item in found if item is not None]
+    assert texts == ["implement → antigravity", "in_process/needs_approval", "done/merged"]
+    assert naps == [activity.IDLE_POLL_S, 1.0]  # slower while nothing runs

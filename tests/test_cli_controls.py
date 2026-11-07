@@ -26,7 +26,10 @@ def test_run_park_and_pause_print_one_line_each(engine: Engine, store_paths: Sto
     doc.meta.status, doc.meta.step = "in_queue/ready", None
     documents.save_ticket(store_paths.project(engine.slug), doc)
     started = runner.invoke(app, ["run", "7b55e0c1"])
-    assert (started.exit_code, started.stdout) == (0, "started 7b55e0c1 plan→claude\n")
+    assert (started.exit_code, started.stdout) == (
+        0,
+        "started 7b55e0c1 plan→claude (watch: kengash logs 7b55e0c1 --watch)\n",
+    )
     again = runner.invoke(app, ["run", "7b55e0c1"])
     assert (again.exit_code, again.stdout) == (1, "skipped 7b55e0c1: already running\n")
     paused = runner.invoke(app, ["pause"])

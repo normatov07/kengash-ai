@@ -151,6 +151,14 @@ class Logs(_Section):
     keep_days: int = Field(30, ge=0)  # 0 keeps every log
 
 
+class Watch(_Section):
+    """Viewer tabs and notifications (SP13 spec §3.7)."""
+
+    tabs: Literal["auto", "off"] = "auto"  # a tab per worker and a dashboard per loop
+    terminal: str = ""  # a command with {title} and {command}; empty: detect the terminal
+    notify: bool = True  # a desktop notification when a ticket needs the user
+
+
 class ReviewPolicy(_Section):
     diff_only: bool = True
 
@@ -247,6 +255,7 @@ class Settings(_Section):
     memory: MemoryCaps = Field(default_factory=MemoryCaps)
     review: ReviewPolicy = Field(default_factory=ReviewPolicy)
     logs: Logs = Field(default_factory=Logs)
+    watch: Watch = Field(default_factory=Watch)
     providers: dict[str, ProviderOptions] = Field(default_factory=dict)
     agents: dict[str, Agent] = Field(default_factory=dict)
     steps: dict[str, CustomStep] = Field(default_factory=dict)

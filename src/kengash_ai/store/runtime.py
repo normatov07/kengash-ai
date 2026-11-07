@@ -17,6 +17,7 @@ from kengash_ai.model import (
     TicketState,
     Trust,
     UiRecord,
+    ViewerRecord,
     WorkerRecord,
     utc_now,
 )
@@ -82,6 +83,23 @@ def save_worker(paths: StorePaths, record: WorkerRecord) -> None:
 def drop_worker(paths: StorePaths, worker_id: str) -> None:
     with _WORKER_LOCK:
         (paths.workers / f"{worker_id}.json").unlink(missing_ok=True)
+
+
+def load_viewer(paths: StorePaths, key: str) -> ViewerRecord | None:
+    """A viewer tab's record (SP13); None when missing or unreadable."""
+    path = paths.viewers / f"{key}.json"
+    try:
+        return _load(path, ViewerRecord) if path.exists() else None
+    except (OSError, KengashError):  # a damaged record holds no tab
+        return None
+
+
+def save_viewer(paths: StorePaths, record: ViewerRecord) -> None:
+    _save(paths.viewers / f"{record.key}.json", record)
+
+
+def drop_viewer(paths: StorePaths, key: str) -> None:
+    (paths.viewers / f"{key}.json").unlink(missing_ok=True)
 
 
 def beat(paths: StorePaths, worker_id: str) -> None:

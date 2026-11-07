@@ -33,7 +33,10 @@ def as_conductor(monkeypatch: pytest.MonkeyPatch) -> As:
 def test_claim_prints_and_a_second_conductor_exits_6(as_conductor: As) -> None:
     as_conductor(OTHER)
     first = runner.invoke(app, ["loop", "claim"])
-    assert (first.exit_code, first.stdout) == (0, "loop claimed: all projects\n")
+    assert (first.exit_code, first.stdout) == (
+        0,
+        "loop claimed: all projects (watch: kengash watch)\n",
+    )
     as_conductor(ME)
     second = runner.invoke(app, ["loop", "claim", "-p", "payments-api"])
     assert second.exit_code == 6
@@ -49,7 +52,10 @@ def test_take_over_flag(as_conductor: As) -> None:
     runner.invoke(app, ["loop", "claim", "-p", "payments-api"])
     as_conductor(ME)
     taken = runner.invoke(app, ["loop", "claim", "-p", "payments-api", "--take-over"])
-    assert (taken.exit_code, taken.stdout) == (0, "loop claimed: payments-api\n")
+    assert (taken.exit_code, taken.stdout) == (
+        0,
+        "loop claimed: payments-api (watch: kengash watch -p payments-api)\n",
+    )
     as_conductor(OTHER)
     assert runner.invoke(app, ["loop", "claim", "-p", "payments-api"]).exit_code == 6
 

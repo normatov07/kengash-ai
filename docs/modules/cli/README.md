@@ -30,6 +30,7 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 
 
 ## Changes
 
+- 2026-11-07: `run`, `approve` and `loop claim` end their line with `(watch: <tab or command>)`; `logs ID --watch` (follows through gates until done, names its tab, registers as the ticket's viewer, waits for Enter at the end on a terminal); `ticket attach ID --tab` (SP13 M1).
 - 2026-11-06: `doctor` prints `note: …` information lines (not with `--quiet`); they never fail it (SP12 M3).
 - 2026-11-06: `logs -f` skips the activity stream's heartbeats (SP12 M2).
 - 2026-11-06: `wait` defaults to 300 s and prints progress on a timeout; `ps`, `logs` (SP12 M2).
@@ -49,4 +50,3 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 
 - 2026-10-26: `agent new`, `agent remove` (SP6).
 - 2026-10-23: `ui open`, `ui stop` (SP5 M1).
 - 2026-10-23: `skills eval` (SP4 M2).
-- 2026-10-23: `skills lint`, `skills install` (SP4 M1).

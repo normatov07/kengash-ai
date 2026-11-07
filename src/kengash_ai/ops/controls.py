@@ -18,7 +18,7 @@ from kengash_ai.model import (
     WorkerRecord,
     utc_now,
 )
-from kengash_ai.ops import agents, jobs, lifecycle, merging, records, slots, steps
+from kengash_ai.ops import agents, jobs, lifecycle, merging, records, slots, steps, watch
 from kengash_ai.store import documents, runtime, storegit
 from kengash_ai.store.locks import locked
 from kengash_ai.store.paths import StorePaths
@@ -38,6 +38,7 @@ class Started:
     project: str
     step: str
     provider: str
+    watch: str = field(default="", compare=False)  # its tab, or the command to watch it
 
 
 @dataclass
@@ -51,6 +52,7 @@ class Approved:
     id: str
     project: str
     status: str
+    watch: str = field(default="", compare=False)  # set when the approval restarted the worker
 
 
 @dataclass
@@ -104,6 +106,8 @@ def run_tickets(
         storegit.commit_store(paths, f"kengash: run {' '.join(s.id for s in result.started)}")
     elif setup is not None:
         raise NeedsSetup(setup)
+    for started in result.started:  # outside every lock: a terminal may take seconds
+        started.watch = watch.open_ticket(paths, started.project, started.id)
     return result
 
 
@@ -162,7 +166,8 @@ def approve_ticket(
         records.record(paths, f"kengash: approve {ticket_id}", approved, *events)
     if isinstance(decision, workflow.Merge):
         return Approved(ticket_id, slug, merging.merge_if_clean(paths, slug, ticket_id, by=by))
-    return Approved(ticket_id, slug, ticket.status)
+    shown = watch.open_ticket(paths, slug, ticket_id) if restart else ""
+    return Approved(ticket_id, slug, ticket.status, shown)
 
 
 def park_ticket(ticket_id: str, why: str, *, project: str | None, by: str) -> Parked:

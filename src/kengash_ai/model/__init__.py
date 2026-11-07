@@ -36,6 +36,7 @@ from kengash_ai.model.runtime import (
     TicketState,
     Trust,
     UiRecord,
+    ViewerRecord,
     WorkerRecord,
 )
 from kengash_ai.model.settings import (
@@ -139,6 +140,7 @@ __all__ = [
     "UiRecord",
     "Usage",
     "UserError",
+    "ViewerRecord",
     "WaitTimeout",
     "WorkOutput",
     "WorkerRecord",

@@ -108,6 +108,10 @@ class StorePaths:
         return self.runtime / "loops"
 
     @property
+    def viewers(self) -> Path:
+        return self.runtime / "viewers"
+
+    @property
     def logs(self) -> Path:
         return self.runtime / "logs"
 
