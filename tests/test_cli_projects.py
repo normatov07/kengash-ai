@@ -89,3 +89,19 @@ def test_doctor_fails_on_a_blocking_provider(
     fake_clis.hide("codex")
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 1 and result.stdout.startswith("codex: not installed;")
+
+
+def test_a_fixed_line_is_no_warning(store_paths: StorePaths, repo: Path) -> None:
+    from conftest import write_settings
+
+    from kengash_ai.ops import projects as ops_projects
+
+    slug = ops_projects.init_project(repo).slug
+    text = (
+        'project.test_cmd: "true"\nworkflows:\n  simple: {steps: [plan, implement, review_code,'
+        " run_tests], on_fail: {review_code: implement}}\n"
+    )
+    write_settings(store_paths, text, slugs=(slug,))
+    lines = runner.invoke(app, ["doctor", "--fix"]).stdout.splitlines()
+    fixed = "workflow simple runs run_tests after review_code with no way back to implement"
+    assert f"project {slug}: {fixed}: fixed" in lines

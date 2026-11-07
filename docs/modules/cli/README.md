@@ -30,6 +30,7 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 
 
 ## Changes
 
+- 2026-11-07: `doctor` prints a line it fixed without `warning:` (SP14).
 - 2026-11-07: `forget PROJECT [--yes] [--by]`: asks for the project name on a terminal, exit 5 off one without `--yes`; prints `forgot <slug>: N plans, N tickets, N worktrees removed; the store's git history keeps them` (SP14).
 - 2026-11-07: `watch [-p] [--once] [--json]`: the board redrawn every `REFRESH_S` on the alternate screen (rich `Live`), plain lines with `--once` or off a terminal; viewer commands name their tab and exit cleanly on SIGTERM or SIGHUP (SP13 M2).
 - 2026-11-07: `run`, `approve` and `loop claim` end their line with `(watch: <tab or command>)`; `logs ID --watch` (follows through gates until done, names its tab, registers as the ticket's viewer, waits for Enter at the end on a terminal); `ticket attach ID --tab` (SP13 M1).
@@ -49,4 +50,3 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 
 - 2026-10-26: every run first moves a 0.1.0 store once and prints the note on stderr (SP8).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-26: on native Windows every command exits 4 with "kengash runs on Linux and macOS; on Windows use WSL" (SP7).
-- 2026-10-26: `agent new`, `agent remove` (SP6).
