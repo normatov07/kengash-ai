@@ -18,6 +18,7 @@ Role skills, data only (system spec §8.2; SP4 spec decision 3): the instruction
 
 ## Changes
 
+- 2026-11-07: plan replies name `files` (they narrow the ticket's touches) and `decisions`; implement replies may propose `decisions`; review-code makes a Decisions line that is not lasting, or contradicts the Memory, a finding (SP16).
 - 2026-11-07: `implement` and `plan` templates no longer carry a `BLOCKED: <…>` placeholder line, which invited `BLOCKED: none` (SP15 review).
 - 2026-11-07: `implement` runs the prompt's Checks before replying, fixes what Check output names when sent back, reports `Checked:` honestly (`checks not run`), and writes `BLOCKED: <what>` for what only the user can give; `plan` adds a `BLOCKED:` line for work that cannot be done without the user (SP15; haiku dry runs: old skill 0/3 gate lines and one claimed check, new 3/3 and 0/3 on a feasible fix).
 - 2026-10-26: role skills say kengash commits after the step (SP8).

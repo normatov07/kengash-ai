@@ -21,10 +21,11 @@ PROCESS_CAP = 100
 RECORD_HINT = (
     "Record what later sessions must respect once the user settles it; one line each, no "
     "secrets, nothing the code or plan already says:\n"
-    "- a design decision (architecture, interfaces, data formats, libraries and tools, "
-    "design-system values, platform or performance targets, a source of truth, naming): "
+    "- a design decision for this project (architecture, interfaces, data formats, libraries "
+    "and tools, design-system values, platform or performance targets, a source of truth, naming): "
     'kengash memory add "<decision>" --why "<reason>" --decision [--rejected "<alternative>"]\n'
-    "- how the user works (preferences, working style, goals, approaches turned down for good): "
+    "- how the user works in every project (preferences, working style, goals, approaches "
+    "turned down for good): "
     'kengash memory add "<fact>" --why "<why>" --section "<Preferences|Working style|Goals|'
     'Turned down>"\n'
     '- how this project builds, tests or ships: kengash memory add "<rule>" --why "<why>" '
