@@ -14,7 +14,7 @@ from uuid import uuid4
 
 import pytest
 
-from kengash_ai import gitops
+from kengash_ai import gitops, settings
 from kengash_ai.model import Doc, Plan, Ticket, TicketState
 from kengash_ai.ops import projects, skills
 from kengash_ai.store import StorePaths, documents, runtime
@@ -283,6 +283,8 @@ def engine(
     documents.save_ticket(project, doc)
     worktree = store_paths.worktree("payments-api", "7b55e0c1")
     gitops.ensure_worktree(registered_repo, worktree, "kg/7b55e0c1", "main")
+    # step mechanics stop at awaiting_merge; tests of auto-merge set it themselves
+    settings.set_values(store_paths, "payments-api", {"merge.mode": "ask"})
     return Engine(store_paths, registered_repo)
 
 

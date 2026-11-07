@@ -136,7 +136,7 @@ def test_schema_errors_get_one_repair_turn(engine: Engine, fake_clis: FakeClis) 
     steps.run_job("7b55e0c1", steps=1)
     second = fake_clis.calls("claude")[1]["argv"]
     assert "--resume" in second and second[1].startswith(
-        "Your last reply failed: output does not match the work schema"
+        "Your last reply failed: output does not match the plan schema"
     )
     assert engine.ticket().meta.step == "implement"
 
@@ -285,6 +285,7 @@ def test_a_denied_command_gets_one_repair_turn(engine: Engine, fake_clis: FakeCl
 
 
 CUSTOM = """\
+merge.mode: ask
 agents:
   helper: {{cli: claude/sonnet, skill: helper}}
 steps.{step}: {{role: helper, kind: {kind}, does: Polish the change.}}
@@ -939,3 +940,13 @@ def test_the_implementer_session_survives_a_check_run(
     assert sessions and sessions[0] is not None
     assert sessions[0].id == "0199a213-81c0-7800-8aa1-bbab2a035a53"
     assert roles == ["implementer"]
+
+
+def test_new_session_prompt_carries_project_memory(engine: Engine, fake_clis: FakeClis) -> None:
+    process = engine.paths.project("payments-api").process
+    process.write_text("# PROCESS.md\n\n## Process notes\n\n- money is integer cents\n")
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    steps.run_job("7b55e0c1", steps=1)
+    prompt = fake_clis.calls("claude")[0]["argv"][1]
+    assert prompt.index("## Memory") < prompt.index("## Goal")
+    assert "- money is integer cents" in prompt

@@ -12,12 +12,13 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from kengash_ai import adapters, gitops, journal, settings, workflow
+from kengash_ai import adapters, gitops, journal, memory, settings, workflow
 from kengash_ai.model import (
     Checked,
     Doc,
     Event,
     Folder,
+    KengashError,
     NeedsSetup,
     ProviderOptions,
     ProviderStatus,
@@ -345,6 +346,14 @@ def _prepare(job: _Job, ready: _Ready, pick: agents.Pick) -> StepRequest:
     return _request(job, ready, pick, session_id=session_id, resume=resume, log=log)
 
 
+def _memory(job: _Job) -> str:
+    """The memory digest for a new session; "" when the store cannot give one."""
+    try:
+        return memory.digest(job.paths, job.slug)
+    except KengashError:
+        return ""
+
+
 def _never_started(request: StepRequest, result: StepResult) -> bool:
     """A new claude session whose CLI failed before creating it (no id, no timeout)."""
     fresh = not request.resume and request.session_id is not None
@@ -464,6 +473,7 @@ def _request(
             diff_stat=diff_stat,
             instruction=told,
             feedback=feedback,
+            memory=_memory(job),
         )
         skill = prompts.role_skill(job.paths, job.slug, resolved.agents[pick.role].skill)
     if resolved.kind_of(step) == "edit" and gitops.changed_files(job.worktree):

@@ -94,6 +94,7 @@ class TicketState(_Runtime):
     calls: int = 0
     sent_back: SentBack | None = None
     checked: Checked | None = None
+    waiting_on: str = ""  # the ticket whose paths this one waits for (SP16 spec §3.8)
 
 
 class ConductorPing(_Runtime):

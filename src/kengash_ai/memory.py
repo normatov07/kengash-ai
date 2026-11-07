@@ -1,6 +1,7 @@
 """MEMORY.md and DECISIONS.md: one-line facts, capped, redacted and journaled (spec §4.5);
 compaction results are checked and applied here (SP3 spec decision 31)."""
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
@@ -22,6 +23,9 @@ ARCHIVE_HEADER = (
     "Never loaded automatically.\n\n"
 )
 MAX_WORDS = 30
+# the `## Memory` block of a new worker session (SP16 spec §3.1): characters per part
+DIGEST_CAPS = {"PROCESS.md": 3_000, "DECISIONS.md": 2_500, "MEMORY.md": 1_500}
+_TAG = re.compile(r"^- \d{4}-\d{2}-\d{2} \[([^\]]+)\] ")
 
 
 @dataclass
@@ -180,6 +184,77 @@ def show(paths: StorePaths, *, decisions: bool = False, project: str | None = No
         if not line.startswith("- ") or any(tag in line for tag in tags)
     ]
     return "\n".join(kept) + "\n"
+
+
+def digest(paths: StorePaths, project: str | None) -> str:
+    """What every new worker session is told to follow (SP16 spec §3.1): the head of the
+    project's process notes, the newest of its and the global decisions, and the newest of
+    the user's memory, each within its cap; redacted, and "" when there is nothing."""
+    parts = [
+        _part("Process (PROCESS.md)", _process_lines(paths, project), "PROCESS.md", newest=False),
+        _part(
+            "Decisions (DECISIONS.md, newest last)", _decision_lines(paths, project), "DECISIONS.md"
+        ),
+        _part("Preferences (MEMORY.md)", _memory_lines(paths), "MEMORY.md"),
+    ]
+    return redact("\n\n".join(part for part in parts if part))
+
+
+def _part(title: str, lines: list[str], name: str, *, newest: bool = True) -> str:
+    """`title` and the `lines` that fit `name`'s cap: the newest (last) ones, or the first."""
+    if not lines:
+        return ""
+    kept: list[str] = []
+    size = 0
+    for line in reversed(lines) if newest else lines:
+        if size + len(line) + 1 > DIGEST_CAPS[name]:
+            break
+        kept.append(line)
+        size += len(line) + 1
+    dropped = len(lines) - len(kept)
+    if newest:
+        body = [*([f"… {dropped} older lines in {name}"] if dropped else []), *reversed(kept)]
+    else:
+        body = [*kept, *([f"… {dropped} more lines in {name}"] if dropped else [])]
+    return "\n".join([f"{title}:", *body])
+
+
+def _process_lines(paths: StorePaths, project: str | None) -> list[str]:
+    """PROCESS.md from its first `## ` heading, blank lines dropped; [] when only headings."""
+    path = paths.project(project).process if project else None
+    if path is None or not path.exists():
+        return []
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = next((i for i, line in enumerate(lines) if line.startswith("## ")), len(lines))
+    body = [line for line in lines[start:] if line.strip()]
+    return body if any(not line.startswith("#") for line in body) else []
+
+
+def _decision_lines(paths: StorePaths, project: str | None) -> list[str]:
+    """DECISIONS.md entries tagged with `project` or `global`, oldest first."""
+    path = paths.memory / "DECISIONS.md"
+    if not path.exists():
+        return []
+    tags = {"global", *([project] if project else [])}
+    return [
+        line
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if (found := _TAG.match(line)) and found.group(1) in tags
+    ]
+
+
+def _memory_lines(paths: StorePaths) -> list[str]:
+    """MEMORY.md entries as `- [<section>] <text>`, in file order."""
+    path = paths.memory / "MEMORY.md"
+    if not path.exists():
+        return []
+    section, found = "", []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("## "):
+            section = line[3:].strip()
+        elif line.startswith("- "):
+            found.append(f"- [{section}] {line[2:]}" if section else line)
+    return found
 
 
 def archive_oldest(lines: list[str], cap: int) -> tuple[list[str], list[str]]:

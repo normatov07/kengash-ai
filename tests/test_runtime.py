@@ -118,3 +118,7 @@ def test_ticket_state_loads_old_files_and_round_trips_the_new_fields(
     )
     runtime.save_ticket_state(store_paths, "7b55e0c1", state)
     assert runtime.load_ticket_state(store_paths, "7b55e0c1") == state
+
+
+def test_ticket_state_starts_waiting_on_nobody() -> None:
+    assert TicketState().waiting_on == ""

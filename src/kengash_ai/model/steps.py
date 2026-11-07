@@ -7,7 +7,7 @@ from typing import Any, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, computed_field, model_validator
 
 Profile = Literal["read_only", "edit_worktree"]
-OutputKind = Literal["work", "review", "compact"]
+OutputKind = Literal["work", "plan", "review", "compact"]
 ErrorKind = Literal["auth", "rate_limit", "network", "timeout", "empty", "schema", "crash"]
 
 
@@ -48,9 +48,25 @@ class Finding(_Step):
     fix: str
 
 
+class Decision(_Step):
+    """A lasting choice a worker proposes; it reaches DECISIONS.md when the ticket merges
+    (SP16 spec §3.3)."""
+
+    decision: str
+    why: str
+    rejected: str = ""
+
+
 class WorkOutput(_Step):
     summary: str
     handoff: str
+    decisions: list[Decision] = Field(default_factory=list)
+
+
+class PlanOutput(WorkOutput):
+    """A read step's reply: the plan, plus the files it will change (SP16 spec §3.12)."""
+
+    files: list[str] = Field(default_factory=list)
 
 
 class ReviewOutput(_Step):
@@ -69,10 +85,11 @@ class CompactOutput(_Step):
     text: str
 
 
-type StepOutput = WorkOutput | ReviewOutput | CompactOutput
+type StepOutput = WorkOutput | PlanOutput | ReviewOutput | CompactOutput
 
 _MODELS: dict[OutputKind, type[WorkOutput | ReviewOutput | CompactOutput]] = {
     "work": WorkOutput,
+    "plan": PlanOutput,
     "review": ReviewOutput,
     "compact": CompactOutput,
 }
@@ -98,9 +115,22 @@ _FINDING = _strict(
     }
 )
 
+_DECISIONS: dict[str, Any] = {
+    "type": "array",
+    "items": _strict({"decision": _TEXT, "why": _TEXT, "rejected": _TEXT}),
+}
+
 # Strict: every field required, no extra fields, so claude, codex and agy all accept them.
 OUTPUT_SCHEMAS: dict[OutputKind, dict[str, Any]] = {
-    "work": _strict({"summary": _TEXT, "handoff": _TEXT}),
+    "work": _strict({"summary": _TEXT, "handoff": _TEXT, "decisions": _DECISIONS}),
+    "plan": _strict(
+        {
+            "summary": _TEXT,
+            "handoff": _TEXT,
+            "files": {"type": "array", "items": _TEXT},
+            "decisions": _DECISIONS,
+        }
+    ),
     "review": _strict(
         {
             "verdict": {"type": "string", "enum": ["pass", "fail"]},

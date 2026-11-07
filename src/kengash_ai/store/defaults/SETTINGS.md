@@ -76,4 +76,4 @@ status.names: {plan: under_planning, review_plan: under_plan_review, implement: 
                docs: under_docs, approve: needs_approval}
 
 # merge: ask | auto | branch
-merge.mode: ask
+merge.mode: auto

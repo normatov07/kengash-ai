@@ -15,6 +15,7 @@ PLAN_SECTIONS = (
     "Prompt",
     "Goal",
     "Decisions",
+    "Lasting decisions",
     "Assumptions",
     "Scope",
     "Out of scope",
@@ -25,7 +26,15 @@ PLAN_SECTIONS = (
     "Milestones",
     "Review log",
 )
-TICKET_SECTIONS = ("Scope", "Acceptance", "Handoff", "Findings", "Check output", "Log")
+TICKET_SECTIONS = (
+    "Scope",
+    "Acceptance",
+    "Handoff",
+    "Findings",
+    "Decisions",
+    "Check output",
+    "Log",
+)
 _STATUS = re.compile(r"^(in_queue|in_process|done)/[a-z_]+$")
 
 # in_process also takes the step names of SETTINGS `status.names`.
@@ -33,6 +42,7 @@ SUB_STATUSES: dict[Folder, tuple[str, ...]] = {
     Folder.in_queue: ("ready", "blocked", "parked"),
     Folder.in_process: (
         "waiting_slot",
+        "waiting_paths",
         "waiting_quota",
         "needs_approval",
         "stalled",

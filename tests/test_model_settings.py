@@ -17,7 +17,11 @@ AGENTS: dict[str, Any] = {
 
 def test_defaults_need_no_input() -> None:
     settings = Settings()
-    assert (settings.loop_max.critical, settings.merge.mode, settings.sessions.max) == (6, "ask", 8)
+    assert (settings.loop_max.critical, settings.merge.mode, settings.sessions.max) == (
+        6,
+        "auto",
+        8,
+    )
 
 
 def test_workflow_steps_must_be_known() -> None:

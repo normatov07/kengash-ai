@@ -21,6 +21,7 @@ The agents' long-term memory: MEMORY.md (who the user is, how they work, what th
 
 ## Changes
 
+- 2026-11-07: `digest(paths, project)`: the `## Memory` body of every new worker session: the head of the project's PROCESS.md (from its first `## `, 3,000 characters), the newest `[project]` and `[global]` DECISIONS.md entries (2,500) and the newest MEMORY.md entries as `- [<section>] text` (1,500), with `… N older/more lines in <file>` notes, redacted (SP16).
 - 2026-10-26: messages name the `kengash` command; `KengashError` replaces `HarnessError` (SP8).
 - 2026-10-26: store commits `kengash: memory …`; compaction events `by: kengash` (SP8).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).

@@ -29,6 +29,7 @@ Everything under `~/.kengash`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
+- 2026-11-07: the seeded SETTINGS.md sets `merge.mode: auto` (SP16).
 - 2026-11-07: the seeded SETTINGS.md names `checks.turns: 2` (SP15).
 - 2026-11-07: `StorePaths.viewers`; `runtime.load_viewer` (None when missing or damaged), `save_viewer`, `drop_viewer`; the seeded SETTINGS.md gains `watch.tabs`, `watch.terminal`, `watch.notify` (SP13 M1).
 - 2026-11-06 (SP12 minors): `yamledit.rename_key` renames a top-level key on its own line, keeping its value and comment.

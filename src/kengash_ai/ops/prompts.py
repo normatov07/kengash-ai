@@ -69,6 +69,18 @@ class Feedback:
 NO_FEEDBACK = Feedback()
 
 
+MEMORY_LEAD = (
+    "The user's preferences and this project's settled decisions and process. Follow them; "
+    "newer lines override older ones. When the Scope conflicts with one, follow the Scope and "
+    "say so in your handoff."
+)
+
+
+def memory_block(memory: str) -> list[tuple[str, str]]:
+    """The `## Memory` block of a new session (SP16 spec §3.1); none when memory is empty."""
+    return [("Memory", f"{MEMORY_LEAD}\n\n{memory}")] if memory.strip() else []
+
+
 def checks_block(test_cmd: str, lint_cmd: str) -> str:
     """The `## Checks` body naming the commands that are set; empty when neither is."""
     rows = [
@@ -131,7 +143,11 @@ def kind(step: str, settings: Settings | None = None) -> Kind | None:
 
 
 def output_kind(step: str, settings: Settings | None = None) -> OutputKind:
-    return "review" if kind(step, settings) in ("review", "check") else "work"
+    """review and check steps give verdicts, read steps plans, edit steps work."""
+    found = kind(step, settings)
+    if found in ("review", "check"):
+        return "review"
+    return "plan" if found == "read" else "work"
 
 
 def profile(step: str, settings: Settings | None = None) -> Profile:
@@ -157,14 +173,16 @@ def new_prompt(
     diff_stat: str,
     instruction: str | None = None,
     feedback: Feedback = NO_FEEDBACK,
+    memory: str = "",
 ) -> str:
-    """A new session's prompt: who it is, the step, and the ticket inline; `instruction`
-    defaults to the built-in step's."""
+    """A new session's prompt: who it is, the step, the memory digest, and the ticket inline;
+    `instruction` defaults to the built-in step's."""
     head = (
         f'You are the {role} for ticket {ticket.id} "{ticket.title}", '
         f"loop {ticket.loop} of {ticket.loop_max}, step {step}."
     )
     blocks = [
+        *memory_block(memory),
         (f"Goal (plan {ticket.plan})", goal),
         ("Scope", sections.get("Scope", "")),
         ("Acceptance", sections.get("Acceptance", "")),
@@ -213,10 +231,10 @@ def _check_blocks(sections: Mapping[str, str], feedback: Feedback) -> list[tuple
 
 
 def plan_review_prompt(
-    plan: Plan, sections: Mapping[str, str], decisions: str, *, round: int, resumed: bool
+    plan: Plan, sections: Mapping[str, str], memory: str, *, round: int, resumed: bool
 ) -> str:
-    """A plan-review round: the whole plan inline; a new session also gets the decision log,
-    a resumed one the Review log (SP3 spec decision 29)."""
+    """A plan-review round: the whole plan inline; a new session also gets the memory digest,
+    a resumed one the Review log (SP3 spec decision 29; SP16 spec §3.1)."""
     of = f"round {round} of {plan.review.max}"
     if resumed:
         head = f"Round {round} of {plan.review.max}: the planner revised the plan. {PLAN_REVIEW}"
@@ -224,7 +242,7 @@ def plan_review_prompt(
     else:
         head = f'You are the plan-reviewer for plan {plan.id} "{plan.title}", {of}.\n{PLAN_REVIEW}'
         blocks = [(name, sections.get(name, "")) for name in PLAN_SECTIONS if name != "Review log"]
-        blocks.append(("Decisions log", decisions))
+        blocks += memory_block(memory)
     return _join(head, blocks, REPLY)
 
 

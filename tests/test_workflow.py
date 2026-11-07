@@ -46,7 +46,8 @@ DONE = Halt(AWAITING_MERGE, "every step passed")
 
 
 def settings(agents: dict[str, Any] | None = None, **fields: Any) -> Settings:
-    data = {"agents": AGENTS | (agents or {}), "workflows": WORKFLOWS} | fields
+    data = {"agents": AGENTS | (agents or {}), "workflows": WORKFLOWS, "merge": {"mode": "ask"}}
+    data |= fields
     return Settings.model_validate(data)
 
 
@@ -108,6 +109,8 @@ def test_a_pass_moves_on_and_the_last_pass_follows_merge_mode() -> None:
     assert after(settings(), progress("implement"), PASS).decision == Run("review_code", 1)
     assert after(settings(), progress(), PASS).decision == DONE
     assert after(settings(merge={"mode": "auto"}), progress(), PASS).decision == Merge()
+    default = Settings.model_validate({"agents": AGENTS, "workflows": WORKFLOWS})
+    assert after(default, progress(), PASS).decision == Merge()  # auto by default (SP16)
     branch = after(settings(merge={"mode": "branch"}), progress(), PASS)
     waiting = "every step passed; the branch waits for the user"
     assert (branch.decision, branch.progress.step) == (Halt(BRANCH_READY, waiting), None)

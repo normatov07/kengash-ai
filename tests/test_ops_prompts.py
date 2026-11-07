@@ -51,6 +51,32 @@ def test_resumed_prompts_carry_only_the_delta(make_ticket: Make) -> None:
     assert "## Handoff" in review and "## Diff stat" in review and "## Findings" not in review
 
 
+def test_new_prompt_puts_memory_first(make_ticket: Make) -> None:
+    ticket = make_ticket().meta
+    text = prompts.new_prompt(
+        ticket,
+        SECTIONS,
+        "Webhooks retry.",
+        role="implementer",
+        step="implement",
+        diff_stat="",
+        memory="Decisions (DECISIONS.md, newest last):\n- keyring over env var",
+    )
+    assert text.index("## Memory") < text.index("## Goal")
+    assert f"## Memory\n{prompts.MEMORY_LEAD}\n\nDecisions" in text
+    plain = prompts.new_prompt(
+        ticket, SECTIONS, "Webhooks retry.", role="implementer", step="implement", diff_stat=""
+    )
+    assert "## Memory" not in plain
+
+
+def test_resumed_prompt_has_no_memory(make_ticket: Make) -> None:
+    ticket = make_ticket().meta
+    assert "## Memory" not in prompts.resumed_prompt(
+        ticket, SECTIONS, step="implement", diff_stat=""
+    )
+
+
 def test_sections_and_log_lines() -> None:
     assert prompts.handoff_text("\n".join(f"l{i}" for i in range(20))).splitlines()[-1] == "l14"
     finding = Finding(severity="high", file="", line=0, issue="token=abc123def456ghi789", fix="f")
@@ -63,6 +89,14 @@ def test_sections_and_log_lines() -> None:
         "review",
         "edit_worktree",
     )
+
+
+def test_read_steps_reply_with_plan_output() -> None:
+    assert [prompts.output_kind(s) for s in ("plan", "implement", "review_plan")] == [
+        "plan",
+        "work",
+        "review",
+    ]
 
 
 def test_role_skills_come_from_the_package_by_default(store_paths: StorePaths) -> None:
@@ -86,7 +120,7 @@ def test_custom_step_prompts_follow_their_kind() -> None:
     )
     assert prompts.instruction(settings, "implement") == prompts.INSTRUCTIONS["implement"]
     assert [prompts.output_kind(s, settings) for s in ("advise", "tidy", "perf_review")] == [
-        "work",
+        "plan",
         "work",
         "review",
     ]

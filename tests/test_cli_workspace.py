@@ -88,7 +88,7 @@ def test_every_command_speaks_json(store_paths: StorePaths, inside_repo: Path) -
     def call(*args: str) -> Any:
         return json.loads(runner.invoke(app, [*args, "--json"]).stdout)
 
-    assert call("settings", "get", "merge.mode") == "ask"
+    assert call("settings", "get", "merge.mode") == "auto"
     assert call("settings", "show")["loop_max"]["critical"] == 6
     assert call("settings", "check") == {"problems": []}
     assert call("memory", "add", "prefers runbooks", "--why", "said so") == {

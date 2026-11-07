@@ -235,3 +235,55 @@ def test_decisions_past_300_lines_move_their_oldest_to_the_archive(store: StoreP
         json.loads(line) for line in next(store.journal.glob("*.jsonl")).read_text().splitlines()
     ]
     assert events[-1]["archived"] == 1
+
+
+def _process(store: StorePaths, slug: str, body: str) -> None:
+    project = ensure_project(store, slug)
+    project.process.write_text(f"# PROCESS.md\n\nIntro line.\n\n{body}", encoding="utf-8")
+
+
+def test_digest_orders_process_decisions_memory(store: StorePaths) -> None:
+    _process(store, "app", "## Process notes\n\n- design values live in design/\n")
+    memory.add(store, "keyring over env var", "rotation", decision=True, project="app")
+    memory.add(store, "wants the diff, not prose", "said so", section="Working style")
+    text = memory.digest(store, "app")
+    assert text.index("design values live in design/") < text.index("keyring over env var")
+    assert text.index("keyring over env var") < text.index("wants the diff, not prose")
+    assert "Intro line." not in text
+    assert "- [Working style] wants the diff, not prose" in text
+
+
+def test_digest_keeps_project_and_global_decisions_only(store: StorePaths) -> None:
+    memory.add(store, "mine", "x", decision=True, project="app")
+    memory.add(store, "theirs", "x", decision=True, project="other")
+    memory.add(store, "everyone", "x", decision=True)
+    text = memory.digest(store, "app")
+    assert "mine" in text and "everyone" in text and "theirs" not in text
+
+
+def test_digest_drops_oldest_over_cap_with_note(store: StorePaths) -> None:
+    for number in range(80):
+        memory.add(store, f"decision number {number} keeps a long tail", "x", decision=True)
+    text = memory.digest(store, None)
+    assert "decision number 79 keeps" in text
+    assert "decision number 0 keeps" not in text
+    assert "older lines in DECISIONS.md" in text
+    assert len(text) < 2_500 + 200
+
+
+def test_digest_keeps_process_head_over_cap(store: StorePaths) -> None:
+    notes = "".join(f"- process rule {n} with words to fill the line up\n" for n in range(100))
+    _process(store, "app", f"## Process notes\n\n{notes}")
+    text = memory.digest(store, "app")
+    assert "process rule 0 with" in text and "process rule 99 with" not in text
+    assert "more lines in PROCESS.md" in text
+
+
+def test_digest_empty_store_is_empty(store: StorePaths) -> None:
+    ensure_project(store, "app")
+    assert memory.digest(store, "app") == ""
+
+
+def test_digest_is_redacted(store: StorePaths) -> None:
+    _process(store, "app", "## Process notes\n\n- token=abc123def456ghi789jkl\n")
+    assert "abc123def456ghi789jkl" not in memory.digest(store, "app")
