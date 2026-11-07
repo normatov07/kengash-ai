@@ -131,7 +131,7 @@ Rows are checked top to bottom; the first match decides. A fingerprint is the fi
 
 ## 7. Scheduling
 
-`harness next` lists `in_queue/ready` tickets (dependencies merged or closed) whose `touches` overlap no `in_process` ticket of the same project nor any ticket listed before them, and whose first step's provider (after fallback) fits a free slot. Paths overlap when one is a prefix of the other segment by segment; empty `touches` overlaps everything. Projects take turns, the one with the oldest last claim first; within a project, critical before standard before simple, then oldest first. Nothing in a paused scope is runnable. `run` checks the same rules again under the locks, so two conductors cannot claim one ticket.
+`harness next` lists `in_queue/ready` tickets (dependencies merged or closed) whose first step's provider (after fallback) fits a free slot and, when that step is in the editing phase, whose `touches` overlap no path holder of the same project nor any editing ticket listed before them (SP16: planning holds and checks no paths; holders are in_process tickets in their editing phase off the gates, and `awaiting_merge` ones; a job reaching the editing phase waits as `waiting_paths`). Paths overlap when one is a prefix of the other segment by segment; empty `touches` overlaps everything. Projects take turns, the one with the oldest last claim first; within a project, the longest chain of waiting dependents first (SP16), then critical before standard before simple, then oldest first. Nothing in a paused scope is runnable. `run` checks the same rules again under the locks, so two conductors cannot claim one ticket.
 
 ## 8. Provider adapters
 
@@ -186,7 +186,8 @@ A resumed session gets only `Loop <n>, step <step>: <step instruction>` (a sent-
 - Commit: `git add -A`, then a commit `hrn(<id8>): loop <n> <step>: <summary's first line>` with the trailers of system spec §7.1.
 - Diffs: `git diff <base>...HEAD` and `--numstat`. `ticket changes` reads the commits carrying `Harness-Ticket: <uuid>` on the ticket branch, or on the base branch after the merge.
 - Merge: rebase onto the base branch inside the worktree (a conflict aborts the rebase and records a finding listing the files), `git merge --ff-only hrn/<id8>` in the main working tree (refused unless clean and on the base branch), then remove the worktree and delete the branch.
-- `repo-<slug>.lock` serialises worktree, rebase and merge commands per repo.
+- `repo-<slug>.lock` serialises worktree, rebase and merge commands per repo; `merge-<slug>.lock` keeps one merge per project at a time, through the recheck of a moved base (SP16).
+- Catch-up: before an edit step, a branch with no commits of its own and no uncommitted path fast-forwards to the base (SP16).
 
 ## 10. Commands
 
