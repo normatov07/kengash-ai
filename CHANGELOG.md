@@ -4,6 +4,30 @@ All notable changes to this project are written here. The format follows [Keep a
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-07
+
+### Added
+
+- Checks inside editing steps: after an implement step, kengash runs the project's `test_cmd` and `lint_cmd` in the worktree. While they fail, it resumes the same session with the failure, up to `checks.turns` times (default 2; 0 turns it off). `run_tests` reuses a pass on the same commit.
+- Failures agents can act on: a failing check writes a digest (headline, file and line, a fenced excerpt) to Findings and a new `## Check output` section. Prompts name the checks and say which step sent the work back and why. agy implementers may now run the project's test and lint commands.
+- A handoff line `BLOCKED: <what>` stops a ticket at `needs_approval` for what only you can give; `kengash approve <id> --note "<answer>"` hands your answer to the next step.
+- Every new worker session starts with a `## Memory` block: the project's PROCESS.md notes, its and the global decisions, and your preferences, each capped, newest winning.
+- Decisions are recorded without anyone remembering to. A plan's `## Lasting decisions` reach DECISIONS.md when you approve it. Workers propose `decisions` in their replies; the code reviewer checks them, and they land in DECISIONS.md when the ticket merges.
+- `kengash memory add --process` appends a process note to the project's PROCESS.md, and `kengash context` ends with a `# Record` hint saying what goes where. Near-duplicate memory lines count as already recorded.
+- Tickets run in parallel:
+  - planning steps neither hold nor check paths, so overlapping tickets plan at once;
+  - a planner's `files` narrow the ticket's `touches` to the exact files;
+  - only tickets that are editing hold their paths; one that would edit the same files waits as `waiting_paths` and goes on when they are free;
+  - the ready ticket with the longest chain of waiting dependents starts first;
+  - an edit starts from the newest main when the branch has no work yet;
+  - the ticket skill keeps `depends_on` and `touches` minimal.
+- A merge queue: merges of one project take turns, and a ticket whose rebase moved onto a newer main reruns the checks before main moves; a failure goes back to implement with the check output.
+
+### Changed
+
+- `merge.mode` defaults to `auto`: a green ticket merges into your local main by itself (kengash never pushes), after a recheck when main moved. Stores seeded before 0.6.0 keep the `merge.mode: ask` they were written with.
+- Read steps reply with the new `plan` output (`files`, `decisions`), and work replies carry `decisions`; both may be empty lists.
+
 ## [0.5.0] - 2026-11-07
 
 ### Added
@@ -120,6 +144,7 @@ The first release.
 
 - The UI checks Host, Origin, a per-run token and an `X-Harness` header on changes, and sends a strict Content Security Policy with framing, sniffing and referrer protections.
 
+[0.6.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.6.0
 [0.5.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.5.0
 [0.4.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.4.0
 [0.3.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.3.0
