@@ -731,3 +731,62 @@ def test_a_ticket_moved_during_checks_gets_no_fix_turn(
     steps.run_job("7b55e0c1", steps=2)
     assert len(fake_clis.calls("codex")) == 1
     assert engine.ticket().meta.status == "in_queue/parked"
+
+
+def counted(engine: Engine) -> tuple[str, Path]:
+    """FIXED that also counts its runs in a file outside the worktree."""
+    runs = engine.repo.parent / "runs"
+    return f"echo x >> {runs}; {FIXED}", runs
+
+
+def test_run_tests_reuses_a_passing_in_step_result(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events
+) -> None:
+    command, runs = counted(engine)
+    write_settings(engine.paths, checks_settings(command))
+    queue_plan_and_implement(fake_clis, {"fixed.txt": "ok\n"})
+    steps.run_job("7b55e0c1", steps=3)
+    assert len(runs.read_text().splitlines()) == 1
+    assert engine.ticket().meta.step == "review_code"
+    assert "· run_tests · test-runner · shell/default · pass · 0" in engine.ticket().sections["Log"]
+    [ended] = [e for e in journal_events() if e["type"] == "step.end" and e["step"] == "run_tests"]
+    assert ended["duration_s"] == 0
+
+
+@pytest.mark.parametrize("change", ["dirty", "commit"])
+def test_run_tests_reruns_on_a_dirty_worktree_or_a_new_commit(
+    engine: Engine, fake_clis: FakeClis, run_git: Callable[..., str], change: str
+) -> None:
+    command, runs = counted(engine)
+    write_settings(engine.paths, checks_settings(command))
+    queue_plan_and_implement(fake_clis, {"fixed.txt": "ok\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    (engine.worktree / "extra.txt").write_text("x\n", encoding="utf-8")
+    if change == "commit":
+        run_git(engine.worktree, "add", "extra.txt")
+        run_git(engine.worktree, "commit", "-qm", "by hand")
+    doc = engine.ticket()
+    doc.meta.status = "in_process/under_test"
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    steps.run_job("7b55e0c1", steps=1)
+    assert len(runs.read_text().splitlines()) == 2
+
+
+def test_a_failing_in_step_result_is_never_reused(engine: Engine, fake_clis: FakeClis) -> None:
+    command, runs = counted(engine)
+    write_settings(engine.paths, checks_settings(command, turns=1))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"}, {"b.txt": "b\n"})
+    steps.run_job("7b55e0c1", steps=3)
+    assert len(runs.read_text().splitlines()) == 3  # turn 0, turn 1, then run_tests
+
+
+def test_a_hook_repair_turn_disables_reuse(engine: Engine, fake_clis: FakeClis) -> None:
+    hook = engine.repo / ".git" / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\ntest -f hooked || { echo 'lint: add hooked'; exit 1; }\n")
+    hook.chmod(0o755)
+    command, runs = counted(engine)
+    write_settings(engine.paths, checks_settings(command))
+    queue_plan_and_implement(fake_clis, {"fixed.txt": "ok\n"}, {"hooked": "yes\n"})
+    steps.run_job("7b55e0c1", steps=3)
+    assert engine.ticket().meta.step == "review_code"
+    assert len(runs.read_text().splitlines()) == 2

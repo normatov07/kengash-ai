@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from kengash_ai import adapters, gitops, journal, settings, workflow
 from kengash_ai.model import (
+    Checked,
     Doc,
     Event,
     Folder,
@@ -90,6 +91,7 @@ class _Ran:
     commit: str | None = None
     files: list[gitops.FileChange] | None = None
     checked: str | None = None  # the summary of in-step checks whose last run passed (SP15)
+    hook_repaired: bool = False  # a commit-hook repair turn changed files after the checks
 
 
 def run_job(ticket_id: str, *, project: str | None = None, steps: int | None = None) -> JobEnd:
@@ -205,6 +207,7 @@ def _step(job: _Job, ready: _Ready) -> JobEnd | None:
         committed = _commit(job, ready, ran)
         if isinstance(committed, JobEnd):
             return committed
+        _remember_checks(job, ready, ran)
     return _finish(job, ready, ran)
 
 
@@ -232,6 +235,9 @@ def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
     (or a rate limit waits for the quota), other errors fail the ticket, keeping the
     session the CLI opened (SP3 spec §5 item 5; SP12 spec §3.4, §3.5)."""
     request = _prepare(job, ready, pick)
+    reused = _reused(job, ready, pick)
+    if reused is not None:
+        return _Ran(pick, request, reused, Usage(), ready.doc.meta.loop)
     usage = Usage()
     tried = {pick.provider}
     timed_out = repaired = unblocked = reconnected = False
@@ -581,6 +587,32 @@ def _fix_turn(
     return "replied"
 
 
+def _remember_checks(job: _Job, ready: _Ready, ran: _Ran) -> None:
+    """After the commit: checks that passed on exactly this commit, for `run_tests` (SP15)."""
+    if ran.checked is None or ran.hook_repaired:
+        return
+    record = Checked(commit=gitops.head(job.worktree), step=ready.step, summary=ran.checked)
+
+    def put(doc: Doc[Ticket], state: TicketState) -> None:
+        state.checked = record
+
+    _update(job, ready.step, put)
+
+
+def _reused(job: _Job, ready: _Ready, pick: agents.Pick) -> StepResult | None:
+    """A shell check step's pass, taken from in-step checks that passed on the worktree's
+    HEAD with nothing changed since; None means run the checks (SP15 spec §3.6)."""
+    if pick.provider != "shell" or ready.resolved.kind_of(ready.step) != "check":
+        return None
+    checked = ready.state.checked
+    if checked is None or checked.commit != gitops.head(job.worktree):
+        return None
+    if gitops.changed_files(job.worktree):
+        return None
+    summary = f"{checked.summary} (in {checked.step}, same commit)"
+    return StepResult(output=ReviewOutput(verdict="pass", summary=summary, findings=[]))
+
+
 def _feedback(resolved: Settings, step: str, sent: SentBack | None) -> prompts.Feedback:
     """The checks, and why the step runs again, for its prompt (SP15 spec §3.4)."""
     project = resolved.project
@@ -623,6 +655,7 @@ def _commit(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
                 kept = calls.work_kept(job.worktree, _changed(job, ready))
                 return _fail(job, f"commit failed: {last}{kept}", ran.usage)
             problem = "the commit hook failed:\n" + "\n".join(lines[-20:])
+            ran.hook_repaired = True
             request = _repair(job, ran.request, ran.result, problem)
             provider = adapters.get(ran.pick.provider, runtime=job.paths.runtime)
             result = provider.run(request)
