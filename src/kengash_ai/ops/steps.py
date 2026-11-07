@@ -4,6 +4,7 @@ A job runs steps until a gate, the end, a pause or park request, or its step bud
 Ticket and state writes happen under the project lock; CLI calls happen outside it.
 """
 
+import contextlib
 import os
 import time
 from collections.abc import Callable
@@ -217,6 +218,13 @@ def _begin(job: _Job, *, budget_left: bool) -> _Ready | JobEnd | _WaitPaths:
         return _Ready(doc, state, resolved, decision.step)
 
 
+def _catch_up(job: _Job) -> None:
+    """Start an edit from the newest base when the branch has no work yet (SP16 spec §3.11);
+    a git error leaves the worktree as it is."""
+    with locked(job.paths.locks / f"repo-{job.slug}.lock"), contextlib.suppress(gitops.GitError):
+        gitops.catch_up(job.worktree, job.base)
+
+
 def _holder(paths: StorePaths, slug: str, resolved: Settings, ticket: Ticket) -> str | None:
     """Another ticket of the project that holds paths overlapping this one's, if any."""
     for other in records.project_tickets(paths, slug).values():
@@ -239,6 +247,8 @@ def _step(job: _Job, ready: _Ready) -> JobEnd | None:
         return _fail(job, str(exc))
     if pick.provider != "shell":
         _take_slot(job, ready, pick)
+    if ready.resolved.kind_of(ready.step) == "edit":
+        _catch_up(job)
     ran = _call(job, ready, pick)
     if isinstance(ran, JobEnd):
         return ran

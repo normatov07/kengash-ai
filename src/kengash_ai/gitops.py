@@ -117,6 +117,19 @@ def rebase(cwd: Path, base: str) -> list[str]:
     return conflicted
 
 
+def catch_up(worktree: Path, base: str) -> bool:
+    """Fast-forward a branch with no commits of its own to `base`, when its worktree has no
+    uncommitted path at all (a failed attempt's edits stay where they are); True when HEAD
+    moved (SP16 spec §3.11)."""
+    if int(_git(worktree, "rev-list", "--count", f"{base}..HEAD").strip()):
+        return False
+    if changed_files(worktree):
+        return False
+    before = head(worktree)
+    _git(worktree, "merge", "--ff-only", "--quiet", base)
+    return head(worktree) != before
+
+
 def merge_ff(repo: Path, branch: str, base: str) -> int:
     """Fast-forward `base` to `branch` in the main working tree; returns the commits merged."""
     current = current_branch(repo)

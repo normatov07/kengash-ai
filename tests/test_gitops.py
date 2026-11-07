@@ -11,6 +11,7 @@ from kengash_ai.gitops import (
     FileChange,
     GitError,
     Worktree,
+    catch_up,
     commit_all,
     current_branch,
     diff,
@@ -182,3 +183,33 @@ def test_changed_files_lists_uncommitted_paths(repo: Path) -> None:
     (repo / "new dir").mkdir()
     (repo / "new dir" / "a.py").write_text("x = 1\n", encoding="utf-8")
     assert changed_files(repo) == ["README.md", "new dir/a.py"]
+
+
+def _behind(repo: Path, tmp_path: Path) -> Path:
+    """A worktree on kg/x made before main gained a commit."""
+    worktree = tmp_path / "wt"
+    ensure_worktree(repo, worktree, "kg/x", "main")
+    (repo / "new.py").write_text("x = 1\n")
+    commit_all(repo, "main moves on", {})
+    return worktree
+
+
+def test_catch_up_fast_forwards_branch_without_commits(repo: Path, tmp_path: Path) -> None:
+    worktree = _behind(repo, tmp_path)
+    assert catch_up(worktree, "main") is True
+    assert head(worktree) == head(repo) and (worktree / "new.py").exists()
+    assert catch_up(worktree, "main") is False  # already there
+
+
+def test_catch_up_leaves_branch_with_commits(repo: Path, tmp_path: Path) -> None:
+    worktree = _behind(repo, tmp_path)
+    (worktree / "mine.py").write_text("y = 2\n")
+    commit_all(worktree, "my work", {})
+    before = head(worktree)
+    assert catch_up(worktree, "main") is False and head(worktree) == before
+
+
+def test_catch_up_skips_dirty_worktree(repo: Path, tmp_path: Path) -> None:
+    worktree = _behind(repo, tmp_path)
+    (worktree / "scratch.txt").write_text("half done\n")
+    assert catch_up(worktree, "main") is False and not (worktree / "new.py").exists()

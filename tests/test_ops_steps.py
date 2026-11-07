@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 from conftest import Engine, Events, FakeClis, write_settings
 
+from kengash_ai import gitops
 from kengash_ai.model import Doc, Running, SentBack, StepRequest, StepResult, Ticket, TicketState
 from kengash_ai.ops import calls, prompts, steps
 from kengash_ai.ops.steps import JobEnd
@@ -1035,3 +1036,18 @@ def test_park_while_waiting_paths(
     fake_clis.queue("claude", fixture="claude/work_resume.json")
     assert steps.run_job("7b55e0c1").status == "in_queue/parked"
     assert fake_clis.calls("codex") == []
+
+
+def test_implement_starts_from_newest_base(
+    engine: Engine, fake_clis: FakeClis, run_git: Callable[..., str]
+) -> None:
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    steps.run_job("7b55e0c1", steps=1)  # planned on the old main
+    _move(engine, "7b55e0c1", "in_process/waiting_paths")  # undo the step budget's pause
+    (engine.repo / "merged.py").write_text("from another ticket\n")
+    gitops.commit_all(engine.repo, "another ticket merged", {})
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "x = 1\n"})
+    steps.run_job("7b55e0c1", steps=1)
+    assert (engine.worktree / "merged.py").exists()
+    log = run_git(engine.worktree, "log", "--format=%s", "-2").splitlines()
+    assert log[1] == "another ticket merged"
