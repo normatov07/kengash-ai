@@ -788,6 +788,9 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
             fingerprints = tuple(workflow.fingerprint(f.file, f.issue) for f in failing)
             if resolved.kind_of(step) == "check":
                 doc.sections["Check output"] = redact(result.check_output) if failing else ""
+                if verdict == "pass":  # the merge recheck skips this commit (SP16 §3.9)
+                    head = gitops.head(job.worktree)
+                    state.checked = Checked(commit=head, step=step, summary=output.summary)
         else:
             verdict = "pass"
             if isinstance(output, WorkOutput):

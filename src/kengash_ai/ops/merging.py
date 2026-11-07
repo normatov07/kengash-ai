@@ -11,6 +11,7 @@ from pathlib import Path
 
 from kengash_ai import adapters, gitops, journal, memory, settings, workflow
 from kengash_ai.model import (
+    Checked,
     Doc,
     Event,
     ReviewOutput,
@@ -49,23 +50,21 @@ def merge_ticket(ticket_id: str, *, project: str | None, by: str) -> Merged:
     resolved = settings.load(paths, slug)
     queue_wait = calls.step_timeout(resolved) + 60  # another merge may be running checks
     with locked(paths.locks / f"merge-{slug}.lock", timeout=queue_wait):
-        moved = _rebase(paths, slug, ticket_id, entry.base, resolved, by)
-        if moved:
-            _recheck(paths, slug, ticket_id, entry.base, resolved, by)
+        _rebase(paths, slug, ticket_id, entry.base, resolved, by)
+        _recheck(paths, slug, ticket_id, entry.base, resolved, by)
         return _land(paths, slug, ticket_id, entry.path, entry.base, by)
 
 
 def _rebase(
     paths: StorePaths, slug: str, ticket_id: str, base: str, resolved: Settings, by: str
-) -> bool:
-    """Rebase the ticket's branch onto `base` under the locks; True when HEAD moved."""
+) -> None:
+    """Rebase the ticket's branch onto `base` under the locks."""
     with locked(paths.locks / f"{slug}.lock"):
         doc = _mergeable(paths, slug, ticket_id)
         worktree = paths.worktree(slug, ticket_id)
         if not worktree.exists():
-            return False
+            return
         with locked(paths.locks / f"repo-{slug}.lock"):
-            before = gitops.head(worktree)
             conflicts = gitops.rebase(worktree, base)
             if conflicts:
                 files = ", ".join(conflicts)
@@ -76,21 +75,27 @@ def _rebase(
                     reason=f"rebase onto {base} conflicts in {files}",
                 )
                 raise UserError(_send_back(paths, slug, resolved, doc, back, by))
-            return gitops.head(worktree) != before
 
 
 def _recheck(
     paths: StorePaths, slug: str, ticket_id: str, base: str, resolved: Settings, by: str
 ) -> None:
-    """Run the project's checks on the rebased branch, without the project lock; a failure
-    sends the ticket back, checks that cannot run leave it awaiting the merge."""
+    """Run the project's checks on the rebased branch unless they last passed on exactly this
+    commit (`TicketState.checked`), so a retry after checks that never finished tests again;
+    without the project lock. A failure sends the ticket back, checks that cannot run leave
+    it awaiting the merge, a pass is remembered (SP16 spec §3.9)."""
+    worktree = paths.worktree(slug, ticket_id)
     with locked(paths.locks / f"{slug}.lock"):
         ticket = _mergeable(paths, slug, ticket_id).meta
-    if not checks.configured(resolved, ticket):
+        tested = runtime.load_ticket_state(paths, ticket_id).checked
+    if not worktree.exists() or not checks.configured(resolved, ticket):
+        return
+    head = gitops.head(worktree)
+    if tested is not None and tested.commit == head:
         return
     log = paths.logs / f"{ticket_id}-merge.out"
     log.parent.mkdir(parents=True, exist_ok=True)
-    request = checks.request(resolved, paths.worktree(slug, ticket_id), log)
+    request = checks.request(resolved, worktree, log)
     result = adapters.get("shell", runtime=paths.runtime).run(request)
     verdict, summary = checks.outcome(result)
     event = {"type": "checks.end", "project": slug, "ticket": ticket_id, "step": "merge"}
@@ -101,6 +106,10 @@ def _recheck(
         ),
     )
     if verdict == "pass":
+        with locked(paths.locks / f"{slug}.lock"):
+            state = runtime.load_ticket_state(paths, ticket_id)
+            state.checked = Checked(commit=head, step="merge", summary=summary)
+            runtime.save_ticket_state(paths, ticket_id, state)
         return
     if verdict != "fail" or not isinstance(result.output, ReviewOutput):
         raise UserError(f"{ticket_id}: checks could not run after rebase onto {base}: {summary}")

@@ -8,10 +8,10 @@ import pytest
 from conftest import Engine, Events, write_settings
 
 from kengash_ai import gitops
-from kengash_ai.model import Doc, Ticket, UserError
-from kengash_ai.ops import changes, merging, records
+from kengash_ai.model import Checked, Doc, Ticket, TicketState, UserError
+from kengash_ai.ops import changes, checks, merging, records
 from kengash_ai.ops.merging import Merged
-from kengash_ai.store import documents
+from kengash_ai.store import documents, runtime
 from kengash_ai.store.locks import locked
 
 Make = Callable[..., Doc[Ticket]]
@@ -145,11 +145,13 @@ def test_merge_reruns_checks_when_base_moved(
     assert [(e["step"], e["verdict"]) for e in checked] == [("merge", "pass")]
 
 
-def test_merge_skips_checks_when_rebase_moved_nothing(
+def test_merge_skips_checks_on_the_commit_they_passed_on(
     engine: Engine, run_git: Callable[..., str], journal_events: Events
 ) -> None:
     _tested(engine, "false")  # would fail if it ran
     ready_to_merge(engine, run_git)
+    tested = Checked(commit=gitops.head(engine.worktree), step="implement", summary="ok")
+    runtime.save_ticket_state(engine.paths, "7b55e0c1", TicketState(checked=tested))
     merging.merge_ticket("7b55e0c1", project=None, by="user")
     assert not [e for e in journal_events() if e["type"] == "checks.end"]
 
@@ -197,3 +199,22 @@ def test_auto_merge_on_a_dirty_tree_journals_why_it_waits(
     assert status == "in_process/awaiting_merge"
     held = [e for e in journal_events() if e["type"] == "ticket.merge_held"]
     assert [e["reason"] for e in held] == ["main working tree has changes; merge waits for you"]
+
+
+def test_a_merge_retry_after_unfinished_checks_reruns_them(
+    engine: Engine, run_git: Callable[..., str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _tested(engine, "test ! -f boom.txt")
+    ready_to_merge(engine, run_git)
+    tested = Checked(commit=gitops.head(engine.worktree), step="implement", summary="ok")
+    runtime.save_ticket_state(engine.paths, "7b55e0c1", TicketState(checked=tested))
+    _main_moves(engine, "boom.txt")
+    real = checks.outcome
+    monkeypatch.setattr(checks, "outcome", lambda result: ("timeout", "checks timed out (60 s)"))
+    with pytest.raises(UserError, match="checks could not run after rebase onto main"):
+        merging.merge_ticket("7b55e0c1", project=None, by="user")
+    assert engine.ticket().meta.status == "in_process/awaiting_merge"
+    monkeypatch.setattr(checks, "outcome", real)
+    with pytest.raises(UserError, match="checks failed after rebase onto main"):
+        merging.merge_ticket("7b55e0c1", project=None, by="user")  # the rebase moves nothing now
+    assert not (engine.repo / "retry.py").exists()
