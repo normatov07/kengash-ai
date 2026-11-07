@@ -42,10 +42,12 @@ class Progress:
 
 @dataclass(frozen=True)
 class Outcome:
-    """A finished step: its verdict and the fingerprints of its findings."""
+    """A finished step: its verdict, the fingerprints of its findings, and what a work step
+    said it is blocked on (its handoff's `BLOCKED:` line; SP15 spec §3.8)."""
 
     verdict: Verdict
     fingerprints: tuple[str, ...] = ()
+    blocked: str = ""
 
 
 @dataclass(frozen=True)
@@ -136,6 +138,8 @@ def after(settings: Settings, progress: Progress, outcome: Outcome) -> Routed:
     if step is None:
         raise ValueError("after() needs the step that ran")
     now = _count(settings, progress, step, outcome)
+    if outcome.verdict == "pass" and outcome.blocked:
+        return Routed(Halt(NEEDS_APPROVAL, f"blocked: {outcome.blocked}", "blocked"), now)
     if outcome.verdict == "pass":
         following = _next(settings, now, step)
         if following is None:
@@ -153,8 +157,13 @@ def approve(
     tokens: int | None = None,
 ) -> Routed:
     """What the user's approval grants: more loops and the pending recirculation, more
-    tokens, or passing the approval step."""
+    tokens, passing the approval step, or going on past a block: an editing step runs again
+    in the same loop to finish the blocked part, any other step counts as passed."""
     if approval == "approve_step":
+        return after(settings, progress, Outcome("pass"))
+    if approval == "blocked":
+        if progress.step is not None and settings.kind_of(progress.step) == "edit":
+            return before(settings, progress)
         return after(settings, progress, Outcome("pass"))
     if approval == "loop_cap":
         grant = loops or settings.loop_grant

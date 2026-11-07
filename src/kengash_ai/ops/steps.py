@@ -693,6 +693,7 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
         state.sent_back = None  # this step's prompt carried it
         output = result.output
         fingerprints: tuple[str, ...] = ()
+        blocked = ""
         if isinstance(output, ReviewOutput):
             verdict = output.verdict
             failing = output.findings if verdict == "fail" else []
@@ -704,6 +705,7 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
             verdict = "pass"
             if isinstance(output, WorkOutput):
                 doc.sections["Handoff"] = prompts.handoff_text(output.handoff)
+                blocked = prompts.blocked_line(output.handoff)
         tokens = ran.usage.tokens
         ticket.tokens += tokens
         line = prompts.log_line(
@@ -723,7 +725,7 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
         routed = workflow.after(
             resolved,
             lifecycle.progress_for(resolved, ticket, state),
-            workflow.Outcome(verdict, fingerprints),
+            workflow.Outcome(verdict, fingerprints, blocked),
         )
         lifecycle.apply_progress(resolved, doc, state, routed.progress)
         decision = routed.decision

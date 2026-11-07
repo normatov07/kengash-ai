@@ -10,6 +10,7 @@ from conftest import Engine, Events, FakeClis
 from kengash_ai.model import (
     Doc,
     NeedsSetup,
+    SentBack,
     Ticket,
     TicketState,
     UserError,
@@ -157,3 +158,51 @@ def test_resuming_a_stalled_ticket_clears_its_plan_rounds(
     assert controls.run_tickets(["7b55e0c1"], steps=None, by="user").started
     state = runtime.load_ticket_state(store_paths, "7b55e0c1")
     assert (state.plan_rounds, state.streaks) == (0, {})
+
+
+def blocked_at_implement(engine: Engine) -> None:
+    doc = engine.ticket()
+    doc.meta.status, doc.meta.step = "in_process/needs_approval", "implement"
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    runtime.save_ticket_state(engine.paths, "7b55e0c1", TicketState(approval="blocked"))
+
+
+def test_a_blocked_note_reaches_the_next_prompt(
+    engine: Engine, fake_clis: FakeClis, spawned: list[tuple[str, int | None]]
+) -> None:
+    from kengash_ai.ops import steps
+
+    blocked_at_implement(engine)
+    note = "fonts are in raw/fonts"
+    approved = controls.approve_ticket(
+        "7b55e0c1", loops=None, tokens=None, project=None, by="user", note=note
+    )
+    assert approved.status == "in_process/under_implementation"
+    assert engine.ticket().meta.loop == 1
+    assert engine.state().sent_back == SentBack(step="user", summary=note)
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"a.py": "x = 1\n"})
+    steps.run_job("7b55e0c1", steps=1)
+    assert "The user answered: fonts are in raw/fonts." in fake_clis.calls("codex")[0]["argv"][-1]
+
+
+def test_a_blocked_approval_without_a_note_says_the_user_resolved_it(
+    engine: Engine, spawned: list[tuple[str, int | None]]
+) -> None:
+    blocked_at_implement(engine)
+    controls.approve_ticket("7b55e0c1", loops=None, tokens=None, project=None, by="user")
+    assert engine.state().sent_back == SentBack(
+        step="user", summary="the user resolved what you were blocked on"
+    )
+
+
+def test_a_note_on_a_loop_cap_is_refused(
+    engine: Engine, spawned: list[tuple[str, int | None]]
+) -> None:
+    doc = engine.ticket()
+    doc.meta.status, doc.meta.step = "in_process/needs_approval", "implement"
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    runtime.save_ticket_state(engine.paths, "7b55e0c1", TicketState(approval="loop_cap"))
+    with pytest.raises(UserError, match="--note answers a blocked ticket"):
+        controls.approve_ticket(
+            "7b55e0c1", loops=None, tokens=None, project=None, by="user", note="x"
+        )

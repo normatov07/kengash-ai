@@ -790,3 +790,30 @@ def test_a_hook_repair_turn_disables_reuse(engine: Engine, fake_clis: FakeClis) 
     steps.run_job("7b55e0c1", steps=3)
     assert engine.ticket().meta.step == "review_code"
     assert len(runs.read_text().splitlines()) == 2
+
+
+def test_a_blocked_plan_stops_the_ticket(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events
+) -> None:
+    handoff = "Files: a.py\nBLOCKED: the design assets need the user's claude.ai login"
+    fake_clis.queue(
+        "claude", stdout=fake_clis.claude_output({"summary": "Plan", "handoff": handoff})
+    )
+    reason = "blocked: the design assets need the user's claude.ai login"
+    assert steps.run_job("7b55e0c1") == JobEnd("in_process/needs_approval", reason)
+    doc = engine.ticket()
+    assert (doc.meta.step, doc.meta.loop) == ("plan", 1)
+    assert engine.state().approval == "blocked"
+    assert "ticket.needs_approval" in [e["type"] for e in journal_events()]
+
+
+def test_blocked_implement_commits_its_work_first(
+    engine: Engine, fake_clis: FakeClis, run_git: Callable[..., str]
+) -> None:
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    partial = fake_clis.codex_output({"summary": "Partial", "handoff": "BLOCKED: no pyftsubset"})
+    fake_clis.queue("codex", stdout=partial, edits={"a.py": "x = 1\n"})
+    end = steps.run_job("7b55e0c1")
+    assert end == JobEnd("in_process/needs_approval", "blocked: no pyftsubset")
+    assert "a.py" in run_git(engine.worktree, "show", "--name-only", "--format=", "HEAD")
+    assert engine.ticket().meta.step == "implement"

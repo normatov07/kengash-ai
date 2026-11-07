@@ -88,6 +88,20 @@ def sent_back_line(sent: SentBack, *, check: bool) -> str:
     return f"{sent.step} sent this back: {summary}. Fix every Finding below{then}."
 
 
+BLOCKED = "BLOCKED:"
+BLOCKED_CHARS = 160
+
+
+def blocked_line(handoff: str) -> str:
+    """What a handoff says the step is blocked on: the text after `BLOCKED:` on the first
+    line that starts with it; empty when no line does (SP15 spec §3.8)."""
+    for line in handoff.splitlines():
+        text = line.strip()
+        if text.startswith(BLOCKED):
+            return redact(_flat(text.removeprefix(BLOCKED)))[:BLOCKED_CHARS] or "no reason given"
+    return ""
+
+
 def fix_prompt(check_output: str, *, turn: int, turns: int) -> str:
     """A fix turn's prompt: the failing check's headline, then its Check output."""
     headline = check_output.split("\n", 1)[0]

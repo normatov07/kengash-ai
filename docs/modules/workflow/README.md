@@ -10,7 +10,8 @@ Decide what a ticket does next (SP3 spec §6): which steps its workflow runs, wh
 - `blocking_off(settings, workflow)`: a blocking role that is switched off.
 - `before(settings, progress)` → `Routed`: run the step, or halt at the token cap or the approval step; a step whose role was switched off is skipped.
 - `after(settings, progress, outcome)` → `Routed`: route a finished step; the first matching rule of SP3 spec §6 wins.
-- `approve(settings, progress, approval, loops=, tokens=)` → `Routed`: what `kengash approve` grants.
+- `approve(settings, progress, approval, loops=, tokens=)` → `Routed`: what `kengash approve` grants; `blocked` runs an editing step again in the same loop and passes any other step (SP15).
+- `Outcome.blocked`: a passing work step's `BLOCKED:` text; `after()` halts it at `needs_approval` with approval `blocked`, reason `blocked: <text>`, no loop added.
 - `fingerprint(file, issue)`: 12 hex digits naming a finding across loops.
 - Types: `Progress(workflow, hitl, step, loop, loop_max, tokens, tokens_max, streaks, plan_rounds)`, `Outcome(verdict, fingerprints)`, decisions `Run(step, loop)`, `Halt(status, reason, approval)`, `Merge()`, and `Routed(decision, progress)`.
 
@@ -24,6 +25,7 @@ Decide what a ticket does next (SP3 spec §6): which steps its workflow runs, wh
 
 ## Changes
 
+- 2026-11-07: `Outcome.blocked` halts a passing step for the user; `approve(…, "blocked")` (SP15).
 - 2026-11-07: `Approval` gains `blocked` (SP15).
 - 2026-11-06: the token-cap reason reads `token cap: <used:,> of <max:,> used; approve with --tokens N` (SP12 M1).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
