@@ -1,10 +1,12 @@
 """Memory compaction: the compact job (SP3 spec decision 31)."""
 
+import os
 from pathlib import Path
 
 from conftest import COMPACTED, PINNED, Events, FakeClis
 
-from kengash_ai.ops import compaction
+from kengash_ai.model import WorkerRecord
+from kengash_ai.ops import compaction, jobs
 from kengash_ai.store import StorePaths, runtime
 
 
@@ -48,3 +50,29 @@ def test_a_failed_compaction_call_journals_worker_exited(
         False,
         "sign in to claude interactively",
     )
+
+
+def _stand_in_worker(paths: StorePaths) -> None:
+    """This test process plays the compact worker: its record names our live pid."""
+    data = {"id": jobs.COMPACT, "project": "", "pid": os.getpid(), "job": "compact"}
+    runtime.save_worker(paths, WorkerRecord.model_validate(data))
+
+
+def test_a_finished_compaction_drops_its_record_with_its_result(
+    long_memory: Path, store_paths: StorePaths, fake_clis: FakeClis
+) -> None:
+    # CI 2026-11-07: a worker that had journaled its result but not yet exited was joined
+    # by the next `kengash memory compact`, which then waited for nothing: "worker died"
+    _stand_in_worker(store_paths)
+    fake_clis.queue("claude", stdout=fake_clis.claude_output({"text": COMPACTED}))
+    compaction.run_compaction()
+    assert jobs.alive(store_paths, jobs.COMPACT) is None
+
+
+def test_a_failed_compaction_drops_its_record_with_its_end(
+    long_memory: Path, store_paths: StorePaths, fake_clis: FakeClis
+) -> None:
+    _stand_in_worker(store_paths)
+    fake_clis.queue("claude", fixture="claude/auth_error.json")
+    compaction.run_compaction()
+    assert jobs.alive(store_paths, jobs.COMPACT) is None

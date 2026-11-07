@@ -2,6 +2,7 @@
 `memory add`, and `kengash memory compact`, which waits for it."""
 
 import os
+from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -32,8 +33,10 @@ def compact_memory(*, timeout: float, poll_s: float = 0.5) -> memory.Compaction:
     if not paths.memory.is_dir():
         raise NeedsSetup("no store yet; run: kengash init")
     provider, _ = split_cli(settings.load(paths).memory.compactor)
-    cursor = journal.end(paths)  # before the job starts, so its end cannot slip past
-    with locked(paths.locks / "compact.lock"):
+    with _lock(paths):
+        # under the lock a worker is either running or has ended and dropped its record
+        # (`_ended_here`), so the cursor sits before the end of the job this call waits for
+        cursor = journal.end(paths)
         if jobs.alive(paths, jobs.COMPACT) is None:
             problem = agents.problem(provider, agents.detector(paths))
             if problem is not None:
@@ -58,7 +61,7 @@ def compact_memory(*, timeout: float, poll_s: float = 0.5) -> memory.Compaction:
 
 def start_background(paths: StorePaths) -> bool:
     """Start the compaction job unless it runs already; True once it runs."""
-    with locked(paths.locks / "compact.lock"):
+    with _lock(paths):
         if jobs.alive(paths, jobs.COMPACT) is None:
             jobs.start(paths, JOB, jobs.COMPACT, "", [JOB])
     return True
@@ -124,7 +127,9 @@ def run_compaction() -> str:
         },
         "duration_s": result.duration_s,
     }
-    outcome = memory.apply_compaction(paths, snapshot, output.text, cap=cap, detail=detail)
+    with _lock(paths):
+        outcome = memory.apply_compaction(paths, snapshot, output.text, cap=cap, detail=detail)
+        jobs.forget(jobs.COMPACT)
     if outcome.accepted:
         return f"MEMORY.md {outcome.before} → {outcome.after} lines"
     return f"MEMORY.md kept ({outcome.before} lines): {outcome.reason}"
@@ -144,8 +149,17 @@ def _ended(event: Event) -> bool:
 
 
 def _exit(paths: StorePaths, reason: str) -> str:
-    journal.append(paths, jobs.exited(JOB, jobs.COMPACT, None, reason))
+    with _lock(paths):
+        journal.append(paths, jobs.exited(JOB, jobs.COMPACT, None, reason))
+        jobs.forget(jobs.COMPACT)
     return f"compaction ended: {reason}"
+
+
+def _lock(paths: StorePaths) -> AbstractContextManager[None]:
+    """Orders a job's start against its end: the worker journals its end and drops its
+    record under this lock, so a caller never joins a worker that has already ended
+    (CI 2026-11-07: the next `memory compact` joined one and reported "worker died")."""
+    return locked(paths.locks / "compact.lock")
 
 
 def _next_log(paths: StorePaths) -> Path:
