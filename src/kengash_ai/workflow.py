@@ -98,6 +98,16 @@ def first_step(settings: Settings, workflow: str, *, hitl: bool) -> str | None:
     return steps[0] if steps else None
 
 
+def edit_phase(settings: Settings, workflow: str, step: str | None, *, hitl: bool) -> bool:
+    """`step` is in the workflow's editing phase: its first `edit`-kind step or any step after
+    it (SP16 spec §3.7); False for an unknown step or a workflow without an edit step."""
+    if step is None or workflow not in settings.workflows:
+        return False
+    order = steps_for(settings, workflow, hitl=hitl)
+    edits = [index for index, name in enumerate(order) if settings.kind_of(name) == "edit"]
+    return bool(edits) and step in order and order.index(step) >= edits[0]
+
+
 def blocking_off(settings: Settings, workflow: str) -> str | None:
     """The first role of the workflow that is switched off although it is blocking."""
     for step in settings.workflows[workflow].steps:

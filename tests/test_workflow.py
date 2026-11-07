@@ -258,3 +258,25 @@ def test_approving_a_blocked_edit_step_runs_it_again_in_the_same_loop() -> None:
 
 def test_approving_a_blocked_plan_moves_on() -> None:
     assert approve(settings(), progress("plan"), "blocked").decision == Run("review_plan", 1)
+
+
+def test_edit_phase_starts_at_first_edit_step() -> None:
+    from kengash_ai.workflow import edit_phase
+
+    resolved = settings()
+    flags = [
+        edit_phase(resolved, "standard", step, hitl=False)
+        for step in WORKFLOWS["standard"]["steps"]
+    ]
+    assert flags == [False, False, True, True]
+    assert edit_phase(resolved, "standard", "approve", hitl=True) is False
+    assert edit_phase(resolved, "standard", None, hitl=False) is False
+    assert edit_phase(resolved, "nope", "implement", hitl=False) is False
+
+
+def test_edit_phase_false_without_edit_step() -> None:
+    from kengash_ai.workflow import edit_phase
+
+    reviews = {"steps": ["plan", "review_plan"], "on_fail": {"review_plan": "plan"}}
+    resolved = settings(workflows=WORKFLOWS | {"reviews": reviews})
+    assert edit_phase(resolved, "reviews", "review_plan", hitl=False) is False
