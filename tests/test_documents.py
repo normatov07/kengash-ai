@@ -63,3 +63,16 @@ def test_check_document_reports_problems(tmp_path: Path, make_ticket: MakeTicket
     problem = documents.check_document(moved, "ticket")
     assert problem is not None
     assert problem.startswith("invalid id: ")
+
+
+def test_check_output_is_saved_between_findings_and_log(
+    tmp_path: Path, make_ticket: MakeTicket
+) -> None:
+    project = ProjectPaths(tmp_path)
+    doc = make_ticket()
+    doc.sections["Findings"] = "- high · -:0 · `x` exit 1: error · fix"
+    doc.sections["Check output"] = "`x` exit 1: error\n```text\nerror\n```"
+    path = documents.save_ticket(project, doc)
+    text = path.read_text(encoding="utf-8")
+    assert text.index("## Findings") < text.index("## Check output") < text.index("## Log")
+    assert documents.load_ticket(path).sections["Check output"] == doc.sections["Check output"]

@@ -1,14 +1,16 @@
 """The step loop: one ticket through its workflow with fake CLIs (SP3 spec §5)."""
 
 import json
+import os
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 from conftest import Engine, Events, FakeClis, write_settings
 
-from kengash_ai.model import Running, TicketState
+from kengash_ai.model import Running, SentBack, StepRequest, StepResult, TicketState
 from kengash_ai.ops import calls, prompts, steps
 from kengash_ai.ops.steps import JobEnd
 from kengash_ai.store import StorePaths, documents, runtime
@@ -543,3 +545,397 @@ def test_a_failed_hook_repair_names_the_worktree_and_keeps_the_session(
     end = steps.run_job("7b55e0c1", steps=2)
     assert end.reason.endswith(f"; work kept in {engine.worktree} (1 files changed)")
     assert engine.ticket().meta.sessions["implementer"].id == "th-9"
+
+
+def checks_settings(test_cmd: str, *, turns: int | None = None, run_tests: bool = True) -> str:
+    """Settings with `test_cmd`, the shell test-runner on, and run_tests after implement."""
+    if run_tests:
+        flow = "[plan, implement, run_tests, review_code], on_fail: {run_tests: implement, "
+    else:
+        flow = "[plan, implement, review_code], on_fail: {"
+    text = (
+        f"project.test_cmd: {json.dumps(test_cmd)}\n"
+        "agents:\n  test-runner: {on: true, cli: shell, skill: run-tests}\n"
+        f"workflows:\n  simple: {{steps: {flow}review_code: implement}}}}\n"
+    )
+    return text + (f"checks.turns: {turns}\n" if turns is not None else "")
+
+
+BOOM = "echo 'error: boom' && exit 1"
+BOOM_HEADLINE = f"`{BOOM}` exit 1: error: boom"
+
+
+def test_a_failing_check_writes_check_output_and_sends_it_back(
+    engine: Engine, fake_clis: FakeClis
+) -> None:
+    write_settings(engine.paths, checks_settings(BOOM, turns=0))
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "retries = 3\n"})
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "retries = 4\n"})
+    steps.run_job("7b55e0c1", steps=3)
+    doc = engine.ticket()
+    assert (doc.meta.step, doc.meta.loop) == ("implement", 2)
+    assert doc.sections["Findings"].startswith(f"- high · -:0 · {BOOM_HEADLINE} · ")
+    assert doc.sections["Check output"].startswith(f"{BOOM_HEADLINE}\n```text\n")
+    assert engine.state().sent_back == SentBack(step="run_tests", summary="tests failed (exit 1)")
+    doc.meta.status = "in_process/under_implementation"  # what `kengash run` does
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    steps.run_job("7b55e0c1", steps=1)
+    prompt = fake_clis.calls("codex")[1]["argv"][-1]
+    assert "run_tests sent this back: tests failed (exit 1). Fix every Finding below" in prompt
+    assert "## Check output" in prompt
+
+
+def test_a_passing_check_clears_check_output(engine: Engine, fake_clis: FakeClis) -> None:
+    write_settings(
+        engine.paths,
+        checks_settings("test -f fixed.txt || { echo 'error: boom'; exit 1; }", turns=0),
+    )
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "r = 3\n"})
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"fixed.txt": "ok\n"})
+    steps.run_job("7b55e0c1", steps=5)
+    doc = engine.ticket()
+    assert doc.meta.step == "review_code"
+    assert doc.sections.get("Check output", "") == ""
+
+
+def test_the_next_step_consumes_sent_back(engine: Engine, fake_clis: FakeClis) -> None:
+    write_settings(engine.paths, checks_settings(BOOM, turns=0))
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "r = 3\n"})
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "r = 4\n"})
+    steps.run_job("7b55e0c1", steps=4)
+    assert engine.ticket().meta.step == "run_tests"
+    assert engine.state().sent_back is None
+
+
+FIXED = "test -f fixed.txt || { echo 'error: fixed.txt missing'; exit 1; }"
+
+
+def check_runs(events: Events) -> list[tuple[int, str]]:
+    return [(e["turn"], e["verdict"]) for e in events() if e["type"] == "checks.end"]
+
+
+def queue_plan_and_implement(fake_clis: FakeClis, *edits: dict[str, str]) -> None:
+    """The plan reply, then one implementer reply per `edits` (first turn, then fix turns)."""
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    for change in edits:
+        fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits=change)
+
+
+def test_checks_pass_first_time_with_no_fix_turn(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events
+) -> None:
+    write_settings(engine.paths, checks_settings(FIXED))
+    queue_plan_and_implement(fake_clis, {"fixed.txt": "ok\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    assert check_runs(journal_events) == [(0, "pass")]
+    log = engine.ticket().sections["Log"]
+    assert "· checks · kengash · shell/default · pass · 0 · tests passed" in log
+    assert len(fake_clis.calls("codex")) == 1
+
+
+def test_a_failing_check_gets_a_fix_turn_in_the_same_loop(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events, run_git: Callable[..., str]
+) -> None:
+    write_settings(engine.paths, checks_settings(FIXED))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"}, {"fixed.txt": "ok\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    _, fix = fake_clis.calls("codex")
+    assert fix["argv"][:2] == ["exec", "resume"]
+    assert "fix turn 1 of 2" in fix["argv"][-1] and "error: fixed.txt missing" in fix["argv"][-1]
+    assert check_runs(journal_events) == [(0, "fail"), (1, "pass")]
+    doc = engine.ticket()
+    assert (doc.meta.step, doc.meta.loop) == ("run_tests", 1)
+    assert doc.sections.get("Check output", "") == ""
+    files = run_git(engine.worktree, "show", "--name-only", "--format=", "HEAD").split()
+    assert {"a.txt", "fixed.txt"} <= set(files)
+
+
+def test_when_fix_turns_run_out_run_tests_sends_it_back(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events
+) -> None:
+    write_settings(engine.paths, checks_settings(FIXED, turns=1))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"}, {"b.txt": "b\n"})
+    steps.run_job("7b55e0c1", steps=3)
+    doc = engine.ticket()
+    assert (doc.meta.step, doc.meta.loop) == ("implement", 2)
+    assert "error: fixed.txt missing" in doc.sections["Findings"]
+    assert check_runs(journal_events)[:2] == [(0, "fail"), (1, "fail")]
+
+
+@pytest.mark.parametrize(
+    "settings_text", [checks_settings(FIXED, run_tests=False), checks_settings(FIXED, turns=0)]
+)
+def test_no_check_step_or_zero_turns_means_no_in_step_checks(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events, settings_text: str
+) -> None:
+    write_settings(engine.paths, settings_text)
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    assert check_runs(journal_events) == []
+    assert len(fake_clis.calls("codex")) == 1
+
+
+def test_a_network_error_in_a_fix_turn_resumes_once(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events
+) -> None:
+    write_settings(engine.paths, checks_settings(FIXED))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"})
+    fake_clis.queue("codex", stdout=_codex_cut(), exit=1)
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"fixed.txt": "ok\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    assert fake_clis.calls("codex")[2]["argv"][-1] == prompts.NETWORK_PROMPT
+    assert check_runs(journal_events) == [(0, "fail"), (1, "pass")]
+
+
+def test_an_invalid_fix_reply_keeps_the_last_valid_one(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events
+) -> None:
+    write_settings(engine.paths, checks_settings(FIXED))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"})
+    fake_clis.queue("codex", stdout=fake_clis.codex_output({"summary": "s"}))
+    steps.run_job("7b55e0c1", steps=2)
+    doc = engine.ticket()
+    assert doc.meta.status != "in_process/failed" and doc.meta.step == "run_tests"
+    handoff = fake_clis.fixture("codex/work_resume.jsonl")
+    assert doc.sections["Handoff"] and doc.sections["Handoff"] in handoff
+    assert check_runs(journal_events) == [(0, "fail")]
+
+
+def test_a_hanging_check_ends_the_in_step_checks(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(calls, "step_timeout", lambda resolved: 1)
+    write_settings(engine.paths, checks_settings("sleep 5"))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    assert check_runs(journal_events) == [(0, "timeout")]
+    assert len(fake_clis.calls("codex")) == 1
+
+
+def test_a_ticket_moved_during_checks_gets_no_fix_turn(
+    engine: Engine, fake_clis: FakeClis, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from kengash_ai.adapters.shell import Shell
+    from kengash_ai.ops import controls
+
+    real = Shell.run
+
+    def park_then_fail(self: Shell, req: StepRequest) -> StepResult:
+        controls.park_ticket("7b55e0c1", "user took it", project=None, by="test")
+        return real(self, req)
+
+    monkeypatch.setattr(Shell, "run", park_then_fail)
+    write_settings(engine.paths, checks_settings(FIXED))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    assert len(fake_clis.calls("codex")) == 1
+    assert engine.ticket().meta.status == "in_queue/parked"
+
+
+def counted(engine: Engine) -> tuple[str, Path]:
+    """FIXED that also counts its runs in a file outside the worktree."""
+    runs = engine.repo.parent / "runs"
+    return f"echo x >> {runs}; {FIXED}", runs
+
+
+def test_run_tests_reuses_a_passing_in_step_result(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events
+) -> None:
+    command, runs = counted(engine)
+    write_settings(engine.paths, checks_settings(command))
+    queue_plan_and_implement(fake_clis, {"fixed.txt": "ok\n"})
+    steps.run_job("7b55e0c1", steps=3)
+    assert len(runs.read_text().splitlines()) == 1
+    assert engine.ticket().meta.step == "review_code"
+    assert "· run_tests · test-runner · shell/default · pass · 0" in engine.ticket().sections["Log"]
+    [ended] = [e for e in journal_events() if e["type"] == "step.end" and e["step"] == "run_tests"]
+    assert ended["duration_s"] == 0
+
+
+@pytest.mark.parametrize("change", ["dirty", "commit"])
+def test_run_tests_reruns_on_a_dirty_worktree_or_a_new_commit(
+    engine: Engine, fake_clis: FakeClis, run_git: Callable[..., str], change: str
+) -> None:
+    command, runs = counted(engine)
+    write_settings(engine.paths, checks_settings(command))
+    queue_plan_and_implement(fake_clis, {"fixed.txt": "ok\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    (engine.worktree / "extra.txt").write_text("x\n", encoding="utf-8")
+    if change == "commit":
+        run_git(engine.worktree, "add", "extra.txt")
+        run_git(engine.worktree, "commit", "-qm", "by hand")
+    doc = engine.ticket()
+    doc.meta.status = "in_process/under_test"
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    steps.run_job("7b55e0c1", steps=1)
+    assert len(runs.read_text().splitlines()) == 2
+
+
+def test_a_failing_in_step_result_is_never_reused(engine: Engine, fake_clis: FakeClis) -> None:
+    command, runs = counted(engine)
+    write_settings(engine.paths, checks_settings(command, turns=1))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"}, {"b.txt": "b\n"})
+    steps.run_job("7b55e0c1", steps=3)
+    assert len(runs.read_text().splitlines()) == 3  # turn 0, turn 1, then run_tests
+
+
+def test_a_hook_repair_turn_disables_reuse(engine: Engine, fake_clis: FakeClis) -> None:
+    hook = engine.repo / ".git" / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\ntest -f hooked || { echo 'lint: add hooked'; exit 1; }\n")
+    hook.chmod(0o755)
+    command, runs = counted(engine)
+    write_settings(engine.paths, checks_settings(command))
+    queue_plan_and_implement(fake_clis, {"fixed.txt": "ok\n"}, {"hooked": "yes\n"})
+    steps.run_job("7b55e0c1", steps=3)
+    assert engine.ticket().meta.step == "review_code"
+    assert len(runs.read_text().splitlines()) == 2
+
+
+def test_a_blocked_plan_stops_the_ticket(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events
+) -> None:
+    handoff = "Files: a.py\nBLOCKED: the design assets need the user's claude.ai login"
+    fake_clis.queue(
+        "claude", stdout=fake_clis.claude_output({"summary": "Plan", "handoff": handoff})
+    )
+    reason = "blocked: the design assets need the user's claude.ai login"
+    assert steps.run_job("7b55e0c1") == JobEnd("in_process/needs_approval", reason)
+    doc = engine.ticket()
+    assert (doc.meta.step, doc.meta.loop) == ("plan", 1)
+    assert engine.state().approval == "blocked"
+    assert "ticket.needs_approval" in [e["type"] for e in journal_events()]
+
+
+def test_blocked_implement_commits_its_work_first(
+    engine: Engine, fake_clis: FakeClis, run_git: Callable[..., str]
+) -> None:
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    partial = fake_clis.codex_output({"summary": "Partial", "handoff": "BLOCKED: no pyftsubset"})
+    fake_clis.queue("codex", stdout=partial, edits={"a.py": "x = 1\n"})
+    end = steps.run_job("7b55e0c1")
+    assert end == JobEnd("in_process/needs_approval", "blocked: no pyftsubset")
+    assert "a.py" in run_git(engine.worktree, "show", "--name-only", "--format=", "HEAD")
+    assert engine.ticket().meta.step == "implement"
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [{"stdout": "", "stderr": "segfault", "exit": 1}, {"fixture": "codex/usage_limit.jsonl"}],
+)
+def test_a_failed_fix_turn_keeps_the_step(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events, reply: dict[str, Any]
+) -> None:
+    # review finding: fix turns only add chances; an error in one never fails the step
+    write_settings(engine.paths, checks_settings(FIXED, turns=1) + "fallback_on_error: false\n")
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"})
+    fake_clis.queue("codex", **reply)
+    steps.run_job("7b55e0c1", steps=2)
+    doc = engine.ticket()
+    assert doc.meta.status != "in_process/failed" and doc.meta.step == "run_tests"
+    assert doc.sections["Handoff"] == "retry.py retries 3 times with exponential backoff."
+    assert check_runs(journal_events) == [(0, "fail")]
+
+
+def test_a_park_during_checks_stops_the_fix_turns(
+    engine: Engine, fake_clis: FakeClis, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # review finding: with a live worker, park only sets a flag
+    from kengash_ai.adapters.shell import Shell
+    from kengash_ai.model import WorkerRecord
+    from kengash_ai.ops import controls
+
+    runtime.save_worker(
+        engine.paths, WorkerRecord(id="7b55e0c1", project=engine.slug, pid=os.getpid())
+    )
+    real = Shell.run
+
+    def park_then_run(self: Shell, req: StepRequest) -> StepResult:
+        assert controls.park_ticket("7b55e0c1", "user took it", project=None, by="t").deferred
+        return real(self, req)
+
+    monkeypatch.setattr(Shell, "run", park_then_run)
+    write_settings(engine.paths, checks_settings(FIXED))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"})
+    steps.run_job("7b55e0c1", steps=3)
+    assert len(fake_clis.calls("codex")) == 1
+    assert engine.ticket().meta.status == "in_queue/parked"
+
+
+def test_a_blocked_reply_skips_the_checks(
+    engine: Engine, fake_clis: FakeClis, journal_events: Events
+) -> None:
+    write_settings(engine.paths, checks_settings(FIXED))
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    blocked = fake_clis.codex_output({"summary": "Partial", "handoff": "BLOCKED: no assets"})
+    fake_clis.queue("codex", stdout=blocked)
+    assert steps.run_job("7b55e0c1").status == "in_process/needs_approval"
+    assert check_runs(journal_events) == []
+
+
+def test_a_check_failure_at_the_loop_cap_still_says_why(
+    engine: Engine, fake_clis: FakeClis
+) -> None:
+    write_settings(engine.paths, checks_settings(BOOM, turns=0))
+    doc = engine.ticket()
+    doc.meta.loop_max = 1
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"})
+    assert steps.run_job("7b55e0c1").status == "in_process/needs_approval"
+    assert engine.state().sent_back == SentBack(step="run_tests", summary="tests failed (exit 1)")
+
+
+@pytest.mark.parametrize(("turns", "budget"), [(0, 3), (1, 2)])
+def test_check_output_is_redacted(
+    engine: Engine, fake_clis: FakeClis, turns: int, budget: int
+) -> None:
+    leaky = "echo 'error: token=abc123def456ghi789'; exit 1"
+    write_settings(engine.paths, checks_settings(leaky, turns=turns))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"}, {"b.txt": "b\n"})
+    steps.run_job("7b55e0c1", steps=budget)
+    output = engine.ticket().sections["Check output"]
+    assert "abc123def456ghi789" not in output and "[REDACTED]" in output
+
+
+def test_files_the_checks_create_are_not_committed(
+    engine: Engine, fake_clis: FakeClis, run_git: Callable[..., str]
+) -> None:
+    golden = "mkdir -p test/failures && echo png > test/failures/golden.png; "
+    write_settings(engine.paths, checks_settings(golden + FIXED))
+    queue_plan_and_implement(fake_clis, {"a.txt": "a\n"}, {"fixed.txt": "ok\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    files = run_git(engine.worktree, "show", "--name-only", "--format=", "HEAD").split()
+    assert "fixed.txt" in files and "test/failures/golden.png" not in files
+    assert not (engine.worktree / "test" / "failures" / "golden.png").exists()
+
+
+def test_the_implementer_session_survives_a_check_run(
+    engine: Engine, fake_clis: FakeClis, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # review finding: a worker killed during checks must not lose the new session
+    from kengash_ai import gitops
+    from kengash_ai.adapters.shell import Shell
+
+    sessions: list[Any] = []
+    roles: list[str] = []
+    real_run, real_commit = Shell.run, gitops.commit_all
+
+    def spy_run(self: Shell, req: StepRequest) -> StepResult:
+        sessions.append(engine.ticket().meta.sessions.get("implementer"))
+        return real_run(self, req)
+
+    def spy_commit(*args: Any, **kwargs: Any) -> Any:
+        running = engine.state().running
+        roles.append(running.role if running else "")
+        return real_commit(*args, **kwargs)
+
+    monkeypatch.setattr(Shell, "run", spy_run)
+    monkeypatch.setattr(gitops, "commit_all", spy_commit)
+    write_settings(engine.paths, checks_settings(FIXED))
+    queue_plan_and_implement(fake_clis, {"fixed.txt": "ok\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    assert sessions and sessions[0] is not None
+    assert sessions[0].id == "0199a213-81c0-7800-8aa1-bbab2a035a53"
+    assert roles == ["implementer"]

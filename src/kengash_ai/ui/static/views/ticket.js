@@ -178,6 +178,10 @@ function timelineTab(data) {
   return html`<div class="t-row"><h2 class="t-h" style="margin: 0">Step timeline</h2><span class="faint" style="font-size: 12px">${data.timeline.length} events · ${loops} ${loops === 1 ? "loop" : "loops"} · ${shortTime(seconds)} of session time</span></div>
     ${data.timeline.length
       ? html`<div class="tl">${data.timeline.map((r, i) => {
+          if (r.kind === "checks.end") {
+            const fail = r.verdict !== "pass";
+            return html`<div class="tl-row ${i % 2 ? "" : "alt"}"><span class="tl-time mono">${clock(r.ts).slice(0, 5)}</span><span class="tl-step" style="color: var(--faint)">checks</span><span class="tl-who mono muted ellipsis">in ${r.step.replaceAll("_", " ")}</span><span class="tl-text ${fail ? "danger-text" : "ok-text"}">${r.note}</span><span class="tl-dur mono faint">${r.duration_s != null ? `${Math.round(r.duration_s)}s` : ""}</span></div>`;
+          }
           if (r.kind !== "step.end") {
             const red = ["ticket.needs_approval", "ticket.stalled", "ticket.failed"].includes(r.kind);
             return html`<div class="tl-row ${red ? "gate" : i % 2 ? "" : "alt"}"><span class="tl-time mono">${clock(r.ts).slice(0, 5)}</span><span class="tl-step" style="color: ${red ? "var(--danger)" : "var(--faint)"}">${r.kind.replace("ticket.", "").replaceAll("_", " ")}</span><span class="tl-who mono muted"></span><span class="tl-text ${red ? "danger-text" : "muted"}">${r.note}</span><span class="tl-dur mono faint"></span></div>`;

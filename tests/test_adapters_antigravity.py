@@ -236,3 +236,58 @@ def test_no_result_classifies_the_clis_own_lines(fake_clis: FakeClis, tmp_path: 
     fake_clis.queue("agy", stdout=_stream(INIT) + f"Error: {RESET}\n", exit=1)
     result = Antigravity().run(_request(tmp_path, prompt="p", output="work"))
     assert (result.error, result.detail) == ("network", f"Error: {RESET}")
+
+
+FLUTTER_LINE = (
+    "You may run only these terminal commands, each on its own with no &&, ;, pipes or "
+    "redirects: `flutter test`, `flutter analyze`, `git status`, `git diff`, `git log`, "
+    "`git show`. Any other command ends your turn; read and edit files with your file tools."
+)
+
+
+def _edit(tmp_path: Path, **fields: Any) -> list[str]:
+    base = {"prompt": "Implement", "output": "work", "profile": "edit_worktree"}
+    return Antigravity().command(_request(tmp_path, **(base | fields)))
+
+
+def test_edit_steps_may_run_the_checks_and_git_reads(tmp_path: Path) -> None:
+    argv = _edit(tmp_path, test_cmd="flutter test", lint_cmd="flutter analyze")
+    allow = json.loads(argv[argv.index("--settings") + 1])["permissions"]["allow"]
+    assert allow == [
+        "read_file(*)",
+        "command(flutter test)",
+        "command(flutter analyze)",
+        "command(git status)",
+        "command(git diff)",
+        "command(git log)",
+        "command(git show)",
+    ]
+    assert argv[2] == f"Implement\n\n{FLUTTER_LINE}"
+
+
+def test_operator_commands_are_left_out(tmp_path: Path) -> None:
+    argv = _edit(tmp_path, test_cmd="uv run pytest && echo done", lint_cmd="ruff check")
+    allow = json.loads(argv[argv.index("--settings") + 1])["permissions"]["allow"]
+    assert "command(ruff check)" in allow
+    assert not any("pytest" in rule for rule in allow)
+    assert "`ruff check`" in argv[2] and "pytest" not in argv[2]
+
+
+def test_without_runnable_commands_the_old_line_stays(tmp_path: Path) -> None:
+    argv = _edit(tmp_path, test_cmd="make test | tee log")
+    assert argv[2] == f"Implement\n\n{EDIT_LINE}"
+    assert json.loads(argv[argv.index("--settings") + 1]) == {
+        "permissions": {"allow": ["read_file(*)"]}
+    }
+
+
+def test_resumed_edit_turns_carry_the_line_too(tmp_path: Path) -> None:
+    argv = _edit(
+        tmp_path,
+        prompt="Loop 2",
+        resume=True,
+        session_id="c-1",
+        test_cmd="flutter test",
+        lint_cmd="flutter analyze",
+    )
+    assert argv[2] == f"Loop 2\n\n{FLUTTER_LINE}"

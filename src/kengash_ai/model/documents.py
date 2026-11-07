@@ -25,7 +25,7 @@ PLAN_SECTIONS = (
     "Milestones",
     "Review log",
 )
-TICKET_SECTIONS = ("Scope", "Acceptance", "Handoff", "Findings", "Log")
+TICKET_SECTIONS = ("Scope", "Acceptance", "Handoff", "Findings", "Check output", "Log")
 _STATUS = re.compile(r"^(in_queue|in_process|done)/[a-z_]+$")
 
 # in_process also takes the step names of SETTINGS `status.names`.

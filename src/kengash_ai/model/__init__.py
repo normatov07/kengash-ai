@@ -26,11 +26,13 @@ from kengash_ai.model.evals import EvalScenario, Expect, RecordsExpect, SetupSte
 from kengash_ai.model.events import Event
 from kengash_ai.model.registry import ProjectEntry, Registry
 from kengash_ai.model.runtime import (
+    Checked,
     Claims,
     ConductorPing,
     JournalCursor,
     LoopLease,
     Running,
+    SentBack,
     SlotEntry,
     SlotTable,
     TicketState,
@@ -87,6 +89,7 @@ __all__ = [
     "SUB_STATUSES",
     "TICKET_SECTIONS",
     "Agent",
+    "Checked",
     "Claims",
     "CompactOutput",
     "ConductorPing",
@@ -121,6 +124,7 @@ __all__ = [
     "Review",
     "ReviewOutput",
     "Running",
+    "SentBack",
     "SessionRef",
     "Settings",
     "SetupStep",

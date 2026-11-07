@@ -401,3 +401,17 @@ def test_show_unknown_skill() -> None:
     with pytest.raises(UserError) as caught:
         skills.show("nope", agent="claude", cli_name="kengash")
     assert str(caught.value) == "unknown skill: nope; known: grill, loop, memory, plan, ticket, ui"
+
+
+def test_role_skills_carry_the_sp15_rules() -> None:
+    implement = (skills.roles_dir() / "implement" / "SKILL.md").read_text(encoding="utf-8")
+    for phrase in ("Checks block", "checks not run", "Check output", "BLOCKED:", "sent this back"):
+        assert phrase in implement, phrase
+    plan = (skills.roles_dir() / "plan" / "SKILL.md").read_text(encoding="utf-8")
+    assert "BLOCKED:" in plan
+    for text in (implement, plan):  # a template line invites "BLOCKED: none"
+        assert not any(line.startswith("BLOCKED: <") for line in text.splitlines())
+    events = (Path(__file__).parents[1] / "skills" / "loop" / "references" / "events.md").read_text(
+        encoding="utf-8"
+    )
+    assert "--note" in events and "blocked" in events

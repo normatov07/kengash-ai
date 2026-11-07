@@ -12,13 +12,14 @@ from kengash_ai.model import (
     Folder,
     NeedsSetup,
     ProviderStatus,
+    SentBack,
     SlotEntry,
     Ticket,
     UserError,
     WorkerRecord,
     utc_now,
 )
-from kengash_ai.ops import agents, jobs, lifecycle, merging, records, slots, steps, watch
+from kengash_ai.ops import agents, jobs, lifecycle, merging, prompts, records, slots, steps, watch
 from kengash_ai.store import documents, runtime, storegit
 from kengash_ai.store.locks import locked
 from kengash_ai.store.paths import StorePaths
@@ -117,10 +118,20 @@ def spawn_worker(paths: StorePaths, slug: str, ticket_id: str, steps: int | None
     return jobs.spawn(paths, args, ticket_id)
 
 
+RESOLVED = "the user resolved what you were blocked on"
+
+
 def approve_ticket(
-    ticket_id: str, *, loops: int | None, tokens: int | None, project: str | None, by: str
+    ticket_id: str,
+    *,
+    loops: int | None,
+    tokens: int | None,
+    project: str | None,
+    by: str,
+    note: str | None = None,
 ) -> Approved:
-    """Open an approval gate: more loops, more tokens, or the approve step passed."""
+    """Open an approval gate: more loops, more tokens, the approve step passed, or a blocked
+    step going on with the user's `note` in its next prompt (SP15 spec §3.8)."""
     paths = StorePaths.default()
     slug, _ = records.locate_ticket(paths, ticket_id, project)
     resolved = settings.load(paths, slug)
@@ -131,6 +142,16 @@ def approve_ticket(
         approval = state.approval
         if ticket.status != workflow.NEEDS_APPROVAL or approval is None:
             raise UserError(f"{ticket_id} is not waiting for approval")
+        if note is not None and approval != "blocked":
+            raise UserError("--note answers a blocked ticket")
+        answer: str | None = None
+        if approval == "blocked":
+            answer = records.one_line(note, "note") if note is not None else RESOLVED
+            state.sent_back = SentBack(step="user", summary=answer)
+            said = prompts.sent_back_line(state.sent_back, check=False)
+            # the Handoff keeps the answer for every later step, not only the next one
+            handoff = doc.sections.get("Handoff", "").rstrip("\n")
+            doc.sections["Handoff"] = f"{handoff}\n{said}" if handoff else said
         progress = lifecycle.progress_for(resolved, ticket, state)
         routed = workflow.approve(resolved, progress, approval, loops=loops, tokens=tokens)
         lifecycle.apply_progress(resolved, doc, state, routed.progress)
@@ -158,6 +179,7 @@ def approve_ticket(
             approval=approval,
             loops=loops,
             tokens=tokens,
+            note=answer,
             status=ticket.status,
             by=by,
         )

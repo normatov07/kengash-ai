@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 
 from kengash_ai import gitops
 from kengash_ai.cli import app
-from kengash_ai.model import SessionRef, WorkerRecord
+from kengash_ai.model import SessionRef, TicketState, WorkerRecord
 from kengash_ai.ops import controls
 from kengash_ai.store import StorePaths, documents, runtime
 
@@ -85,3 +85,14 @@ def test_pause_takes_a_project_folder(registered_repo: Path, store_paths: StoreP
     pause = runtime.pause_state(store_paths)
     assert pause.covers("payments-api") and not pause.everything
     assert pause.projects == frozenset({"payments-api"})
+
+
+def test_approve_takes_a_note(engine: Engine) -> None:
+    doc = engine.ticket()
+    doc.meta.status, doc.meta.step = "in_process/needs_approval", "implement"
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    runtime.save_ticket_state(engine.paths, "7b55e0c1", TicketState(approval="blocked"))
+    result = runner.invoke(app, ["approve", "7b55e0c1", "--note", "fonts are in raw/fonts"])
+    assert result.exit_code == 0, result.output
+    sent = runtime.load_ticket_state(engine.paths, "7b55e0c1").sent_back
+    assert sent is not None and sent.summary == "fonts are in raw/fonts"

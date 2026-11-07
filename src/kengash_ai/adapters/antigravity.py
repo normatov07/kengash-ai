@@ -3,6 +3,7 @@
 
 import json
 import re
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -31,10 +32,15 @@ EDIT_LINE = (
     "Terminal commands are not available in this step: read and edit files with your "
     "file tools only, and do not run tests; review steps check the result."
 )
+# SP15: editing steps may run the project's checks and read-only git. agy matches an allow
+# rule `command(<prefix>)` against each part of a line, so a check holding a shell operator
+# cannot be allowed and is left out.
+GIT_READS = ("git status", "git diff", "git log", "git show")
+OPERATORS = ("&&", "||", ";", "|", ">", "<", "`", "$(")
 MODE = {"read_only": "plan", "edit_worktree": "accept-edits"}
 # Headless agy auto-denies a read it cannot prompt for and ends the turn (chess-samurai run of
 # 2026-11-06, call 3); its own message names this allow-rule. Reads only (SP12 spec §5.3).
-READ_ALLOW = '{"permissions":{"allow":["read_file(*)"]}}'
+READ_RULE = "read_file(*)"
 
 _MODEL = re.compile(r"[A-Za-z0-9][\w.:-]*")
 
@@ -52,10 +58,12 @@ class Antigravity(CliProvider):
 
     def command(self, req: StepRequest) -> list[str]:
         text = f"{req.skill}\n\n{req.prompt}" if req.skill and not req.resume else req.prompt
+        checks = runnable(req)
+        allowed = [*checks, *GIT_READS] if checks else []
         if req.profile == "read_only":
             text = f"{text}\n\n{READ_ONLY_LINE}"
         elif not req.bypass:
-            text = f"{text}\n\n{EDIT_LINE}"
+            text = f"{text}\n\n{edit_line(allowed) if allowed else EDIT_LINE}"
         argv = [self.binary, "-p", positional(text)]
         if req.resume:
             argv += ["--conversation", str(req.session_id)]
@@ -65,7 +73,8 @@ class Antigravity(CliProvider):
             argv += ["--model", req.model]
         argv += ["--mode", MODE[req.profile]]
         if req.profile == "edit_worktree":
-            argv += ["--settings", READ_ALLOW]
+            rules = [READ_RULE, *[f"command({command})" for command in allowed]]
+            argv += ["--settings", json.dumps({"permissions": {"allow": rules}})]
         return argv + (["--dangerously-skip-permissions"] if req.bypass else [])
 
     def parse(self, req: StepRequest, proc: ProcessResult) -> StepResult:
@@ -140,6 +149,22 @@ class Antigravity(CliProvider):
         )
         conversation = (init or {}).get("conversation_id")
         return str(conversation) if conversation else None
+
+
+def runnable(req: StepRequest) -> list[str]:
+    """The project's test and lint commands an agy rule can allow: set, with no operator."""
+    commands = (req.test_cmd.strip(), req.lint_cmd.strip())
+    return [c for c in commands if c and not any(op in c for op in OPERATORS)]
+
+
+def edit_line(commands: Sequence[str]) -> str:
+    """What an editing step is told it may run (SP15 spec §3.5)."""
+    listed = ", ".join(f"`{command}`" for command in commands)
+    return (
+        "You may run only these terminal commands, each on its own with no &&, ;, pipes or "
+        f"redirects: {listed}. Any other command ends your turn; read and edit files with "
+        "your file tools."
+    )
 
 
 def parse_models(stdout: str) -> list[str]:

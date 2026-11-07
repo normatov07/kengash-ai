@@ -3,7 +3,9 @@
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from kengash_ai.model import Doc, Finding, Settings, Ticket
+import pytest
+
+from kengash_ai.model import Doc, Finding, SentBack, Settings, Ticket
 from kengash_ai.ops import prompts
 from kengash_ai.store import StorePaths
 from kengash_ai.store.seed import ensure_project, ensure_store
@@ -93,3 +95,140 @@ def test_custom_step_prompts_follow_their_kind() -> None:
         "edit_worktree",
         "read_only",
     ]
+
+
+CHECKS = (
+    "kengash runs these in the worktree after editing steps; each must exit 0:\n"
+    "- tests: `flutter test`\n- lint: `flutter analyze`"
+)
+CHECK_OUTPUT = "`flutter analyze` exit 1: info • x\n```text\ninfo • x\n```"
+
+
+def test_checks_block_names_the_commands_that_are_set() -> None:
+    assert prompts.checks_block("flutter test", "flutter analyze") == CHECKS
+    assert prompts.checks_block("", "") == ""
+    assert prompts.checks_block("", "ruff check") == (
+        "kengash runs these in the worktree after editing steps; each must exit 0:\n"
+        "- lint: `ruff check`"
+    )
+
+
+def test_new_prompts_name_the_checks(make_ticket: Make) -> None:
+    text = prompts.new_prompt(
+        make_ticket().meta,
+        SECTIONS,
+        "Webhooks retry.",
+        role="implementer",
+        step="implement",
+        diff_stat="",
+        feedback=prompts.Feedback(checks=CHECKS, editing=True),
+    )
+    assert f"## Checks\n{CHECKS}" in text
+    assert text.index("## Findings") < text.index("## Checks")
+
+
+def test_a_check_sent_back_head_replaces_the_instruction(make_ticket: Make) -> None:
+    ticket = make_ticket(loop=3, loop_max=5).meta
+    sent = SentBack(step="run_tests", summary="lint failed (exit 1)")
+    line = prompts.sent_back_line(sent, check=True)
+    text = prompts.resumed_prompt(
+        ticket,
+        {**SECTIONS, "Check output": CHECK_OUTPUT},
+        step="implement",
+        diff_stat="",
+        feedback=prompts.Feedback(checks=CHECKS, sent_back=line, editing=True),
+    )
+    assert text.splitlines()[0] == (
+        "Loop 3, step implement: run_tests sent this back: lint failed (exit 1). "
+        "Fix every Finding below, then run the failing check."
+    )
+    assert f"## Check output\n{CHECK_OUTPUT}" in text and f"## Checks\n{CHECKS}" in text
+
+
+def test_a_review_sent_back_line_has_no_check_clause() -> None:
+    sent = SentBack(step="review_code", summary="pubspec declares no fonts")
+    assert prompts.sent_back_line(sent, check=False) == (
+        "review_code sent this back: pubspec declares no fonts. Fix every Finding below."
+    )
+
+
+def test_the_users_answer_follows_the_instruction(make_ticket: Make) -> None:
+    ticket = make_ticket(loop=2, loop_max=3).meta
+    line = prompts.sent_back_line(SentBack(step="user", summary="assets are in raw/"), check=False)
+    assert line == "The user answered: assets are in raw/."
+    feedback = prompts.Feedback(sent_back=line, user=True, editing=True)
+    resumed = prompts.resumed_prompt(
+        ticket, SECTIONS, step="implement", diff_stat="", feedback=feedback
+    )
+    told = prompts.INSTRUCTIONS["implement"]
+    assert resumed.splitlines()[:2] == [f"Loop 2, step implement: {told}", line]
+    new = prompts.new_prompt(
+        ticket, SECTIONS, "g", role="implementer", step="implement", diff_stat="", feedback=feedback
+    )
+    assert new.splitlines()[1:3] == [told, line]
+
+
+def test_reviewers_get_checks_but_not_check_output(make_ticket: Make) -> None:
+    ticket = make_ticket().meta
+    sections = {**SECTIONS, "Check output": CHECK_OUTPUT}
+    feedback = prompts.Feedback(checks=CHECKS)
+    review = prompts.resumed_prompt(
+        ticket, sections, step="review_code", diff_stat=" a | 1", feedback=feedback
+    )
+    new = prompts.new_prompt(
+        ticket,
+        sections,
+        "g",
+        role="code-reviewer",
+        step="review_code",
+        diff_stat="x",
+        feedback=feedback,
+    )
+    for text in (review, new):
+        assert "## Checks" in text and "## Check output" not in text
+
+
+def test_sent_back_lines_are_flat_redacted_and_short() -> None:
+    summary = "first line\nsecond token=abc123def456ghi789 " + "x" * 400
+    line = prompts.sent_back_line(SentBack(step="review_code", summary=summary), check=False)
+    assert "\n" not in line and "abc123def456ghi789" not in line and "[REDACTED]" in line
+    assert len(line) <= len("review_code sent this back: . Fix every Finding below.") + 300
+
+
+def test_fix_prompt_carries_the_headline_and_output() -> None:
+    output = "`flutter test` exit 1: error: boom\n```text\nerror: boom\n```"
+    text = prompts.fix_prompt(output, turn=1, turns=2)
+    assert text.splitlines()[0] == (
+        "kengash ran the checks after your reply (fix turn 1 of 2): "
+        "`flutter test` exit 1: error: boom"
+    )
+    assert f"## Check output\n{output}" in text
+    assert text.endswith(
+        "Fix the cause, then rerun that command if your tools allow. "
+        "Reply again with JSON that matches the schema."
+    )
+
+
+def test_check_log_line() -> None:
+    at = datetime(2026, 11, 7, 10, 1, tzinfo=UTC)
+    assert prompts.check_log_line(at, "fail", "lint failed (exit 1)") == (
+        "- 2026-11-07 10:01 · checks · kengash · shell/default · fail · 0 · lint failed (exit 1)"
+    )
+
+
+@pytest.mark.parametrize(
+    ("handoff", "said"),
+    [
+        ("Files: x\nBLOCKED: needs the login", "needs the login"),
+        ("- BLOCKED: needs the login", "needs the login"),
+        ("**BLOCKED:** needs the login", "needs the login"),
+        ("BLOCKED: none", ""),
+        ("BLOCKED: n/a", ""),
+        ("BLOCKED: -", ""),
+        ("BLOCKED: Nothing.", ""),
+        ("BLOCKED:", ""),
+        ("Not blocked at all", ""),
+    ],
+)
+def test_blocked_line_reads_real_blocks_only(handoff: str, said: str) -> None:
+    assert prompts.blocked_line(handoff) == said

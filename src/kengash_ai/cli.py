@@ -713,14 +713,18 @@ def approve_ticket(
     ticket_id: TicketId,
     loops: Annotated[int | None, typer.Option("--loops", min=1, help="Loops to add.")] = None,
     tokens: Annotated[int | None, typer.Option("--tokens", min=1, help="Tokens to add.")] = None,
+    note: Annotated[
+        str | None,
+        typer.Option("--note", help="Answer to the ticket's BLOCKED line; the next step reads it."),
+    ] = None,
     project: Only = None,
     by: By = "unknown",
     as_json: AsJson = False,
 ) -> None:
-    """Open an approval gate: the approve step, a loop cap or a token cap."""
+    """Open an approval gate: the approve step, a loop cap, a token cap or a BLOCKED line."""
     with _errors():
         approved = controls.approve_ticket(
-            ticket_id, loops=loops, tokens=tokens, project=project, by=by
+            ticket_id, loops=loops, tokens=tokens, project=project, by=by, note=note
         )
     if as_json:
         _emit_json(approved)

@@ -137,6 +137,10 @@ class SkillCaps(_Section):
     max_words: int = Field(400, ge=1)
 
 
+class Checks(_Section):
+    turns: int = Field(2, ge=0, le=5)  # fix turns after an editing step's checks fail (SP15)
+
+
 class MemoryCaps(_Section):
     compact_at_lines: int = Field(200, ge=10)
     compactor: str = "claude/haiku"
@@ -245,6 +249,7 @@ class Settings(_Section):
     loop_count_rejected_review: bool = True
     stall_repeat: int = Field(2, ge=1)
     loop_start: Literal["ask", "auto"] = "ask"  # auto: the loop starts once tickets are added
+    checks: Checks = Field(default_factory=Checks)
     grill: Grill = Field(default_factory=Grill)
     plan: PlanReview = Field(default_factory=PlanReview)
     sessions: Sessions = Field(default_factory=Sessions)

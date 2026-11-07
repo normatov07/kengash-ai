@@ -66,6 +66,7 @@ const GATE_LABELS = {
   loop_cap: ["LOOP CAP", "danger"],
   token_cap: ["TOKEN CAP", "danger"],
   approve_step: ["APPROVE", "danger"],
+  blocked: ["BLOCKED", "danger"],
   stalled: ["STALLED", "warn"],
   failed: ["FAILED", "danger"],
   awaiting_merge: ["READY TO MERGE", "ok"],
@@ -79,11 +80,13 @@ function gate(item, data) {
     loop_cap: html`${item.title} reached <span class="mono">${item.loop}/${item.loop_max}</span> loops${where ? ` in ${where}` : ""}.`,
     token_cap: html`${item.title} reached its token ceiling${where ? ` in ${where}` : ""}.`,
     approve_step: html`${item.title} waits for your approval before it goes on.`,
+    blocked: html`${item.title} needs something only you can give: <span class="muted">${(item.reason ?? "").replace(/^blocked: /, "")}</span>`,
   }[item.kind] ?? html`${item.title}${item.reason ? html`: <span class="muted">${item.reason}</span>` : ""}`;
   const actions = {
     loop_cap: html`<button class="btn small accent" type="button" data-act="approve" data-id="${item.ticket}">Grant +${data.grant} loops</button><button class="btn small ghost" type="button" data-act="park" data-id="${item.ticket}">Park ticket</button>`,
     token_cap: html`<button class="btn small accent" type="button" data-act="approve" data-id="${item.ticket}">Grant more tokens</button><button class="btn small ghost" type="button" data-act="park" data-id="${item.ticket}">Park ticket</button>`,
     approve_step: html`<button class="btn small accent" type="button" data-act="approve" data-id="${item.ticket}">Approve</button><button class="btn small ghost" type="button" data-act="park" data-id="${item.ticket}">Park ticket</button>`,
+    blocked: html`<button class="btn small accent" type="button" data-act="approve" data-id="${item.ticket}">Done, go on</button><button class="btn small ghost" type="button" data-act="park" data-id="${item.ticket}">Park ticket</button>`,
     stalled: html`<a class="btn small" href="#/ticket/${item.ticket}">${planStalled ? "Read the plan and findings" : "Read the findings"}</a><button class="btn small ghost" type="button" data-act="run" data-id="${item.ticket}">Run again</button>`,
     failed: html`<a class="btn small" href="#/ticket/${item.ticket}">Read what failed</a><button class="btn small ghost" type="button" data-act="run" data-id="${item.ticket}">Run again</button>`,
     awaiting_merge: html`<button class="btn small accent" type="button" data-act="merge" data-id="${item.ticket}">Merge</button><a class="btn small ghost" href="#/ticket/${item.ticket}">Review changes</a>`,

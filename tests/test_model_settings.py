@@ -270,3 +270,11 @@ def test_loop_start_refuses_other_values() -> None:
 
 def test_default_token_cap() -> None:
     assert Settings().tokens.per_ticket_max == 1_000_000
+
+
+def test_checks_turns_default_and_bounds() -> None:
+    assert Settings().checks.turns == 2
+    assert Settings.model_validate({"checks": {"turns": 0}}).checks.turns == 0
+    for bad in (-1, 6):
+        with pytest.raises(ValidationError):
+            Settings.model_validate({"checks": {"turns": bad}})

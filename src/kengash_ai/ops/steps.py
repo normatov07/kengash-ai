@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from kengash_ai import adapters, gitops, journal, settings, workflow
 from kengash_ai.model import (
+    Checked,
     Doc,
     Event,
     Folder,
@@ -22,6 +23,7 @@ from kengash_ai.model import (
     ProviderStatus,
     ReviewOutput,
     Running,
+    SentBack,
     SessionRef,
     Settings,
     SlotEntry,
@@ -34,11 +36,12 @@ from kengash_ai.model import (
     WorkOutput,
     utc_now,
 )
-from kengash_ai.ops import agents, calls, lifecycle, merging, prompts, records, slots
+from kengash_ai.ops import agents, calls, checks, lifecycle, merging, prompts, records, slots
 from kengash_ai.ops.workspace import GATES
 from kengash_ai.store import documents, runtime
 from kengash_ai.store.locks import locked
 from kengash_ai.store.paths import StorePaths
+from kengash_ai.store.redact import redact
 from kengash_ai.store.registry import load_registry
 
 SLOT_POLL_S = 5
@@ -88,6 +91,8 @@ class _Ran:
     loop: int
     commit: str | None = None
     files: list[gitops.FileChange] | None = None
+    checked: str | None = None  # the summary of in-step checks whose last run passed (SP15)
+    hook_repaired: bool = False  # a commit-hook repair turn changed files after the checks
 
 
 def run_job(ticket_id: str, *, project: str | None = None, steps: int | None = None) -> JobEnd:
@@ -197,9 +202,11 @@ def _step(job: _Job, ready: _Ready) -> JobEnd | None:
     if isinstance(ran, JobEnd):
         return ran
     if ready.resolved.kind_of(ready.step) == "edit":
+        _verify(job, ready, ran)
         committed = _commit(job, ready, ran)
         if isinstance(committed, JobEnd):
             return committed
+        _remember_checks(job, ready, ran)
     return _finish(job, ready, ran)
 
 
@@ -227,6 +234,9 @@ def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
     (or a rate limit waits for the quota), other errors fail the ticket, keeping the
     session the CLI opened (SP3 spec §5 item 5; SP12 spec §3.4, §3.5)."""
     request = _prepare(job, ready, pick)
+    reused = _reused(job, ready, pick)
+    if reused is not None:
+        return _Ran(pick, request, reused, Usage(), ready.doc.meta.loop)
     usage = Usage()
     tried = {pick.provider}
     timed_out = repaired = unblocked = reconnected = False
@@ -432,9 +442,16 @@ def _request(
     review = resolved.kind_of(step) == "review"
     told = prompts.instruction(resolved, step)
     diff_stat = gitops.diff(job.worktree, job.base, stat=True) if review else ""
+    feedback = _feedback(resolved, step, ready.state.sent_back)
     if resume:
         prompt = prompts.resumed_prompt(
-            ticket, sections, step=step, diff_stat=diff_stat, instruction=told, review=review
+            ticket,
+            sections,
+            step=step,
+            diff_stat=diff_stat,
+            instruction=told,
+            review=review,
+            feedback=feedback,
         )
         skill = None
     else:
@@ -446,6 +463,7 @@ def _request(
             step=step,
             diff_stat=diff_stat,
             instruction=told,
+            feedback=feedback,
         )
         skill = prompts.role_skill(job.paths, job.slug, resolved.agents[pick.role].skill)
     if resolved.kind_of(step) == "edit" and gitops.changed_files(job.worktree):
@@ -469,6 +487,156 @@ def _request(
         user_config=options.user_config,
         bypass=resolved.agents[pick.role].bypass_permissions,
         prior_usage=ready.state.totals.get(pick.role) if resume else None,
+    )
+
+
+def _verify(job: _Job, ready: _Ready, ran: _Ran) -> None:
+    """Run the project's checks after an editing step's reply; while they fail and fix turns
+    remain, resume the step's session with what failed (SP15 spec §3.1). Fix turns only add
+    chances: running out of them, a timeout, an unusable reply, a park request or a moved
+    ticket ends the checks, and the step goes on as before. A reply that says it is BLOCKED
+    goes straight to the user instead."""
+    resolved, step = ready.resolved, ready.step
+    output = ran.result.output
+    blocked = isinstance(output, WorkOutput) and prompts.blocked_line(output.handoff)
+    if blocked or not checks.wanted(resolved, ready.doc.meta, step):
+        return
+    if ran.result.session_id:  # a worker killed during the checks keeps the session
+        _keep_session(job, step, ran.pick, ran.result.session_id)
+    try:
+        _check_and_fix(job, ready, ran)
+    finally:
+        pick = ran.pick
+        working = Running(
+            role=pick.role, provider=pick.provider, model=pick.model, log=ran.request.log
+        )
+        _set_running(job, step, working)
+
+
+def _check_and_fix(job: _Job, ready: _Ready, ran: _Ran) -> None:
+    resolved, step = ready.resolved, ready.step
+    turns = resolved.checks.turns
+    shell = adapters.get("shell", runtime=job.paths.runtime)
+    for turn in range(turns + 1):
+        log = _next_log(job)
+        _set_running(job, step, Running(role="test-runner", provider="shell", log=log))
+        before = set(gitops.untracked_files(job.worktree))
+        result = shell.run(checks.request(resolved, job.worktree, log))
+        gitops.drop_untracked(job.worktree, keep=before)  # what the checks wrote is no work
+        verdict, summary = checks.outcome(result)
+        if not _record_check(job, step, turn, result, (verdict, summary), log):
+            return  # the user moved the ticket: their status stands
+        if verdict == "pass":
+            ran.checked = summary
+            return
+        if verdict != "fail" or turn == turns or runtime.park_requested(job.paths, job.ticket_id):
+            return
+        prompt = prompts.fix_prompt(redact(result.check_output), turn=turn + 1, turns=turns)
+        if not _fix_turn(job, ready, ran, prompt):
+            return
+
+
+def _set_running(job: _Job, step: str, running: Running) -> None:
+    """Name the call in flight, so `kengash ps`, `logs -f` and the Live tab follow it."""
+
+    def put(doc: Doc[Ticket], state: TicketState) -> None:
+        state.running = running
+
+    _update(job, step, put)
+
+
+def _record_check(
+    job: _Job, step: str, turn: int, result: StepResult, said: tuple[str, str], log: Path
+) -> bool:
+    """Write a check run's Log line and Check output and journal `checks.end`; False when
+    the user moved the ticket off the step. `said` is the run's verdict and summary."""
+    verdict, summary = said
+
+    def write(doc: Doc[Ticket], state: TicketState) -> None:
+        doc.sections["Check output"] = redact(result.check_output) if verdict == "fail" else ""
+        line = prompts.check_log_line(utc_now(), verdict, summary)
+        doc.sections["Log"] = "\n".join(filter(None, [doc.sections.get("Log", "").strip(), line]))
+
+    if not _update(job, step, write):
+        return False
+    event = Event.model_validate(
+        {
+            "type": "checks.end",
+            "project": job.slug,
+            "ticket": job.ticket_id,
+            "step": step,
+            "turn": turn,
+            "verdict": verdict,
+            "summary": summary,
+            "duration_s": result.duration_s,
+            "log": str(log),
+        }
+    )
+    records.record(job.paths, f"kengash: {job.ticket_id} checks", event)
+    return True
+
+
+def _fix_turn(job: _Job, ready: _Ready, ran: _Ran, prompt: str) -> bool:
+    """One resumed turn telling the session what the checks found; True once it replied
+    validly (its reply replaces `ran`'s). Any other end keeps the last valid reply, because a
+    fix turn only adds a chance: a `network` error gets one resumed turn, then any error ends
+    the fix turns, carrying the CLI's usage totals so the next resume counts from them."""
+    pick = ran.pick
+    working = Running(role=pick.role, provider=pick.provider, model=pick.model, log=ran.request.log)
+    _set_running(job, ready.step, working)
+    provider = adapters.get(pick.provider, runtime=job.paths.runtime)
+    request = _resume(job, ran.request, ran.result, prompt)
+    result = provider.run(request)
+    ran.usage = calls.plus(ran.usage, result.usage)
+    if result.error == "network":
+        request = _resume(job, request, result, prompts.NETWORK_PROMPT)
+        result = provider.run(request)
+        ran.usage = calls.plus(ran.usage, result.usage)
+    session = result.session_id or ran.result.session_id
+    if result.error is not None:
+        totals = result.total_usage or ran.result.total_usage
+        ran.result = ran.result.model_copy(update={"session_id": session, "total_usage": totals})
+        return False
+    ran.request, ran.result = request, result.model_copy(update={"session_id": session})
+    return True
+
+
+def _remember_checks(job: _Job, ready: _Ready, ran: _Ran) -> None:
+    """After the commit: checks that passed on exactly this commit, for `run_tests` (SP15)."""
+    if ran.checked is None or ran.hook_repaired:
+        return
+    record = Checked(commit=gitops.head(job.worktree), step=ready.step, summary=ran.checked)
+
+    def put(doc: Doc[Ticket], state: TicketState) -> None:
+        state.checked = record
+
+    _update(job, ready.step, put)
+
+
+def _reused(job: _Job, ready: _Ready, pick: agents.Pick) -> StepResult | None:
+    """A shell check step's pass, taken from in-step checks that passed on the worktree's
+    HEAD with nothing changed since; None means run the checks (SP15 spec §3.6)."""
+    if pick.provider != "shell" or ready.resolved.kind_of(ready.step) != "check":
+        return None
+    checked = ready.state.checked
+    if checked is None or checked.commit != gitops.head(job.worktree):
+        return None
+    if gitops.changed_files(job.worktree):
+        return None
+    summary = f"{checked.summary} (in {checked.step}, same commit)"
+    return StepResult(output=ReviewOutput(verdict="pass", summary=summary, findings=[]))
+
+
+def _feedback(resolved: Settings, step: str, sent: SentBack | None) -> prompts.Feedback:
+    """The checks, and why the step runs again, for its prompt (SP15 spec §3.4)."""
+    project = resolved.project
+    return prompts.Feedback(
+        checks=prompts.checks_block(project.test_cmd, project.lint_cmd),
+        sent_back=prompts.sent_back_line(sent, check=resolved.kind_of(sent.step) == "check")
+        if sent is not None
+        else "",
+        user=sent is not None and sent.step == "user",
+        editing=resolved.kind_of(step) == "edit",
     )
 
 
@@ -501,6 +669,7 @@ def _commit(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
                 kept = calls.work_kept(job.worktree, _changed(job, ready))
                 return _fail(job, f"commit failed: {last}{kept}", ran.usage)
             problem = "the commit hook failed:\n" + "\n".join(lines[-20:])
+            ran.hook_repaired = True
             request = _repair(job, ran.request, ran.result, problem)
             provider = adapters.get(ran.pick.provider, runtime=job.paths.runtime)
             result = provider.run(request)
@@ -535,17 +704,22 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
             slots.release(paths, job.ticket_id)  # the user moved it: their status stands
             return JobEnd(ticket.status, "changed while the step ran")
         state = runtime.load_ticket_state(paths, job.ticket_id)
+        state.sent_back = None  # this step's prompt carried it
         output = result.output
         fingerprints: tuple[str, ...] = ()
+        blocked = ""
         if isinstance(output, ReviewOutput):
             verdict = output.verdict
             failing = output.findings if verdict == "fail" else []
             doc.sections["Findings"] = prompts.findings_text(failing)
             fingerprints = tuple(workflow.fingerprint(f.file, f.issue) for f in failing)
+            if resolved.kind_of(step) == "check":
+                doc.sections["Check output"] = redact(result.check_output) if failing else ""
         else:
             verdict = "pass"
             if isinstance(output, WorkOutput):
                 doc.sections["Handoff"] = prompts.handoff_text(output.handoff)
+                blocked = prompts.blocked_line(output.handoff)
         tokens = ran.usage.tokens
         ticket.tokens += tokens
         line = prompts.log_line(
@@ -565,9 +739,11 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
         routed = workflow.after(
             resolved,
             lifecycle.progress_for(resolved, ticket, state),
-            workflow.Outcome(verdict, fingerprints),
+            workflow.Outcome(verdict, fingerprints, blocked),
         )
         lifecycle.apply_progress(resolved, doc, state, routed.progress)
+        if verdict == "fail" and isinstance(output, ReviewOutput) and routed.progress.step != step:
+            state.sent_back = SentBack(step=step, summary=output.summary)  # also at a cap
         decision = routed.decision
         end: JobEnd | None = None
         if isinstance(decision, workflow.Run):
@@ -634,17 +810,19 @@ def _status(doc: Doc[Ticket], status: str) -> None:
     doc.meta.updated = utc_now()
 
 
-def _update(job: _Job, step: str, change: Callable[[Doc[Ticket], TicketState], None]) -> None:
+def _update(job: _Job, step: str, change: Callable[[Doc[Ticket], TicketState], None]) -> bool:
     """Reload the ticket and its state under the project lock, change both, save both;
-    nothing changes once the user has moved the ticket off `step` (decision 26)."""
+    nothing changes once the user has moved the ticket off `step` (decision 26), and then
+    the answer is False."""
     with locked(_lock(job.paths, job.slug)):
         doc = _load(job.paths, job.slug, job.ticket_id)
         if doc.meta.folder is not Folder.in_process or doc.meta.step != step:
-            return
+            return False
         state = runtime.load_ticket_state(job.paths, job.ticket_id)
         change(doc, state)
         documents.save_ticket(job.paths.project(job.slug), doc)
         runtime.save_ticket_state(job.paths, job.ticket_id, state)
+        return True
 
 
 def _recover(job: _Job) -> None:

@@ -26,6 +26,7 @@ The git commands kengash runs in the user's repo (SP3 spec §9): ticket worktree
 
 ## Changes
 
+- 2026-11-07: `untracked_files(cwd)` (not ignored) and `drop_untracked(cwd, keep=)`: remove files that appeared since `keep` was listed (SP15: what in-step checks leave behind).
 - 2026-11-06: `changed_files(cwd)`: uncommitted paths, tracked or not, sorted (`git status --porcelain=v1 -z`) (SP12 M1).
 - 2026-10-26: `TRAILER = "Kengash-"`; `ticket_commits` finds `Kengash-Ticket` or 0.1.0 `Harness-Ticket` commits and returns every trailer under its `Kengash-` name (SP8).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).

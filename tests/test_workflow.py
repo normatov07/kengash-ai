@@ -237,3 +237,21 @@ def test_custom_agent_runs_anywhere(order: list[str]) -> None:
     assert walked == order[:stop]
     expected = Halt(NEEDS_APPROVAL, "waiting for the user's approval", "approve_step")
     assert routed.decision == (expected if "approve" in order else DONE)
+
+
+def test_a_blocked_pass_halts_for_the_user() -> None:
+    routed = after(settings(), progress("implement"), Outcome("pass", blocked="needs the login"))
+    assert routed.decision == Halt(NEEDS_APPROVAL, "blocked: needs the login", "blocked")
+    assert (routed.progress.step, routed.progress.loop) == ("implement", 1)
+    failed = after(settings(), progress(), Outcome("fail", ("a1",), blocked="ignored"))
+    assert failed.decision == Run("implement", 2)
+
+
+def test_approving_a_blocked_edit_step_runs_it_again_in_the_same_loop() -> None:
+    assert approve(settings(), progress("implement", loop=2), "blocked").decision == Run(
+        "implement", 2
+    )
+
+
+def test_approving_a_blocked_plan_moves_on() -> None:
+    assert approve(settings(), progress("plan"), "blocked").decision == Run("review_plan", 1)
