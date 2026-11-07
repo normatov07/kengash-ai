@@ -28,7 +28,7 @@ def test_run_park_and_pause_print_one_line_each(engine: Engine, store_paths: Sto
     started = runner.invoke(app, ["run", "7b55e0c1"])
     assert (started.exit_code, started.stdout) == (
         0,
-        "started 7b55e0c1 plan→claude (watch: kengash logs 7b55e0c1 --watch)\n",
+        "started 7b55e0c1 plan→claude (watch: kengash logs 7b55e0c1 -f)\n",
     )
     again = runner.invoke(app, ["run", "7b55e0c1"])
     assert (again.exit_code, again.stdout) == (1, "skipped 7b55e0c1: already running\n")

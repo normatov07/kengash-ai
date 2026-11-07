@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 OPEN_TIMEOUT_S = 10.0
+OFF = "KENGASH_WATCH"  # "off" turns every tab and notification off (tests, evals, CI)
 
 type Which = Callable[[str], str | None]
 
@@ -21,6 +22,11 @@ class Terminal:
 
     name: str
     argv: Callable[[str, list[str]], list[str]]
+
+
+def disabled(env: Mapping[str, str]) -> bool:
+    """Tabs and notifications are off in this environment."""
+    return env.get(OFF, "").strip().lower() in ("off", "0", "false", "no")
 
 
 def detect(env: Mapping[str, str], template: str, which: Which = shutil.which) -> Terminal | None:

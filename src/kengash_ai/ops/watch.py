@@ -26,7 +26,6 @@ from kengash_ai.ops.workspace import open_gates
 from kengash_ai.store import runtime
 from kengash_ai.store.paths import StorePaths
 
-OFF = "KENGASH_WATCH"  # "off" turns every tab and notification off (tests, evals, CI)
 FEED_MAX = 12  # the dashboard's latest actions across every worker
 REASON_MAX = 120  # a gate's reason on the dashboard; the full line is in `kengash status`
 ACTIONS = {
@@ -63,9 +62,8 @@ class Board:
 
 
 def disabled(env: Mapping[str, str] | None = None) -> bool:
-    """Tabs and notifications are off for this process."""
-    value = (env if env is not None else os.environ).get(OFF, "")
-    return value.strip().lower() in ("off", "0", "false", "no")
+    """Tabs and notifications are off for this process (`KENGASH_WATCH=off`)."""
+    return terminals.disabled(env if env is not None else os.environ)
 
 
 def cli_name() -> str:
@@ -76,7 +74,9 @@ def cli_name() -> str:
 def open_ticket(paths: StorePaths, slug: str, ticket_id: str) -> str:
     """Open the ticket's worker tab unless one is open; what the user watches it with."""
     command = [cli_name(), "logs", ticket_id, "--watch"]
-    return _open(paths, slug, f"ticket-{ticket_id}", f"kg {ticket_id}", command)
+    # with no tab, `-f`: it ends when the ticket stops, so an agent's background task ends too
+    printed = [cli_name(), "logs", ticket_id, "-f"]
+    return _open(paths, slug, f"ticket-{ticket_id}", f"kg {ticket_id}", command, printed)
 
 
 def open_dashboard(paths: StorePaths, project: str | None) -> str:
@@ -98,8 +98,16 @@ def attach_tab(ticket_id: str, *, role: str | None, project: str | None) -> str:
     return _open(paths, found.project, key, title, ["sh", "-c", found.command])
 
 
-def _open(paths: StorePaths, slug: str | None, key: str, title: str, command: list[str]) -> str:
-    printed = shlex.join(command)
+def _open(
+    paths: StorePaths,
+    slug: str | None,
+    key: str,
+    title: str,
+    command: list[str],
+    fallback: list[str] | None = None,
+) -> str:
+    """Open `command` in a tab titled `title`; else the command to run instead."""
+    printed = shlex.join(fallback or command)
     if disabled():
         return printed
     try:

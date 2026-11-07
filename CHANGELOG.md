@@ -4,6 +4,18 @@ All notable changes to this project are written here. The format follows [Keep a
 
 ## [Unreleased]
 
+### Added
+
+- Watch every worker: starting a ticket's worker opens a terminal tab (`kg <id>`) that follows it through its gates until it is done (`kengash logs <id> --watch`), and a new loop opens a dashboard tab, in Orca, tmux or gnome-terminal, or the command in `watch.terminal`; at most one tab per ticket, and `run`, `approve` and `loop claim` say where to watch.
+- `kengash watch [-p project] [--once]`: one live screen with the running loops, sessions and tokens per CLI, every running worker (step, model, elapsed, last activity, files, tokens of its cap, last action), the tickets that need you with the command that acts, and the latest actions across all workers. Nothing in it runs a model.
+- A desktop notification (`notify-send`, or `osascript` on macOS) when a ticket needs approval, stalls, fails or is ready to merge, and when a plan review finishes (`watch.notify`).
+- `kengash ticket attach <id> --tab` opens a role's own session in a tab once no worker drives it, so you can talk to that agent directly.
+
+### Changed
+
+- With no terminal to open a tab in, `run` prints `(watch: kengash logs <id> -f)`; the loop skill starts that in the background only then, and repeats progress lines only when a worker is `quiet` or gone, which saves the conductor's tokens.
+- `KENGASH_WATCH=off` turns tabs and notifications off; tests and evals set it.
+
 ## [0.4.0] - 2026-11-06
 
 ### Added

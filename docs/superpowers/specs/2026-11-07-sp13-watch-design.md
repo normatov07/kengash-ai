@@ -24,7 +24,7 @@ SP12 made that answerable (`kengash ps`, `kengash logs <id> -f`, `wait` progress
 - Whenever kengash starts a ticket's worker (`run`, an approval that restarts it, `resume`), it opens a **worker tab** titled `kg <id>` running `kengash logs <id> --watch`.
 - Whenever `kengash loop claim` takes a new lease, it opens one **dashboard tab** titled `kg watch` (or `kg watch <project>`) running `kengash watch [-p <project>]`.
 - At most one tab per key: a viewer registers itself in `runtime/viewers/<key>.json` (`ticket-<id>`, `watch-<scope>`) with its pid. An opener skips a key whose viewer runs, and holds a 15-second claim on the key while the new tab starts, under `locks/viewers.lock`, so two quick `run`s never open two tabs.
-- `kengash run` appends where to watch to each `started` line: `started 7add8c2e implement→antigravity (watch: orca tab kg 7add8c2e)`, or, with no terminal, `(watch: kengash logs 7add8c2e --watch)`. `--json` carries a `watch` field.
+- `kengash run` appends where to watch to each `started` line: `started 7add8c2e implement→antigravity (watch: orca tab kg 7add8c2e)`, or, with no terminal, `(watch: kengash logs 7add8c2e -f)`: `-f` ends when the ticket stops, so an agent can run it as a background task that ends (*call*). `--json` carries a `watch` field.
 
 ### 3.2 Terminals (`ops.terminals`)
 

@@ -71,7 +71,7 @@ def test_tabs_off_or_watch_off_print_the_command(
 ) -> None:
     write_settings(store_paths, "watch.tabs: off\n", slugs=("payments-api",))
     assert watch.open_ticket(store_paths, "payments-api", "7b55e0c1") == (
-        "kengash logs 7b55e0c1 --watch"
+        "kengash logs 7b55e0c1 -f"
     )
     monkeypatch.setenv("KENGASH_WATCH", "off")
     assert watch.open_dashboard(store_paths, None) == "kengash watch"
@@ -86,7 +86,7 @@ def test_no_terminal_prints_the_command(
     for name in ("TERM_PROGRAM", "TMUX", "DISPLAY", "WAYLAND_DISPLAY"):
         monkeypatch.delenv(name, raising=False)
     assert watch.open_ticket(store_paths, "payments-api", "7b55e0c1") == (
-        "kengash logs 7b55e0c1 --watch"
+        "kengash logs 7b55e0c1 -f"
     )
 
 

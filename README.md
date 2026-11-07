@@ -52,7 +52,7 @@ Then, in your agent:
 
 1. `/kengash:plan` (or `/kengash:grill` to be interviewed first): a plan, reviewed by an agent on another provider. Once you approve it, it becomes tickets with importance, dependencies and touched paths, and the loop follows: at once when Auto mode is on (Settings or Overview in the UI), otherwise your agent asks once. `/kengash:ticket "<prompt>"` makes tickets from a short prompt instead.
 2. `/kengash:loop`: tickets run in their loops; the agent waits, reports gates and asks before granting loops or merging. One loop covers a project at a time: a second one is refused and told which session runs it.
-3. Watch the workers: `kengash ps`, `kengash logs <id> -f`, or the ticket's Live tab in the UI. In Claude Code the loop starts `kengash logs -f` as a background task per worker, which you open like a subagent.
+3. Watch the workers: each one opens its own terminal tab (`kg <id>`) showing every read, edit and command as it happens, and the loop opens a dashboard tab (`kengash watch`): running workers, sessions and tokens per CLI, what needs you, the latest actions. Tabs open in Orca, tmux or gnome-terminal (`watch.terminal` names any other; `watch.tabs: off` turns them off), and a desktop notification tells you when a ticket needs you. `kengash ps`, `kengash logs <id> -f` and the UI's Live tab show the same. To talk to one worker yourself once it stops: `kengash ticket attach <id> --tab`.
 4. `/kengash:ui` (or `kengash ui open`): the web UI on 127.0.0.1 behind a private link.
 
 `/kengash:plan`, `/kengash:ticket` and `/kengash:loop` take an optional project name or folder at the end, such as `/kengash:loop payments-api` or `/kengash:ticket "<prompt>" ~/code/payments`; without one, planning uses the project you are in and `/kengash:loop` works every project. Every `--project/-p` option of `kengash` takes a name or a folder too. In Codex, type `$kengash-loop` and so on.
@@ -64,7 +64,7 @@ Then, in your agent:
 | `kengash init`, `link`, `adopt`, `doctor [--fix]` | register projects, repair links, check everything |
 | `kengash plan …`, `ticket …` | plans and tickets (agents use these; they never edit store files) |
 | `kengash next`, `run`, `wait`, `status` | what can start, start it, wait for gates, a summary |
-| `kengash ps [--line]`, `logs ID [-f]` | what each worker is doing now; one worker's reads, edits and commands, live |
+| `kengash watch`, `ps [--line]`, `logs ID [-f\|--watch]` | one live dashboard; what each worker is doing now; one worker's reads, edits and commands, live |
 | `kengash loop claim\|release\|status` | the one loop per project (the loop skill runs these) |
 | `kengash approve`, `park`, `stop`, `pause`, `resume`, `merge` | steer running work |
 | `kengash settings show\|get\|check`, `memory …`, `context` | settings, memory and the conductor's digest |
