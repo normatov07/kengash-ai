@@ -4,9 +4,11 @@ All notable changes to this project are written here. The format follows [Keep a
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-07
+
 ### Added
 
-- `kengash forget <project> [--yes]` removes a project kengash should no longer know: its plans, tickets, worktrees and `.kengash` link; the store's git history keeps every removed file. `kengash doctor` names it for a repo that is gone.
+- `kengash forget <project> [--yes]` removes a project kengash should no longer know: its plans, tickets, worktrees and `.kengash` link. The store's git history keeps every removed store file; uncommitted changes in a ticket's worktree are lost, and it says how many worktrees hold some before asking. `kengash doctor` names it for a repo that is gone.
 
 ### Fixed
 
@@ -118,6 +120,7 @@ The first release.
 
 - The UI checks Host, Origin, a per-run token and an `X-Harness` header on changes, and sends a strict Content Security Policy with framing, sniffing and referrer protections.
 
+[0.5.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.5.0
 [0.4.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.4.0
 [0.3.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.3.0
 [0.2.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.2.0

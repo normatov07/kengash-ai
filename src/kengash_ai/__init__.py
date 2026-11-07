@@ -1,3 +1,3 @@
 """kengash_ai: run many projects at once with subscription coding-agent CLIs."""
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
