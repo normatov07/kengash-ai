@@ -21,6 +21,7 @@ Resolve SETTINGS.md into a validated `Settings` model so agents never parse the 
 
 ## Changes
 
+- 2026-11-06 (SP12 minors): `set_values` setting a renamed key's new name renames the old key on its own line (`yamledit.rename_key`), keeping its place and comment.
 - 2026-11-06: `scope_layer(paths, slug)`: one scope's own file as written, renamed keys under their old names (SP12 M3).
 - 2026-11-06: `RENAMED` (`fallback_on_rate_limit` → `fallback_on_error`): each layer reads the old key under the new name and refuses both in one file; `set_values` setting the new key drops the old one from that file (SP12 M1).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).

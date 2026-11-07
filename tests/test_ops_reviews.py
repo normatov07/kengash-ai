@@ -1,6 +1,7 @@
 """Plan review: the reviewer's provider, the review job and its rounds (SP3 spec decisions
 14, 28 to 30)."""
 
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -9,8 +10,16 @@ import pytest
 from conftest import Events, FakeClis, write_settings
 
 from kengash_ai import settings
-from kengash_ai.model import Doc, NeedsSetup, Plan, PlanMode, PlanStatus, ProviderStatus
-from kengash_ai.ops import calls, plans, records, reviews
+from kengash_ai.model import (
+    Doc,
+    NeedsSetup,
+    Plan,
+    PlanMode,
+    PlanStatus,
+    ProviderStatus,
+    WorkerRecord,
+)
+from kengash_ai.ops import calls, jobs, plans, records, reviews
 from kengash_ai.ops.agents import Pick
 from kengash_ai.store import StorePaths, documents, runtime
 
@@ -225,3 +234,29 @@ def test_a_plan_saved_during_the_round_keeps_the_users_version(
     assert doc.sections.get("Review log", "") == ""
     event = journal_events()[-1]
     assert event["type"] == "worker.exited" and "changed" in event["reason"]
+
+
+def _stand_in_worker(paths: StorePaths, plan_id: str) -> None:
+    """This test process plays the review worker: its record names our live pid."""
+    data = {"id": plan_id, "project": "", "pid": os.getpid(), "job": "plan-review"}
+    runtime.save_worker(paths, WorkerRecord.model_validate(data))
+
+
+def test_a_finished_round_drops_the_workers_record_with_its_verdict(
+    plan_id: str, store_paths: StorePaths, fake_clis: FakeClis
+) -> None:
+    # as for compaction (CI 2026-11-07): the next `plan review` must not join a worker
+    # that has journaled its round but not yet exited
+    _stand_in_worker(store_paths, plan_id)
+    fake_clis.queue("claude", stdout=fake_clis.claude_output(FAIL))
+    reviews.run_review(plan_id, project=None)
+    assert jobs.alive(store_paths, plan_id) is None
+
+
+def test_a_failed_round_drops_the_workers_record_with_its_end(
+    plan_id: str, store_paths: StorePaths, fake_clis: FakeClis
+) -> None:
+    _stand_in_worker(store_paths, plan_id)
+    fake_clis.queue("claude", fixture="claude/auth_error.json")
+    reviews.run_review(plan_id, project=None)
+    assert jobs.alive(store_paths, plan_id) is None

@@ -80,9 +80,11 @@ def review_plan(
     limit = resolved.plan.review_max
     if limit == 0:
         raise UserError(f"plan review is off (plan.review_max: 0); approve plan {plan_id} directly")
-    cursor = journal.end(paths)  # before the job starts, so its end cannot slip past
     warning = ""
     with locked(_lock(paths, slug)):
+        # under the lock a worker is either running or has ended and dropped its record
+        # (`_exit`, `run_review`), so the cursor sits before the end this call waits for
+        cursor = journal.end(paths)
         doc = records.load_plan(path)
         plan = doc.meta
         number = plan.review.round + 1
@@ -189,10 +191,11 @@ def run_review(plan_id: str, *, project: str | None) -> str:
     with locked(_lock(paths, slug)):
         doc = records.load_plan(path)
         plan = doc.meta
-        if plan.status is not PlanStatus.in_review or plan.review.verdict is not None:
-            return _exit(paths, slug, plan_id, "the plan changed before its review started")
+        stale = plan.status is not PlanStatus.in_review or plan.review.verdict is not None
         number, since = plan.review.round + 1, plan.updated
         reviewer = plan.review.reviewer or resolved.agents[ROLE].cli
+    if stale:
+        return _exit(paths, slug, plan_id, "the plan changed before its review started")
     provider, model = split_cli(reviewer)
     problem = agents.problem(provider, agents.detector(paths))
     if problem is not None:
@@ -214,26 +217,45 @@ def run_review(plan_id: str, *, project: str | None) -> str:
     with locked(_lock(paths, slug)):
         doc = records.load_plan(path)
         plan = doc.meta
-        if plan.status is not PlanStatus.in_review or plan.updated != since:
-            reason = f"the plan changed during its review; run: kengash plan review {plan_id}"
-            return _exit(paths, slug, plan_id, reason)
-        plan.review.round, plan.review.verdict = number, output.verdict
-        if result.session_id:
-            plan.review.session = SessionRef(
-                provider=provider, model=model or "default", id=result.session_id
-            )
-        log = doc.sections.get("Review log", "").strip("\n")
-        lines = prompts.review_log_lines(number, output)
-        doc.sections["Review log"] = "\n".join(filter(None, [log, *lines]))
-        plan.updated = utc_now()
-        documents.save_plan(paths.project(slug), doc)
-        if result.total_usage is not None:
-            state = runtime.load_ticket_state(paths, plan_id)
-            state.totals[ROLE] = result.total_usage
-            runtime.save_ticket_state(paths, plan_id, state)
-        event = _reviewed(slug, plan, output, reviewer, result, called.usage)
-        records.record(paths, f"kengash: plan review {plan_id} round {number}", event)
+        changed = plan.status is not PlanStatus.in_review or plan.updated != since
+        if not changed:
+            _record_round(paths, slug, plan_id, doc, number, output, provider, model, result)
+            event = _reviewed(slug, plan, output, reviewer, result, called.usage)
+            records.record(paths, f"kengash: plan review {plan_id} round {number}", event)
+            jobs.forget(plan_id)  # with the round, so the next review never joins this worker
+    if changed:
+        reason = f"the plan changed during its review; run: kengash plan review {plan_id}"
+        return _exit(paths, slug, plan_id, reason)
     return f"{plan_id}: round {number} {output.verdict}"
+
+
+def _record_round(
+    paths: StorePaths,
+    slug: str,
+    plan_id: str,
+    doc: Doc[Plan],
+    number: int,
+    output: ReviewOutput,
+    provider: str,
+    model: str | None,
+    result: StepResult,
+) -> None:
+    """Write the round's verdict, session, review log and token totals to the plan."""
+    plan = doc.meta
+    plan.review.round, plan.review.verdict = number, output.verdict
+    if result.session_id:
+        plan.review.session = SessionRef(
+            provider=provider, model=model or "default", id=result.session_id
+        )
+    log = doc.sections.get("Review log", "").strip("\n")
+    lines = prompts.review_log_lines(number, output)
+    doc.sections["Review log"] = "\n".join(filter(None, [log, *lines]))
+    plan.updated = utc_now()
+    documents.save_plan(paths.project(slug), doc)
+    if result.total_usage is not None:
+        state = runtime.load_ticket_state(paths, plan_id)
+        state.totals[ROLE] = result.total_usage
+        runtime.save_ticket_state(paths, plan_id, state)
 
 
 def fail_review(plan_id: str, *, project: str | None, reason: str) -> None:
@@ -245,8 +267,11 @@ def fail_review(plan_id: str, *, project: str | None, reason: str) -> None:
 
 
 def _exit(paths: StorePaths, slug: str, plan_id: str, reason: str) -> str:
-    """Journal the end of a job that produced no round."""
-    journal.append(paths, jobs.exited(JOB, plan_id, slug, reason))
+    """Journal the end of a job that produced no round and drop the worker's record, under
+    the plan's lock: a `plan review` never joins a worker that has already ended."""
+    with locked(_lock(paths, slug)):
+        journal.append(paths, jobs.exited(JOB, plan_id, slug, reason))
+        jobs.forget(plan_id)
     return f"{plan_id}: review ended: {reason}"
 
 

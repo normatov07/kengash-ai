@@ -477,3 +477,28 @@ def test_the_live_rows_outlive_a_render() -> None:
     assert "read x" in found["a"] and "edit y" in found["a"] and found["b"] == ""
     source = (STATIC / "views" / "ticket.js").read_text()
     assert 'addEventListener("open"' in source  # a reconnect replays history: start over
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_the_live_header_elapsed_time_ticks() -> None:
+    fmt = (STATIC / "format.js").as_uri()
+    out = _node(
+        f"import {{ tick }} from '{fmt}';"
+        "const el = {dataset: {since: '1000'}, textContent: '0s'};"
+        "const root = {querySelectorAll: (q) => q === '[data-since]' ? [el] : []};"
+        "tick(root, 1_000_000 + 13_000); const a = el.textContent;"
+        "tick(root, 1_000_000 + 324_000);"
+        "console.log(JSON.stringify([a, el.textContent]));"
+    )
+    assert json.loads(out) == ["13s", "5m"]
+    ticket = (STATIC / "views" / "ticket.js").read_text()
+    assert "data-since=" in ticket and "setInterval(" in ticket and "clearInterval(" in ticket
+
+
+def test_screen_readers_hear_that_a_worker_runs() -> None:
+    board = (STATIC / "views" / "board.js").read_text()
+    pulse = re.search(r'<span class="pulse"[^>]*>', board)
+    assert pulse is not None and 'aria-hidden="true"' in pulse.group(0)
+    assert '<span class="sr-only">a worker is running</span>' in board
+    ticket = (STATIC / "views" / "ticket.js").read_text()
+    assert '<span class="sr-only">a worker is running</span>' in ticket

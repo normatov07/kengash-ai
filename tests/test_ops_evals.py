@@ -182,15 +182,20 @@ def test_baseline_runs_install_no_skills(work: Path, source: Path, fake_clis: Fa
     assert not (work / "repo" / ".claude").exists()
 
 
-def test_agy_conductors_run_sandboxed_without_prompts(
+def test_agy_conductors_may_run_kengash_and_read_only(
     work: Path, source: Path, fake_clis: FakeClis
 ) -> None:
+    # like claude's `Bash(kengash:*)`: no sandbox, whose read-only ~/.gemini stopped every
+    # agy that kengash starts (the sign-in check, workers), and no blanket permission skip
     reply = json.dumps({"conversation_id": "c-1", "status": "SUCCESS", "response": "Planned."})
     fake_clis.queue("agy", stdout=reply, shell=PLAN_NEW)
     result = run(work, source, scenario(), agent="antigravity")
     assert result.passed, result.failure
     argv = fake_clis.calls("agy")[0]["argv"]
-    assert argv[-2:] == ["--dangerously-skip-permissions", "--sandbox"]
+    assert "--sandbox" not in argv and "--dangerously-skip-permissions" not in argv
+    allowed = json.loads(argv[argv.index("--settings") + 1])["permissions"]["allow"]
+    assert allowed == list(evals.AGY_ALLOW) and allowed[0] == "command(kengash)"
+    assert not [rule for rule in allowed if rule.startswith(("command(rm", "command(find"))]
     assert (work / "repo/.agents/skills/kengash-plan/SKILL.md").is_file()
 
 
@@ -295,3 +300,37 @@ def test_claude_conductor_loads_the_plugin_dir(
     argv = fake_clis.calls("claude")[0]["argv"]
     assert argv[1] == "/kengash:plan Add add(a, b)"
     assert argv[argv.index("--plugin-dir") + 1] == str(work / "repo/.claude/skills/kengash")
+
+
+def test_agy_conductors_stream_so_a_denied_command_shows_in_the_transcript(tmp_path: Path) -> None:
+    argv = evals.conductor_argv("antigravity", "/kengash-plan", model=None, session=None)
+    assert argv[argv.index("--output-format") + 1] == "stream-json"
+    init = {"event": "init", "conversation_id": "c-1"}
+    tool = {
+        "event": "step_update",
+        "step_update": {"step_type": "tool", "tool_name": "run_command", "state": "DONE"},
+    }
+    result = {"event": "result", "result": {"conversation_id": "c-1", "response": "Done."}}
+    stream = "".join(json.dumps(event) + "\n" for event in (init, tool, result))
+    assert evals.parse_turn("antigravity", stream) == ("c-1", "Done.")
+    assert evals.parse_turn("antigravity", json.dumps(init) + "\n") == ("c-1", "")
+
+
+def test_agy_runs_tell_the_conductor_its_shell_runs_kengash_only(
+    work: Path, source: Path, fake_clis: FakeClis
+) -> None:
+    # headless agy ends its turn, replyless, on the first denied command (live 2026-11-07:
+    # `ls`, then `find`); claude is told of a denial and goes on, and has no shell besides
+    reply = json.dumps({"conversation_id": "c-1", "status": "SUCCESS", "response": "Planned."})
+    fake_clis.queue("agy", stdout=reply, shell=PLAN_NEW)
+    clean = scenario(expect={"journal": ["plan.created"], "clean": True})
+    result = run(work, source, clean, agent="antigravity")
+    assert result.passed, result.failure  # the rule file is the runner's: the repo is clean
+    rule = (work / "repo" / "AGENTS.md").read_text(encoding="utf-8")
+    assert "read_file" in rule and "kengash" in rule and "find" in rule
+
+
+def test_claude_runs_get_no_agy_rule(work: Path, source: Path, fake_clis: FakeClis) -> None:
+    fake_clis.queue("claude", stdout=claude_reply(), shell=PLAN_NEW)
+    assert run(work, source, scenario()).passed
+    assert not (work / "repo" / "AGENTS.md").exists()

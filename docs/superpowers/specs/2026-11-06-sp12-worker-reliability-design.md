@@ -76,7 +76,7 @@ agy also takes `--settings <json>` for one session. Claude Code has `--output-fo
 
    `fallback_on_rate_limit` is renamed `fallback_on_error`, covering rate limits and network errors; the old key is still read (*call*: one switch for "use my fallbacks when the main CLI cannot answer").
 5. **Keep the session.** A failed call stores `result.session_id` on the ticket, which agy reports even with `status: ERROR`. For a killed call, `recover_session(log)` reads the id from the stream log's first event: agy's `init`, claude's `system/init`, codex's `thread.started`. The existing dead-worker recovery uses the same function. A later `kengash run <id>` then resumes the session that holds the context. The id is not stored while the step runs (*call*: nothing attaches to a running step, and `run_process` blocks until the CLI exits). Because of this, the stream-json switch of §4.1 lands in this milestone.
-6. **Say where the work is.** A failure line becomes one line of at most 300 characters: `<kind>: <first line of the detail>; log: <path>`. For an editing step it adds `; work kept in <worktree> (N files changed)`. A retry of an editing step whose worktree has uncommitted changes tells the session, or a new one, that the worktree already holds changes from the failed attempt, which it should review and finish.
+6. **Say where the work is.** A failure line becomes one line of at most 300 characters: `<kind>: <first line of the detail>; log: <path>`. The reason keeps at least 120 characters, so very long paths (macOS temp folders) may lengthen the line instead of crowding it out. For an editing step it adds `; work kept in <worktree> (N files changed)`. A retry of an editing step whose worktree has uncommitted changes tells the session, or a new one, that the worktree already holds changes from the failed attempt, which it should review and finish.
 
 ## 4. Decisions: visibility (milestone 2)
 
@@ -95,7 +95,7 @@ agy also takes `--settings <json>` for one session. Claude Code has `--output-fo
    A step quiet for 10 minutes or more is marked `quiet` (*call*). Nothing is killed for that; `step_timeout_min` still governs.
 3. **`wait` shows progress.**
    - The default `--timeout` drops from 540 to 300 seconds (*call*: the conductor and user hear something every 5 minutes, inside every agent's tool timeout).
-   - On exit 3, `wait` prints one line per running ticket in scope, at most 5 lines: `<id> <step>→<provider>/<model> <elapsed> · active <age> ago · <N> files changed · <action>`, ending with `· quiet` when marked.
+   - On exit 3, `wait` prints one line per running ticket in scope, at most 5 lines: `<id> <step>→<provider>/<model> <elapsed> · active <age> ago · <N> files changed · <action>`, ending with `· quiet` when marked. A worker between CLI calls (committing, routing, waiting for a slot) shows `<step> (between calls)` in place of `<step>→<provider>/<model>`.
    - The loop skill shows these lines to the user and waits again.
    - `--json` gives the `Progress` list.
 4. **Each worker as a watchable "sub-agent"** (the user's request of 2026-11-06: see the worker CLIs like Claude Code's or Antigravity's subagents, and click one to see what it does).
@@ -103,11 +103,11 @@ agy also takes `--settings <json>` for one session. Claude Code has `--output-fo
    - **`kengash logs <id> -f`: the worker's live transcript.**
      - It follows one ticket across all its steps, one readable line per worker action, parsed from the stream logs (§4.1):
        ```
-       11:05:43 implement → antigravity/gemini-3.8-flash-medium (session d68cea60)
+       11:05:43 implement → antigravity/gemini-3.8-flash-medium
        11:05:51 read pubspec.yaml
        11:06:02 edit lib/main.dart
        11:26:27 reply: Rebrand core package and UI to Chess Samurai
-       11:26:30 implement done · 26 files changed · 498k tokens
+       11:26:30 implement pass · 26 files · 498k tokens
        11:26:31 review_code → claude/opus
        ```
      - Without `-f` it prints what has happened so far. With `-f` it ends when the ticket reaches a gate, is done or fails, with a closing status line. `--json` gives the events.
@@ -115,7 +115,7 @@ agy also takes `--settings <json>` for one session. Claude Code has `--output-fo
      - After `kengash run`, start `kengash logs <id> -f` in the background for each started ticket. The host lists each as a running task named after the ticket, and the user opens it to watch that worker live, the way a subagent's transcript opens. It ends on its own when the ticket stops.
      - Run `kengash wait` in the background too, and keep answering the user while it runs. Act on its events when the host reports that it ended. The session is never frozen in a blocking call.
      - Agents without background commands keep today's blocking `wait`, which now prints progress every 5 minutes (§4.3).
-   - **`kengash ps`.** Prints one progress line per running ticket (§4.2), or `nothing running`. `--line` prints one compact line for a status bar: `kg: 2 running · 7add8c2e implement→agy 12m edit lib/main.dart`, for example from Claude Code's `statusLine` command. The docs show how to set it up; kengash never edits the user's agent settings (*call*).
+   - **`kengash ps`.** Prints one progress line per running ticket (§4.2), or `nothing running`. `--line` prints one compact line for a status bar: `kg: 2 running · 7add8c2e implement→antigravity 12m edit lib/main.dart`, for example from Claude Code's `statusLine` command. The docs show how to set it up; kengash never edits the user's agent settings (*call*).
 5. **UI: the worker live view.**
    - Overview's Live agent sessions table gains an "activity" cell: `active <age> ago · <N> files · <action>`, red when quiet.
    - Clicking a running session opens its ticket on a new **Live** tab. It shows the same timeline as `kengash logs`: each action a row with time, kind icon (read, edit, run, reply) and target. It streams over SSE from `GET /api/tickets/{id}/live`, follows the newest row, and shows a pulsing "running" header with step, CLI and model, elapsed time and changed files.
@@ -147,7 +147,7 @@ agy also takes `--settings <json>` for one session. Claude Code has `--output-fo
      - a doc-writer without `fallback`;
      - `fallback_on_rate_limit`.
    - `doctor --fix` rewrites exactly those, keeping comments: 1,000,000, `fallback: [claude/sonnet]`, and `fallback_on_error` with the same value. A value the user changed is never touched (the user's choice).
-   - The `needs_approval` detail reads `token cap: 505,494 of 250,000 used; approve with: kengash approve <id> --tokens N`.
+   - The `needs_approval` detail reads `token cap: 505,494 of 250,000 used; approve with --tokens N` (the line it appears on already starts with the ticket id).
 3. **agy permissions.** Editing steps pass `--settings` allowing agy's read-only file tools anywhere, so a read outside the worktree no longer ends a turn. The exact key is to be confirmed by a probe at build time; if agy offers no such key, the repair turn of SP3 stays the remedy (*call*).
 5. **A checks step that runs** (the user's choice).
    - The shell adapter's `run_tests` runs `project.test_cmd`, then `project.lint_cmd`, in the worktree. It passes only when both exit 0; an empty command is skipped.
@@ -182,6 +182,6 @@ Each milestone ends with a critical review against this spec (hard rule 9).
 
 ## 8. Risks
 
-- **Stream formats can change.** Parsers read only the fields they need. An event they do not know is skipped. When no `result` event is found, the step is an `empty` error, as today.
-- **Large logs.** A step that streams for 30 minutes may write megabytes. `logs.keep_days` already rotates logs; progress reads only the log's tail (*call*: the last 64 KiB).
+- **Stream formats can change.** Parsers read only the fields they need. An event they do not know is skipped. When no `result` event is found, the step is classified from what the CLI itself said (§4.1), and is a crash when it said nothing.
+- **Large logs.** A step that streams for 30 minutes may write megabytes. `logs.keep_days` already rotates logs; progress reads only the log's tail (*call*: the last 64 KiB); `kengash logs` and the Live tab then say `earlier actions omitted; full log: <log>`.
 - **`git status` cost on big worktrees.** It runs only when progress is asked for: on `wait` exit 3, `ps`, and UI reloads. Worktrees with no file written for 60 s reuse the last result.

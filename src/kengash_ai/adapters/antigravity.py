@@ -15,6 +15,7 @@ from kengash_ai.adapters.base import (
     probe,
     schema_json,
     tail,
+    unfinished,
 )
 from kengash_ai.adapters.process import ProcessResult
 from kengash_ai.model import StepRequest, StepResult, Usage
@@ -79,7 +80,7 @@ class Antigravity(CliProvider):
         )
         if not isinstance(data, dict) or "status" not in data:
             # no result: the CLI died mid-stream; classify what it said, never `empty`
-            message = tail(proc.stderr or proc.stdout) or f"exit {proc.exit_code}"
+            message = unfinished(proc)
             return StepResult(session_id=started, error=classify(message), detail=message)
         text = str(data.get("response") or "")
         totals = _totals(data.get("usage") or {})

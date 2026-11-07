@@ -267,16 +267,33 @@ def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
             _wait_quota(job, ready, result)
             request = _again(job, request, result)
             continue
-        if _never_started(request, result):
-            _forget_session(job, ready.step, pick.role, str(request.session_id))
-        elif result.session_id:
-            _keep_session(job, ready.step, pick, result.session_id)
-        editing = ready.resolved.kind_of(ready.step) == "edit"
-        changed = len(gitops.changed_files(job.worktree)) if editing else 0
-        reason = calls.failure(
-            pick.provider, request, result, worktree=job.worktree, changed=changed
-        )
-        return _fail(job, reason, usage)
+        return _call_failed(job, ready, pick, request, result, usage)
+
+
+def _call_failed(
+    job: _Job,
+    ready: _Ready,
+    pick: agents.Pick,
+    request: StepRequest,
+    result: StepResult,
+    usage: Usage,
+) -> JobEnd:
+    """Fail the ticket over a failed CLI call: keep the session it opened (else forget one
+    that never started) and name the work left in the worktree (SP12 §3.5)."""
+    if _never_started(request, result):
+        _forget_session(job, ready.step, pick.role, str(request.session_id))
+    elif result.session_id:
+        _keep_session(job, ready.step, pick, result.session_id)
+    reason = calls.failure(
+        pick.provider, request, result, worktree=job.worktree, changed=_changed(job, ready)
+    )
+    return _fail(job, reason, usage)
+
+
+def _changed(job: _Job, ready: _Ready) -> int:
+    """How many files an editing step left changed in the worktree; 0 for other steps."""
+    editing = ready.resolved.kind_of(ready.step) == "edit"
+    return len(gitops.changed_files(job.worktree)) if editing else 0
 
 
 def _prepare(job: _Job, ready: _Ready, pick: agents.Pick) -> StepRequest:
@@ -302,7 +319,16 @@ def _prepare(job: _Job, ready: _Ready, pick: agents.Pick) -> StepRequest:
 
     _update(job, step, begin)
     ready.state = runtime.load_ticket_state(job.paths, job.ticket_id)
-    _journal(job, "step.start", step=step, role=role, provider=pick.provider, loop=ticket.loop)
+    model = None if pick.provider == "shell" else pick.model or "default"
+    _journal(
+        job,
+        "step.start",
+        step=step,
+        role=role,
+        provider=pick.provider,
+        model=model,
+        loop=ticket.loop,
+    )
     if pick.provider != "shell":
         kind = "session.resumed" if resume else "session.created"
         _journal(job, kind, role=role, provider=pick.provider, session=session_id)
@@ -468,9 +494,12 @@ def _commit(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
             break
         except gitops.CommitFailed as exc:
             lines = exc.output.strip().splitlines()
+            if ran.result.session_id:  # `kengash run` resumes the step's session
+                _keep_session(job, ready.step, ran.pick, ran.result.session_id)
             if attempt == 2:
                 last = lines[-1] if lines else str(exc)
-                return _fail(job, f"commit failed: {last}", ran.usage)
+                kept = calls.work_kept(job.worktree, _changed(job, ready))
+                return _fail(job, f"commit failed: {last}{kept}", ran.usage)
             problem = "the commit hook failed:\n" + "\n".join(lines[-20:])
             request = _repair(job, ran.request, ran.result, problem)
             provider = adapters.get(ran.pick.provider, runtime=job.paths.runtime)
@@ -481,7 +510,7 @@ def _commit(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
                 result = provider.run(request)
                 ran.usage = calls.plus(ran.usage, result.usage)
             if result.error is not None:
-                return _fail(job, calls.failure(ran.pick.provider, request, result), ran.usage)
+                return _call_failed(job, ready, ran.pick, request, result, ran.usage)
             session = result.session_id or ran.result.session_id
             ran.result = ran.result.model_copy(update={"session_id": session})
     ran.files = gitops.commit_files(job.worktree, ran.commit) if ran.commit else []

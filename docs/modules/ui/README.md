@@ -30,6 +30,7 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 
 ## Changes
 
+- 2026-11-06 (SP12 minors): the Live header's elapsed time counts on (`format.tick` re-times `[data-since]` every second while the stream is open) and shows `(between calls)` when no CLI runs; the pulse is hidden from screen readers, which read a `.sr-only` "a worker is running" instead.
 - 2026-11-06 (final review): the Live tab keeps its rows (`liveAppend`, `liveRows`) and its stream across re-renders, starts the rows over when the stream (re)opens, and does not reopen a finished ticket's stream.
 - 2026-11-06: the ticket sheet's Live tab (while a worker runs, or opened from a running session or card through `app.ticketTab`) streams `/api/tickets/{id}/live` into rows (`format.activityRow`: time, kind, text), follows the newest unless scrolled up, and closes its `EventSource` on every render and on leaving; a pulsing header names step, CLI/model, elapsed (`format.span`), files and quiet or gone workers; Changes lists `in_progress` files; Overview's session rows add an activity line and open Live; running board cards pulse (`.pulse`, still under `prefers-reduced-motion`); checked headless at 360 and 1440 px (SP12 M2).
 - 2026-11-06: `GET /api/tickets/{id}/live` streams the ticket's worker activity as `event: activity` (history, then live, from `activity.watch`) and ends with `event: done` (SP12 M2).
@@ -49,4 +50,3 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 - 2026-10-26: the server reads its token from `KENGASH_UI_TOKEN` (SP8).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-26: three provider cards (claude, codex, antigravity); the not-supported card is gone (SP7).
-- 2026-10-26: accessibility: axe-core reports no serious or critical issue on any screen; `--faint` is the canvas's grey lifted to 4.5:1, text never uses `--dim`, off roles and pending chain steps show their state by colour instead of opacity, the SETTINGS.md view is keyboard-scrollable (SP7).

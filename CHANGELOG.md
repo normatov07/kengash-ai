@@ -4,6 +4,8 @@ All notable changes to this project are written here. The format follows [Keep a
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-06
+
 ### Added
 
 - An approved plan flows on: `/kengash:plan` and `/kengash:grill` cut the tickets as soon as you approve, with no second yes, each ticket's scope 3 to 8 lines.
@@ -24,6 +26,17 @@ All notable changes to this project are written here. The format follows [Keep a
 - Failures are one line naming the log and, for an editing step, the worktree and its changed files; a failed call keeps its session, so a retry resumes it.
 - Claude and Antigravity workers run with `--output-format stream-json`.
 - The loop skill's event table moved to `loop/references/events.md`. Run `kengash skills install --agent … [--global]` again to get the new skills.
+
+### Fixed
+
+- A worker CLI that stops without a result is no longer judged by its model's own words (a reply mentioning a quota or a dropped connection); only what the CLI itself said counts.
+- `kengash logs` and the Live tab say `earlier actions omitted; full log: <log>` when a long log is read from its end.
+- The Live tab's elapsed time counts on; a worker between CLI calls shows `(between calls)` there and in `kengash ps`, instead of `step→/`.
+- `kengash doctor --fix` renames `fallback_on_rate_limit` where it stands, keeping its comment.
+- A commit hook that fails twice names the work kept in the worktree and keeps the step's session, so `kengash run` resumes it.
+- Screen readers announce a running worker on board cards and the Live tab.
+- `kengash logs` and the Live tab name each step's CLI and model (`implement → antigravity/flash`).
+- `kengash memory compact` or `kengash plan review` run right after the previous one ended no longer fails with `worker died`.
 
 ## [0.3.0] - 2026-10-30
 
@@ -89,6 +102,7 @@ The first release.
 
 - The UI checks Host, Origin, a per-run token and an `X-Harness` header on changes, and sends a strict Content Security Policy with framing, sniffing and referrer protections.
 
+[0.4.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.4.0
 [0.3.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.3.0
 [0.2.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.2.0
 [0.1.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.1.0

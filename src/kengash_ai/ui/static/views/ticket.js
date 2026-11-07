@@ -3,7 +3,7 @@
 // Memory file, and a rail with the agent chain, metadata and actions. Closes back to where it
 // was opened (× or Escape).
 import { get } from "../api.js";
-import { STEPS, activityRow, clock, elapsed, shortTime, span, tokens } from "../format.js";
+import { STEPS, activityRow, clock, elapsed, shortTime, span, tick, tokens } from "../format.js";
 import { html, raw } from "../html.js";
 import { icon } from "../icons.js";
 import { armed } from "../scope.js";
@@ -16,10 +16,12 @@ const GATED = ["needs_approval", "stalled", "failed", "awaiting_merge"];
 // The Live tab's stream; closed on every render and when the user leaves the ticket.
 // The Live tab's rows and stream outlive a render: the sheet re-renders on every journal
 // event, and the stream would otherwise replay its history and lose the scroll each time.
-const live = { id: "", rows: [], source: null, done: false, follow: true };
+const live = { id: "", rows: [], source: null, done: false, follow: true, timer: null };
 function closeLive() {
   live.source?.close();
   live.source = null;
+  clearInterval(live.timer); // the header's elapsed time stops counting with the stream
+  live.timer = null;
 }
 export function liveAppend(id, item) {
   if (live.id !== id) Object.assign(live, { id, rows: [], done: false, follow: true });
@@ -134,7 +136,7 @@ function overviewTab(data) {
 function liveTab(data) {
   const run = data.running;
   const head = run
-    ? html`<div class="live-head"><span class="pulse" aria-hidden="true"></span><span><strong>${STEPS[run.step]?.label ?? run.step}</strong> → <span class="mono">${run.provider}/${run.model}</span></span><span class="muted">${span(run.elapsed_s)} · ${run.changed} ${run.changed === 1 ? "file" : "files"} changed</span>${run.quiet ? html`<span class="cchip red">quiet</span>` : ""}${run.alive ? "" : html`<span class="cchip red">worker gone</span>`}</div>`
+    ? html`<div class="live-head"><span class="pulse" aria-hidden="true"></span><span class="sr-only">a worker is running</span><span><strong>${STEPS[run.step]?.label ?? run.step}</strong> ${run.provider ? html`→ <span class="mono">${run.provider}/${run.model}</span>` : html`<span class="muted">(between calls)</span>`}</span><span class="muted"><span data-since="${Math.round(Date.now() / 1000 - run.elapsed_s)}">${span(run.elapsed_s)}</span> · ${run.changed} ${run.changed === 1 ? "file" : "files"} changed</span>${run.quiet ? html`<span class="cchip red">quiet</span>` : ""}${run.alive ? "" : html`<span class="cchip red">worker gone</span>`}</div>`
     : html`<div class="live-head"><span class="muted">No worker is running this ticket; its last activity:</span></div>`;
   return html`${head}<div class="live-rows box" id="live-rows" role="log" aria-live="polite" aria-label="Worker activity">${raw(liveRows(data.meta.id))}</div>`;
 }
@@ -311,6 +313,7 @@ export function bind(root, app, data) {
         closeLive();
       });
     }
+    if (!live.done) live.timer ??= setInterval(() => tick(document), 1000);
   }
   const close = () => (location.hash = app.from || "#/board");
   const why = () => root.querySelector("#why")?.value.trim() ?? "";

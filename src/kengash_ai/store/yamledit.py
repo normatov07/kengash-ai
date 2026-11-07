@@ -33,12 +33,31 @@ def set_key(text: str, key: str, value: Any, *, source: str = "YAML") -> str:
     return _set(f"{text}{cr}\n", key, value, source, cr).removesuffix(f"{cr}\n")
 
 
-def _set(text: str, key: str, value: Any, source: str, cr: str) -> str:
-    """`set_key` on a text whose last line is ended; `cr` ends each line written."""
+def rename_key(text: str, old: str, new: str, *, source: str = "YAML") -> str:
+    """`text` with top-level key `old` renamed `new` on its own line, its value and comment
+    kept; unchanged when `old` is missing, quoted, or `new` is already there."""
+    root = _load(text, source)
+    if not isinstance(root, CommentedMap) or old not in root or new in root:
+        return text
+    line, column = root.lc.key(old)
+    lines = text.split("\n")
+    row = lines[line]
+    if row[column : column + len(old)] != old:
+        return text
+    lines[line] = row[:column] + new + row[column + len(old) :]
+    return "\n".join(lines)
+
+
+def _load(text: str, source: str) -> object:
     try:
-        root = YAML(typ="rt").load(text)
+        return YAML(typ="rt").load(text)
     except YAMLError as exc:
         raise UserError(f"{source}: invalid YAML: {getattr(exc, 'problem', exc)}") from exc
+
+
+def _set(text: str, key: str, value: Any, source: str, cr: str) -> str:
+    """`set_key` on a text whose last line is ended; `cr` ends each line written."""
+    root = _load(text, source)
     if root is None:
         root = CommentedMap()
     if not isinstance(root, CommentedMap):

@@ -222,3 +222,17 @@ def test_edit_steps_allow_reads(tmp_path: Path) -> None:
     assert allow == {"permissions": {"allow": ["read_file(*)"]}}
     read_only = Antigravity().command(_request(tmp_path, prompt="p"))
     assert "--settings" not in read_only
+
+
+def test_no_result_never_classifies_the_models_text(fake_clis: FakeClis, tmp_path: Path) -> None:
+    # the model's own words mention a quota; the CLI said nothing, so this is a crash
+    update = {"event": "step_update", "step_update": {"text": "the quota exceeded page, 401"}}
+    fake_clis.queue("agy", stdout=_stream(INIT, update), exit=1)
+    result = Antigravity().run(_request(tmp_path, prompt="p", output="work"))
+    assert (result.error, result.detail) == ("crash", "stream ended without a result (exit 1)")
+
+
+def test_no_result_classifies_the_clis_own_lines(fake_clis: FakeClis, tmp_path: Path) -> None:
+    fake_clis.queue("agy", stdout=_stream(INIT) + f"Error: {RESET}\n", exit=1)
+    result = Antigravity().run(_request(tmp_path, prompt="p", output="work"))
+    assert (result.error, result.detail) == ("network", f"Error: {RESET}")

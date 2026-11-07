@@ -30,6 +30,7 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 
 ## Changes
 
+- 2026-11-06 (SP12 minors): a stream that ends without a result is classified from stderr, else from `stream.said` (the CLI's lines that are not JSON and each event's `error`), never from the model's text; with neither it is a crash, `stream ended without a result (exit N)` (`base.unfinished`).
 - 2026-11-06 (final review): the stdout pump stamps each line before writing it and is waited on for at most `grace_s` after the group ends, so a child that left the group holding stdout cannot hang a call; `classify` knows claude's and Node's network wording (`Connection error`, `Request timed out`, `ECONNREFUSED`, `ENOTFOUND`, `ETIMEDOUT`, `EAI_AGAIN`, `fetch failed`, `socket hang up`); `stream.lines` splits on `\n` only, keeping JSON with U+2028 whole.
 - 2026-11-06: agy editing steps pass `--settings` allowing `read_file(*)`, the allow-rule agy's own denial names, so a read it cannot prompt for no longer ends the turn (SP12 M3).
 - 2026-11-06: `Shell` runs `project.test_cmd`, then `project.lint_cmd` (an empty one skipped; lint logs to `<log>-lint.out`); the first failure is the verdict, its finding naming `make project.<x>_cmd pass`; summaries `tests passed`, `tests and lint passed`, `lint failed (exit N)` (SP12 M3).
@@ -49,4 +50,3 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 - 2026-10-23: codex `error` events followed by a completed turn are retries, not failures (SP3 M2 review).
 - 2026-10-23: antigravity provider (SP3 M2).
 - 2026-10-23: codex provider (SP3 M2).
-- 2026-10-23: claude provider (SP3 M2).

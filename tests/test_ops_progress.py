@@ -82,3 +82,14 @@ def test_nothing_running(engine: Engine) -> None:
 
     documents.save_ticket(engine.paths.project(engine.slug), doc)
     assert progress.running(engine.paths, [engine.slug]) == []
+
+
+def test_progress_between_calls_names_no_cli(busy: Engine) -> None:
+    runtime.save_ticket_state(busy.paths, busy.ticket_id, TicketState())  # no CLI runs now
+    (found,) = progress.running(busy.paths, [busy.slug])
+    line = progress.line(found)
+    assert line.startswith(f"{busy.ticket_id} implement (between calls) 12m · ")
+    assert "→" not in line and "/ " not in line
+    assert progress.short([found]).startswith(
+        f"kg: 1 running · {busy.ticket_id} implement (between calls) 12m"
+    )
