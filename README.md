@@ -35,6 +35,10 @@ Leave out `[ui]` for the CLI alone. The latest code: `uv tool install 'kengash-a
 
 The skills install as the `kengash` plugin: in Claude Code and Antigravity you type `/kengash:plan`, `/kengash:grill`, `/kengash:ticket`, `/kengash:loop` and `/kengash:ui`; Codex has no plugin namespace, so it gets `$kengash-plan` and so on. Claude Code can also take the plugin from its marketplace: `/plugin marketplace add normatov07/kengash-ai`, then `/plugin install kengash@kengash-ai`.
 
+### Upgrading from 0.4.0
+
+`uv tool upgrade kengash-ai`, then `kengash doctor --fix`: it moves a `run_tests` step that runs after the code review, or has no way back to `implement`, right after `implement`. A project whose repo is gone for good is removed with `kengash forget <project>`; commands run inside an Orca workspace or any other git worktree of a registered repo now use that repo's project.
+
 ### Upgrading from 0.3.0
 
 `uv tool upgrade kengash-ai`, then `kengash skills install --agent … --global` again (an approved plan now flows into tickets and the loop, and the loop watches its workers), and `kengash doctor --fix`: it renames `fallback_on_rate_limit` to `fallback_on_error`, raises a token cap still at the old 250,000 to 1,000,000, gives the docs agent a fallback where you left it as seeded, and adds the detected test and lint commands with a `run_tests` step to each project that has none. Switch Auto mode on in Settings or on Overview to have the loop start by itself. Each worker now opens its own terminal tab and each loop a dashboard tab (`kengash watch`), with desktop notifications when a ticket needs you; `watch.tabs: off` and `watch.notify: false` turn them off.
