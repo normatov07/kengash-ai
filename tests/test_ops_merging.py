@@ -170,7 +170,8 @@ def test_merge_check_failure_sends_back_and_keeps_main(
     assert "test ! -f boom.txt" in doc.sections["Findings"]
     assert doc.sections["Check output"].startswith("`test ! -f boom.txt` exit 1")
     assert not (engine.repo / "retry.py").exists()
-    assert engine.state().sent_back is not None and engine.state().sent_back.step == "merge"
+    sent = engine.state().sent_back
+    assert sent is not None and sent.step == "merge"
 
 
 def test_merges_of_one_project_serialize(engine: Engine, run_git: Callable[..., str]) -> None:

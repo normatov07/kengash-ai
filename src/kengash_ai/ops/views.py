@@ -1171,6 +1171,8 @@ STATUS_EVENTS = frozenset(
         "ticket.recirculated",
         "ticket.paused",
         "ticket.stopped",
+        "ticket.waiting",  # a job waits for another ticket's paths (SP16)
+        "ticket.merge_held",  # an auto-merge waits for the user (SP16)
     }
 )
 

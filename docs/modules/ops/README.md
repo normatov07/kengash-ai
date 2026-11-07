@@ -62,6 +62,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-07: the ticket timeline shows `ticket.waiting` and `ticket.merge_held` with their reasons (SP16).
 - 2026-11-07: `merging.merge_ticket` is a merge queue: merges of one project take turns on `merge-<slug>.lock` (held through the checks, waiting up to the step timeout); a rebase that moved HEAD reruns the checks (`checks.configured`: a command set and an enabled `check` step) without the project lock, journals `checks.end` with step `merge`, and a fail sends the ticket back like a conflict (Findings, `## Check output`, `TicketState.sent_back` from `merge`, loop + 1 or the cap's approval); checks that cannot run leave it awaiting the merge; a base that moved since the rebase refuses with `<base> moved; run kengash merge <id> again`. `merge_if_clean` journals `ticket.merge_held` with why an auto-merge waits (SP16).
 - 2026-11-07: a planning step's `files` (`PlanOutput`) narrow the ticket's touches when `prompts.narrowed` accepts them (1–40 repo-relative paths, normalised, deduplicated, sorted; any absolute, empty or `..` path keeps the touches); the Log line says `touches narrowed to N files` (SP16).
 - 2026-11-07: before an `edit`-kind step's call, `steps._catch_up` fast-forwards a branch with no work yet to the newest base under the repo lock (SP16).
