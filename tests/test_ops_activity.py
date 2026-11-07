@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from conftest import FAKES, Engine
+from conftest import FAKES, Engine, FakeClis
 
 from kengash_ai import journal
 from kengash_ai.model import Event
@@ -162,3 +162,18 @@ def test_a_whole_log_has_no_omitted_note(engine: Engine) -> None:
     _log(engine, 1, "agy/stream-ok.jsonl", T0)
     found = activity.ticket(engine.paths, engine.slug, engine.ticket_id)
     assert not [item for item in found if "omitted" in item.text]
+
+
+def test_a_step_start_names_the_model(engine: Engine) -> None:
+    _event(engine, T0, "step.start", step="implement", provider="antigravity", model="flash")
+    found = activity.ticket(engine.paths, engine.slug, engine.ticket_id)
+    assert found[0].text == "implement → antigravity/flash"
+
+
+def test_the_journal_names_each_steps_model(engine: Engine, fake_clis: FakeClis) -> None:
+    from kengash_ai.ops import steps
+
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    steps.run_job(engine.ticket_id)
+    found = activity.ticket(engine.paths, engine.slug, engine.ticket_id)
+    assert found[0].text == "plan → claude/opus"

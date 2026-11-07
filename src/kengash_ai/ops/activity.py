@@ -163,7 +163,9 @@ def _journal(paths: StorePaths, slug: str, ticket_id: str, since: date | None) -
 def _from_event(event: Event) -> Activity | None:
     extra = event.model_extra or {}
     if event.type == "step.start":
-        return Activity(event.ts, "step", f"{extra.get('step')} → {extra.get('provider')}")
+        model = extra.get("model")  # journals before 0.4.0 name no model
+        cli = f"{extra.get('provider')}/{model}" if model else str(extra.get("provider"))
+        return Activity(event.ts, "step", f"{extra.get('step')} → {cli}")
     if event.type == "step.end":
         tokens = extra.get("tokens") or {}
         used = int(tokens.get("in", 0)) + int(tokens.get("out", 0))

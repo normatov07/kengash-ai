@@ -50,12 +50,12 @@ Run `kengash skills install --agent … --global` again: the commands are now `/
 
 Then, in your agent:
 
-1. `/kengash:plan` (or `/kengash:grill` to be interviewed first): a plan, reviewed by an agent on another provider.
-2. `/kengash:ticket`: the plan becomes tickets with importance, dependencies and touched paths.
-3. `/kengash:loop`: tickets run in their loops; the agent waits, reports gates and asks before granting loops or merging.
+1. `/kengash:plan` (or `/kengash:grill` to be interviewed first): a plan, reviewed by an agent on another provider. Once you approve it, it becomes tickets with importance, dependencies and touched paths, and the loop follows: at once when Auto mode is on (Settings or Overview in the UI), otherwise your agent asks once. `/kengash:ticket "<prompt>"` makes tickets from a short prompt instead.
+2. `/kengash:loop`: tickets run in their loops; the agent waits, reports gates and asks before granting loops or merging. One loop covers a project at a time: a second one is refused and told which session runs it.
+3. Watch the workers: `kengash ps`, `kengash logs <id> -f`, or the ticket's Live tab in the UI. In Claude Code the loop starts `kengash logs -f` as a background task per worker, which you open like a subagent.
 4. `/kengash:ui` (or `kengash ui open`): the web UI on 127.0.0.1 behind a private link.
 
-The first three take an optional project name or folder at the end, such as `/kengash:loop payments-api` or `/kengash:ticket "<prompt>" ~/code/payments`; without one, planning uses the project you are in and `/kengash:loop` works every project. Every `--project/-p` option of `kengash` takes a name or a folder too. In Codex, type `$kengash-loop` and so on.
+`/kengash:plan`, `/kengash:ticket` and `/kengash:loop` take an optional project name or folder at the end, such as `/kengash:loop payments-api` or `/kengash:ticket "<prompt>" ~/code/payments`; without one, planning uses the project you are in and `/kengash:loop` works every project. Every `--project/-p` option of `kengash` takes a name or a folder too. In Codex, type `$kengash-loop` and so on.
 
 ## Commands
 
@@ -64,13 +64,21 @@ The first three take an optional project name or folder at the end, such as `/ke
 | `kengash init`, `link`, `adopt`, `doctor [--fix]` | register projects, repair links, check everything |
 | `kengash plan …`, `ticket …` | plans and tickets (agents use these; they never edit store files) |
 | `kengash next`, `run`, `wait`, `status` | what can start, start it, wait for gates, a summary |
+| `kengash ps [--line]`, `logs ID [-f]` | what each worker is doing now; one worker's reads, edits and commands, live |
+| `kengash loop claim\|release\|status` | the one loop per project (the loop skill runs these) |
 | `kengash approve`, `park`, `stop`, `pause`, `resume`, `merge` | steer running work |
 | `kengash settings show\|get\|check`, `memory …`, `context` | settings, memory and the conductor's digest |
 | `kengash agent new\|edit\|copy\|show\|remove` | agents: yours in full, built-in ones' CLI, fallbacks and switches |
 | `kengash workflow new\|rename\|remove\|route\|set` | workflows and which one each importance gets |
-| `kengash skills install\|lint\|eval`, `ui open\|stop` | skills and the web UI |
+| `kengash skills install\|show\|lint\|eval`, `ui open\|stop` | skills and the web UI |
 
-Every command takes `--help`, and most take `--json`. Exit codes: 0 done, 1 a problem, 3 timed out, 4 setup needed, 5 your decision needed.
+Every command takes `--help`, and most take `--json`. Exit codes: 0 done, 1 a problem, 3 timed out, 4 setup needed, 5 your decision needed, 6 another loop covers the project.
+
+To see running workers in Claude Code's status line, add this to `~/.claude/settings.json` (kengash never edits it for you):
+
+    "statusLine": {"type": "command", "command": "kengash ps --line"}
+
+It reads `kg: 2 running · 7add8c2e implement→antigravity 12m edit lib/main.dart`, or `kg: nothing running`.
 
 ## Configuration
 
@@ -107,6 +115,7 @@ Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
 - Installed without `--global`, Claude Code loads the `kengash` plugin only after you trust the project folder.
 - A provider shows "signed out": run the sign-in command the Agents screen or `doctor` prints, then "Check sign-in again".
 - A ticket is stalled or at a loop cap: open it on the board; the sheet shows the findings and the approve or park actions.
+- A worker seems stuck: `kengash ps` shows how long each step has run, when it last wrote anything (`quiet` after 10 minutes) and whether its process is gone; `kengash logs <id>` shows what it did. A failed step's line names its log and the worktree holding its changes; `kengash run <id>` resumes its session.
 - Worker logs are in `~/.kengash/runtime/logs/`.
 
 ## Uninstall

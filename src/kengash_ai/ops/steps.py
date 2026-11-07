@@ -319,7 +319,16 @@ def _prepare(job: _Job, ready: _Ready, pick: agents.Pick) -> StepRequest:
 
     _update(job, step, begin)
     ready.state = runtime.load_ticket_state(job.paths, job.ticket_id)
-    _journal(job, "step.start", step=step, role=role, provider=pick.provider, loop=ticket.loop)
+    model = None if pick.provider == "shell" else pick.model or "default"
+    _journal(
+        job,
+        "step.start",
+        step=step,
+        role=role,
+        provider=pick.provider,
+        model=model,
+        loop=ticket.loop,
+    )
     if pick.provider != "shell":
         kind = "session.resumed" if resume else "session.created"
         _journal(job, kind, role=role, provider=pick.provider, session=session_id)

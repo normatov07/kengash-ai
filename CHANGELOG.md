@@ -35,6 +35,7 @@ All notable changes to this project are written here. The format follows [Keep a
 - `kengash doctor --fix` renames `fallback_on_rate_limit` where it stands, keeping its comment.
 - A commit hook that fails twice names the work kept in the worktree and keeps the step's session, so `kengash run` resumes it.
 - Screen readers announce a running worker on board cards and the Live tab.
+- `kengash logs` and the Live tab name each step's CLI and model (`implement → antigravity/flash`).
 
 ## [0.3.0] - 2026-10-30
 
