@@ -1,6 +1,6 @@
 # SP15: Feedback loop — checks inside the editing step, failures agents can act on (design)
 
-Date: 2026-11-07. Status: from the user's report on chess-samurai ("tickets fail test or review again and again… agents must know why it fails") and the investigation below; the user chose kengash running the checks itself inside the editing step. Calls marked *call* are the builder's.
+Date: 2026-11-07. Status: from the user's report on chess-samurai ("tickets fail test or review again and again… agents must know why it fails") and the investigation below; the user chose kengash running the checks itself inside the editing step, and a `BLOCKED:` handoff stopping the ticket for them. Calls marked *call* are the builder's.
 
 ## 1. Why
 
@@ -20,7 +20,8 @@ The code reviewer works: it read the diff and its findings were real and specifi
 - Goal: a check failure reaches the implementer, in the same conversation and within the same loop, as the failing command, its exit code and the lines that say what broke; a loop is spent only when the implementer cannot fix it in its fix turns.
 - Goal: every agent that edits or reviews knows the project's checks; a resumed agent knows which step sent it back and why.
 - Goal: less wall time per ticket: fewer loops, and `run_tests` does not rerun checks on a commit that already passed them.
-- Non-goals: parsing each test framework's output into one finding per test (the excerpt is framework-agnostic); a new gate when the implementer says it is blocked (§5); changing the reviewer.
+- Goal: work no agent can do (a login, a download, a missing tool) stops the ticket for the user at once instead of burning loops.
+- Non-goals: parsing each test framework's output into one finding per test (the excerpt is framework-agnostic); changing the reviewer.
 - Anti-goal: a step that can now fail where it passed before. Fix turns only add chances; when they run out, the step passes as today and `run_tests` routes the ticket back as today.
 
 ## 3. Decisions
@@ -55,7 +56,14 @@ The code reviewer works: it read the diff and its findings were real and specifi
    - `plan`: the implementer edits files and runs only the Checks commands; a Scope item that needs a login, a download or another tool goes under `Risks:` as `BLOCKED: <what>` so the user can supply it.
    - Both stay within `skill.max_lines` and `skill.max_words`; RED/GREEN wording follows `docs/conventions/skills.md`.
 
-8. **Mechanics** (all *call*).
+8. **A `BLOCKED:` line stops the ticket for the user** (the user's choice).
+   - A plan or edit step whose Handoff holds a line starting `BLOCKED:` ends as usual (Handoff, Log, commit), then the ticket halts at `in_process/needs_approval` with approval `blocked` and reason `blocked: <rest of the first such line, 160 characters>`, instead of routing on. No loop is added; the existing gate notification (SP13) fires.
+   - `kengash approve <id> [--note TEXT]` on a `blocked` ticket: an edit step runs again in the same loop (it must finish the blocked part); a plan step's ticket goes on to the next step. Either way the next prompt carries `sent_back = {step: "user", summary: <note, or "the user resolved what you were blocked on">}`, so it reads `user sent this back: <note>`. `--note` is new and also accepted, unused, by the other approvals (*call*).
+   - The UI's approve button sends no note (*call*); the `loop` skill's `needs_approval` row explains a `blocked` gate with the BLOCKED line and passes the user's answer as `--note`.
+   - Skills: `BLOCKED:` is only for something the user must supply or decide (a login, a file or download, a paid or missing tool, a choice the Scope leaves open), never for checks, which kengash runs. The planner writes it as its own handoff line.
+   - Contract: approval kind `blocked` (`TicketState.approval`), `kengash approve --note`.
+
+9. **Mechanics** (all *call*).
    - The shell adapter puts the digest in a new `StepResult.check_output: str` (headline line, then the digest); `ops` writes it to `## Check output`. `adapters.digest` imports only `model`, like every adapter.
    - `TICKET_SECTIONS` gains `"Check output"` between `Findings` and `Log`.
    - During an in-step check run the step keeps its provider slot (the fix turn needs the session), the ticket keeps the edit step's status, and `TicketState.running` names `test-runner`/`shell` with the check's log, so `kengash ps`, `logs -f` and the Live tab show the check.
@@ -66,14 +74,14 @@ The code reviewer works: it read the diff and its findings were real and specifi
 
 ## 4. Contract changes (system spec and SP3 spec §8.2, same commits as the code)
 
-- System §4.4: `## Check output` in the ticket template; system §4.6: `checks.turns`; §6.1: `checks.end`; §7.1: the in-step checks between items 5 and 6, and `run_tests` reuse.
+- System §4.4: `## Check output` in the ticket template; system §4.6: `checks.turns`; §5: the `blocked` gate; §6: `approve --note`; §6.1: `checks.end`; §7.1: the in-step checks between items 5 and 6, and `run_tests` reuse.
 - SP3 §8.2: the `## Checks` block, the sent-back head, the fix prompt.
 - `docs/conventions/memory-files.md`: the `## Check output` row (kengash, 62 lines).
 - Module READMEs: `adapters`, `ops`, `roles`, `model` (hard rule 2).
 
 ## 5. Left out, on purpose
 
-- A `BLOCKED:` handoff opening no gate yet: the reviewer still decides. If loops keep burning on blocked scope, a later change can send such a ticket to `needs_approval`.
+- A note field on the UI's approve button.
 - Per-framework parsers (flutter `--reporter`, pytest `-rf`): the digest is generic; a project can still set a quieter `test_cmd`.
 
 ## 6. Milestones and exit criteria
@@ -81,5 +89,5 @@ The code reviewer works: it read the diff and its findings were real and specifi
 | M | Scope | Exit |
 |---|---|---|
 | M1 | §3.2–3.3: digest, finding, `## Check output`; §3.4 prompts and sent-back; skills §3.7 | digest tests on fixtures trimmed from the chess-samurai logs (flutter test assertion, flutter compile error, flutter analyze infos) plus pytest and a marker-less failure; finding and section writes and clears; prompt tests; skill lint |
-| M2 | §3.1 in-step checks, §3.6 reuse, §3.5 agy allow-rules; contract docs | step tests: pass first run, fail then fixed, turns exhausted (step passes, `run_tests` fails, loop + 1), no check step in workflow, `checks.turns: 0`, network error in a fix turn; reuse on same commit, rerun on another or dirty worktree; agy argv with simple and operator commands; `make check` green; live probe of the agy rule |
+| M2 | §3.1 in-step checks, §3.6 reuse, §3.5 agy allow-rules, §3.8 BLOCKED gate; `loop` skill row; contract docs | step tests: pass first run, fail then fixed, turns exhausted (step passes, `run_tests` fails, loop + 1), no check step in workflow, `checks.turns: 0`, network error in a fix turn; reuse on same commit, rerun on another or dirty worktree; agy argv with simple and operator commands; BLOCKED from plan and from implement, approve with and without `--note`, no loop added; `make check` green; live probe of the agy rule |
 | M3 | Critical review against §1–§3; replay | a chess-samurai ticket rerun on the new build: failing checks fixed inside the implement step, Findings name the failing test or lint row |
