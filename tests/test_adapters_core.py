@@ -127,19 +127,32 @@ def test_shell_passes_on_exit_zero(tmp_path: Path) -> None:
     )
 
 
-def test_shell_failure_keeps_the_last_20_lines_even_when_not_utf8(tmp_path: Path) -> None:
-    script = "for i in $(seq 1 30); do echo line$i; done; printf '\\377\\376 bad'; exit 2"
+def test_shell_failure_digests_the_output_even_when_not_utf8(tmp_path: Path) -> None:
+    script = "for i in $(seq 1 30); do echo line$i; done; printf 'error: \\377\\376 bad'; exit 2"
     result = Shell().run(_request(tmp_path, test_cmd=script))
     assert isinstance(result.output, ReviewOutput) and result.output.verdict == "fail"
     assert result.output.summary == "tests failed (exit 2)"
     [finding] = result.output.findings
-    assert finding.issue.splitlines()[0] == "line12" and "�" in finding.issue
-    assert (finding.severity, finding.file, finding.line, finding.fix) == (
-        "high",
-        "",
-        0,
-        "make project.test_cmd pass",
-    )
+    assert finding.issue.startswith(f"`{script}` exit 2: error: ") and "\ufffd" in finding.issue
+    assert (finding.severity, finding.file, finding.line) == ("high", "", 0)
+    assert finding.fix == f"fix the cause in Check output, then run {script}"
+    assert result.check_output.startswith(finding.issue + "\n```text\n")
+    assert "line30" in result.check_output and "line10" not in result.check_output
+
+
+def test_a_lint_failure_names_the_lint_command(tmp_path: Path) -> None:
+    lint = "echo 'warning: x' && exit 2"
+    result = Shell().run(_request(tmp_path, test_cmd="true", lint_cmd=lint))
+    assert isinstance(result.output, ReviewOutput)
+    assert result.output.summary == "lint failed (exit 2)"
+    [finding] = result.output.findings
+    assert finding.issue == f"`{lint}` exit 2: warning: x"
+    assert finding.fix == f"fix the cause in Check output, then run {lint}"
+
+
+def test_a_pass_has_no_check_output(tmp_path: Path) -> None:
+    result = Shell().run(_request(tmp_path, test_cmd="echo ok", lint_cmd="true"))
+    assert result.check_output == ""
 
 
 def test_shell_without_a_test_command_fails(tmp_path: Path) -> None:
@@ -240,7 +253,8 @@ def test_lint_failure_fails_the_step(tmp_path: Path) -> None:
     assert isinstance(result.output, ReviewOutput) and result.output.verdict == "fail"
     assert result.output.summary == "lint failed (exit 3)"
     (finding,) = result.output.findings
-    assert "bad" in finding.issue and finding.fix == "make project.lint_cmd pass"
+    assert "bad" in finding.issue
+    assert finding.fix == "fix the cause in Check output, then run echo bad; exit 3"
 
 
 def test_failing_tests_skip_lint(tmp_path: Path) -> None:

@@ -158,6 +158,7 @@ class StepResult(_Step):
     retry_after: datetime | None = None
     detail: str = ""
     warning: str = ""  # an error the CLI reported after a valid output (SP12 spec §3.1)
+    check_output: str = ""  # a failing check's digest, for `## Check output` (SP15 spec §3.3)
 
     @computed_field  # type: ignore[prop-decorator]
     @property
