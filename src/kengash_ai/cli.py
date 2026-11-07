@@ -16,7 +16,7 @@ from typing import Annotated, Any
 import typer
 
 from kengash_ai import __version__
-from kengash_ai.model import Folder, KengashError, PlanMode, UserError
+from kengash_ai.model import Folder, KengashError, NeedsUser, PlanMode, UserError
 from kengash_ai.ops import (
     activity,
     agent_config,
@@ -1076,6 +1076,34 @@ def ticket_attach(
         _emit_json(found)
         return
     typer.echo(found.command)
+
+
+@app.command("forget")
+def forget(
+    slug: Annotated[str, typer.Argument(help="Project slug from the registry.")],
+    yes: Annotated[bool, typer.Option("--yes", help="Forget it without asking.")] = False,
+    by: By = "unknown",
+    as_json: AsJson = False,
+) -> None:
+    """Remove a project from kengash: its plans, tickets, worktrees and .kengash link (the
+    store's git history keeps them)."""
+    with _errors():
+        found = projects.forget_preview(slug)
+        what = f"{found.plans} plans, {found.tickets} tickets, {found.worktrees} worktrees"
+        if found.dirty:
+            what += f" ({found.dirty} with uncommitted changes, which are lost)"
+        if not yes:
+            if not sys.stdin.isatty():
+                raise NeedsUser(f"forget {slug} removes {what}; add --yes to go on")
+            typer.echo(f"forget {slug} ({found.path}): removes {what}")
+            if input(f"type {slug} to confirm: ").strip() != slug:
+                typer.echo(f"kept {slug}")
+                raise typer.Exit(1)
+        gone = projects.forget_project(slug, by=by)
+    if as_json:
+        _emit_json(gone)
+        return
+    typer.echo(f"forgot {slug}: {what} removed; the store's git history keeps them")
 
 
 agent_app = typer.Typer(help="Agents: add or remove your own roles.", no_args_is_help=True)

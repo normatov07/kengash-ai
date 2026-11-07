@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from kengash_ai import settings
-from kengash_ai.model import KengashError, UserError
+from kengash_ai.model import KengashError, Settings, UserError
 from kengash_ai.ops import configure
 from kengash_ai.store.paths import StorePaths
 from kengash_ai.store.registry import load_registry
@@ -89,7 +89,36 @@ def check_changes(paths: StorePaths, slug: str, test: str, lint: str) -> dict[st
             "steps": steps,
             "on_fail": {**flow.on_fail, "run_tests": "implement"},
         }
-    return changes
+    routed, _ = route_fixes(resolved)
+    return {**routed, **changes}
+
+
+def route_fixes(resolved: Settings) -> tuple[dict[str, Any], list[str]]:
+    """Workflows whose check steps run after a review of the code they check, or have no
+    `on_fail` way back to the edit step before them: the fixed workflows, and one line per
+    workflow (SP14 spec §2.3). A check with no edit step before it is left alone."""
+    changes: dict[str, Any] = {}
+    found: list[str] = []
+    for name, flow in resolved.workflows.items():
+        steps, on_fail, said = list(flow.steps), dict(flow.on_fail), []
+        for check in [step for step in flow.steps if resolved.kind_of(step) == "check"]:
+            at = steps.index(check)
+            edits = [n for n, step in enumerate(steps[:at]) if resolved.kind_of(step) == "edit"]
+            if not edits:
+                continue
+            edit = steps[edits[-1]]
+            reviews = [s for s in steps[edits[-1] + 1 : at] if resolved.kind_of(s) == "review"]
+            if reviews:
+                said.append(f"runs {check} after {', '.join(reviews)}")
+                steps.remove(check)
+                steps.insert(steps.index(edit) + 1, check)
+            if check not in on_fail:
+                said.append(f"{'' if reviews else f'runs {check} '}with no way back to {edit}")
+                on_fail[check] = edit
+        if said:
+            changes[f"workflows.{name}"] = {**flow.model_dump(), "steps": steps, "on_fail": on_fail}
+            found.append(f"workflow {name} " + " ".join(said))
+    return changes, found
 
 
 def apply_checks(paths: StorePaths, slug: str, test: str, lint: str) -> list[str]:
@@ -166,12 +195,17 @@ def _project(paths: StorePaths, slug: str, repo: Path, fix: bool) -> list[Note]:
             return [Note(f"project {slug}: test command set to {test}", slug, fixed=True)]
         hint = "run: kengash doctor --fix"
         return [Note(f"project {slug} has no test command; detected: {test}; {hint}", slug)]
-    if check_changes(paths, slug, "", ""):
-        if fix:
-            apply_checks(paths, slug, "", "")
-            return [Note(f"project {slug}: checks step added", slug, fixed=True)]
-        return [Note(f"project {slug} runs no checks step; run: kengash doctor --fix", slug)]
-    return []
+    if not check_changes(paths, slug, "", ""):
+        return []
+    _, routes = route_fixes(resolved)
+    if fix:
+        apply_checks(paths, slug, "", "")
+        fixed = [f"project {slug}: {line}: fixed" for line in routes]
+        return [Note(m, slug, fixed=True) for m in fixed or [f"project {slug}: checks step added"]]
+    hint = "run: kengash doctor --fix"
+    if routes:
+        return [Note(f"project {slug}: {line}; {hint}", slug) for line in routes]
+    return [Note(f"project {slug} runs no checks step; {hint}", slug)]
 
 
 def _fallbacks(paths: StorePaths, registered: dict[str, Any]) -> list[Note]:

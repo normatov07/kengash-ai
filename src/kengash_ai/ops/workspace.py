@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from kengash_ai import memory, settings
 from kengash_ai.model import Folder, NeedsSetup, Settings, UserError
 from kengash_ai.ops import compaction
-from kengash_ai.ops.records import repo_root
+from kengash_ai.ops.records import repo_root, worktree_owner
 from kengash_ai.store import documents
 from kengash_ai.store.paths import StorePaths
 from kengash_ai.store.registry import load_registry
@@ -45,7 +45,7 @@ def resolve_slug(project: str | None, cwd: Path, paths: StorePaths | None = None
     for slug, entry in registry.projects.items():
         if here == entry.path or entry.path in here.parents:
             return slug
-    return None
+    return worktree_owner(registry, here)
 
 
 def project_slug(value: str, cwd: Path, paths: StorePaths | None = None) -> str:
@@ -63,9 +63,12 @@ def project_slug(value: str, cwd: Path, paths: StorePaths | None = None) -> str:
         for slug, entry in registry.projects.items()
         if folder == entry.path or entry.path in folder.parents
     ]
-    if not holders:
+    if holders:
+        return max(holders)[1]
+    owner = worktree_owner(registry, folder)
+    if owner is None:
         raise NeedsSetup(f"not a kengash project: {folder}; run: kengash init {folder}")
-    return max(holders)[1]
+    return owner
 
 
 def settings_for(project: str | None, cwd: Path) -> Settings:

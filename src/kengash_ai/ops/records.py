@@ -10,7 +10,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from kengash_ai import journal
-from kengash_ai.model import Doc, Event, Plan, Ticket, UserError
+from kengash_ai.model import Doc, Event, Plan, Registry, Ticket, UserError
 from kengash_ai.ops import notify
 from kengash_ai.store import documents, storegit
 from kengash_ai.store.paths import ProjectPaths, StorePaths
@@ -152,6 +152,35 @@ def _only(kind: str, item_id: str, found: list[tuple[str, Path]]) -> tuple[str, 
         names = ", ".join(slug for slug, _ in found)
         raise UserError(f"{kind} {item_id} is in several projects ({names}); pass --project")
     return found[0]
+
+
+def main_repo(path: Path) -> Path | None:
+    """The repo whose `.git` is `path`'s git common directory: a checkout itself, or the
+    repo a linked worktree belongs to (an Orca workspace, `git worktree add`, a ticket's
+    worktree); None outside git or for a worktree whose repo forgot it (SP14)."""
+    if not path.is_dir():
+        return None
+    result = subprocess.run(
+        ["git", "-C", str(path), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    common = Path(result.stdout.strip())
+    return common.parent.resolve() if common.name == ".git" else None
+
+
+def worktree_owner(registry: Registry, folder: Path) -> str | None:
+    """The project whose repo `folder` is a git worktree of, else None (SP14)."""
+    main = main_repo(folder)
+    if main is None:
+        return None
+    for slug, entry in registry.projects.items():
+        if entry.path.resolve() == main:
+            return slug
+    return None
 
 
 def repo_root(path: Path) -> Path:

@@ -9,10 +9,20 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from kengash_ai.model import NeedsSetup, Plan, ProjectEntry, Ticket, UserError, utc_now
-from kengash_ai.ops import hygiene, jobs, providers, skills, waiting
-from kengash_ai.ops.records import repo_root
-from kengash_ai.store import documents, links, migrate, seed, storegit
+from kengash_ai import gitops
+from kengash_ai.model import (
+    Event,
+    KengashError,
+    NeedsSetup,
+    Plan,
+    ProjectEntry,
+    Ticket,
+    UserError,
+    utc_now,
+)
+from kengash_ai.ops import hygiene, jobs, leases, lifecycle, providers, records, skills, waiting
+from kengash_ai.ops.records import repo_root, worktree_owner
+from kengash_ai.store import documents, links, migrate, runtime, seed, storegit
 from kengash_ai.store.locks import locked
 from kengash_ai.store.paths import ProjectPaths, StorePaths
 from kengash_ai.store.registry import (
@@ -72,6 +82,11 @@ def init_project(path: Path, paths: StorePaths | None = None) -> InitResult:
     """Register the project containing `path` and link it to the store (idempotent)."""
     paths = paths or StorePaths.default()
     repo = repo_root(path)
+    worktree = _worktree_of(paths, repo)
+    if worktree is not None:  # a worktree of a registered repo: no second project (SP14)
+        owner, main = worktree
+        note = f"{repo} is a worktree of {owner}; kengash uses {owner} here"
+        return InitResult(owner, main, paths.project(owner).root, False, [note])
     _refuse_obstruction(repo)
     ensure_store(paths)
     slug, created = _register(paths, repo)
@@ -81,6 +96,115 @@ def init_project(path: Path, paths: StorePaths | None = None) -> InitResult:
         hygiene.apply_checks(paths, slug, *hygiene.detect_commands(repo))
     storegit.commit_store(paths, f"kengash: init {slug}")
     return InitResult(slug, repo, project.root, created, warnings)
+
+
+@dataclass
+class Forgotten:
+    """A project kengash forgot (or would forget, as a preview) (SP14 spec §2.2)."""
+
+    slug: str
+    path: Path
+    plans: int
+    tickets: int
+    worktrees: int
+    link: bool  # the repo's `.kengash` link pointed at its store folder and was removed
+    dirty: int = 0  # worktrees holding uncommitted changes: those are lost, not kept
+
+
+def forget_preview(slug: str, paths: StorePaths | None = None) -> Forgotten:
+    """What `forget_project` would remove; nothing changes."""
+    paths = paths or StorePaths.default()
+    entry = load_registry(paths).projects.get(slug)
+    if entry is None:
+        raise UserError(f"unknown project: {slug}")
+    project = paths.project(slug)
+    plans = len(list(project.plans.glob("*.md"))) if project.plans.is_dir() else 0
+    tickets = len(_ticket_ids(project))
+    worktrees = _worktrees(paths, slug)
+    dirty = sum(bool(_changed(worktree)) for worktree in worktrees)
+    link = _our_link(entry.path, project)
+    return Forgotten(slug, entry.path, plans, tickets, len(worktrees), link, dirty)
+
+
+def _changed(worktree: Path) -> list[str]:
+    try:
+        return gitops.changed_files(worktree)
+    except (OSError, subprocess.SubprocessError, KengashError):
+        return []
+
+
+def forget_project(slug: str, *, by: str, paths: StorePaths | None = None) -> Forgotten:
+    """Remove a project from kengash: its registry entry, store folder, ticket worktrees and
+    states, and its repo's `.kengash` link; refused while a worker or a loop of its runs.
+    The store commit keeps every removed file in the store's git history."""
+    paths = paths or StorePaths.default()
+    preview = forget_preview(slug, paths)
+    _refuse_running(paths, slug)
+    project = paths.project(slug)
+    ids = _ticket_ids(project)
+    # first commit whatever the store holds, so its history keeps every file removed below
+    storegit.commit_store(paths, f"kengash: before forgetting {slug}")
+    with locked(paths.locks / "registry.lock"):
+        registry = load_registry(paths)
+        registry.projects.pop(slug, None)
+        save_registry(paths, registry)
+    repo = preview.path
+    for worktree in _worktrees(paths, slug):
+        if repo.is_dir():
+            subprocess.run(
+                ["git", "-C", str(repo), "worktree", "remove", "--force", str(worktree)],
+                capture_output=True,
+                check=False,
+            )
+            branch = f"kg/{worktree.name.split('-', 1)[-1]}"
+            subprocess.run(
+                ["git", "-C", str(repo), "branch", "-D", branch], capture_output=True, check=False
+            )
+        shutil.rmtree(worktree, ignore_errors=True)
+    shutil.rmtree(paths.worktrees / slug, ignore_errors=True)
+    if repo.is_dir():
+        subprocess.run(
+            ["git", "-C", str(repo), "worktree", "prune"], capture_output=True, check=False
+        )
+    if preview.link:
+        (repo / links.LINK).unlink()
+    for ticket_id in ids:
+        runtime.drop_ticket_state(paths, ticket_id)
+    shutil.rmtree(project.root, ignore_errors=True)
+    event = Event.model_validate(
+        {
+            "type": "project.forgotten",
+            "project": slug,
+            "plans": preview.plans,
+            "tickets": preview.tickets,
+            "by": by,
+        }
+    )
+    records.record(paths, f"kengash: forget {slug}", event)
+    return preview
+
+
+def _ticket_ids(project: ProjectPaths) -> list[str]:
+    tasks = project.root / "tasks"
+    return sorted(path.stem for path in tasks.rglob("*.md")) if tasks.is_dir() else []
+
+
+def _worktrees(paths: StorePaths, slug: str) -> list[Path]:
+    folder = paths.worktrees / slug
+    return sorted(path for path in folder.iterdir() if path.is_dir()) if folder.is_dir() else []
+
+
+def _our_link(repo: Path, project: ProjectPaths) -> bool:
+    link = repo / links.LINK
+    return link.is_symlink() and link.resolve() == project.root.resolve()
+
+
+def _refuse_running(paths: StorePaths, slug: str) -> None:
+    for record in runtime.load_workers(paths):
+        if record.project == slug and lifecycle.pid_alive(record.pid):
+            raise UserError(f"a worker runs {record.id} in {slug}; stop it first")
+    if any(lease.project == slug for lease in leases.live(paths)):
+        raise UserError(f"a loop runs on {slug}; release or stop it first")
 
 
 def relink(slug: str, new_path: Path, paths: StorePaths | None = None) -> InitResult:
@@ -215,6 +339,17 @@ def _refuse_obstruction(repo: Path) -> None:
         raise UserError(f"{repo / links.LINK} is a file; move it away first")
 
 
+def _worktree_of(paths: StorePaths, repo: Path) -> tuple[str, Path] | None:
+    """The registered project and repo that `repo` is a linked worktree of, else None."""
+    if not paths.registry.exists():
+        return None
+    registry = load_registry(paths)
+    if slug_for_path(registry, repo) is not None:
+        return None
+    owner = worktree_owner(registry, repo)
+    return (owner, registry.projects[owner].path) if owner is not None else None
+
+
 def _register(paths: StorePaths, repo: Path) -> tuple[str, bool]:
     with locked(paths.locks / "registry.lock"):
         registry = load_registry(paths)
@@ -249,7 +384,11 @@ def _attach(repo: Path, project: ProjectPaths) -> list[str]:
 def _check_project(paths: StorePaths, slug: str, repo: Path, fix: bool) -> list[Problem]:
     if not repo.is_dir():
         return [
-            Problem(f"repo missing at {repo}; if it moved: kengash link {slug} <new-path>", slug)
+            Problem(
+                f"repo missing at {repo}; if it moved: kengash link {slug} <new-path>; "
+                f"if it is gone for good: kengash forget {slug}",
+                slug,
+            )
         ]
     project = paths.project(slug)
     problems: list[Problem] = []
