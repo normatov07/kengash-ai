@@ -581,3 +581,31 @@ def test_running_cards_are_marked(busy_ticket: Engine) -> None:
     ]
     (card,) = [card for card in cards if card.id == busy_ticket.ticket_id]
     assert card.running is True
+
+
+def test_check_runs_show_on_the_timeline_but_not_in_the_chain(
+    registered_repo: Path, store_paths: StorePaths, make_ticket: Make
+) -> None:
+    project = store_paths.project("payments-api")
+    documents.save_ticket(
+        project,
+        make_ticket("ccccccc1", status="in_process/under_implementation", step="implement"),
+    )
+    check = Event.model_validate(
+        {
+            "type": "checks.end",
+            "project": "payments-api",
+            "ticket": "ccccccc1",
+            "step": "implement",
+            "turn": 1,
+            "verdict": "fail",
+            "summary": "lint failed (exit 1)",
+            "duration_s": 2.0,
+        }
+    )
+    journal.append(store_paths, check)
+    found = views.ticket_view(store_paths, "ccccccc1", project="payments-api")
+    [row] = found.timeline
+    assert (row.kind, row.step, row.verdict) == ("checks.end", "implement", "fail")
+    assert row.note == "fail · lint failed (exit 1) · turn 1"
+    assert {step.step: step.runs for step in found.chain}["implement"] == 0

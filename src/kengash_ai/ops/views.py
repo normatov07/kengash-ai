@@ -1202,6 +1202,17 @@ def _timeline_row(event: Event, ticket_id: str) -> TimelineStep | None:
             int(used.get("in", 0)) + int(used.get("out", 0)),
             extra.get("duration_s"),
         )
+    if event.type == "checks.end":  # a check run inside an editing step (SP15)
+        verdict = str(extra.get("verdict", ""))
+        note = f"{verdict} · {extra.get('summary', '')} · turn {extra.get('turn', 0)}"
+        return TimelineStep(
+            event.ts,
+            event.type,
+            str(extra.get("step", "")),
+            verdict=verdict,
+            duration_s=extra.get("duration_s"),
+            note=note,
+        )
     if event.type in STATUS_EVENTS:
         note = extra.get("reason") or extra.get("why") or extra.get("to") or ""
         return TimelineStep(event.ts, event.type, note=str(note))

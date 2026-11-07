@@ -62,6 +62,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-07: `views` timeline rows for `checks.end` (`checks`, the step, `<verdict> · <summary> · turn <n>`); the agent chain still counts `step.end` only (SP15).
 - 2026-11-07: a work step whose handoff has a `BLOCKED:` line (`prompts.blocked_line`, redacted, 160 characters) stops at `needs_approval`; `controls.approve_ticket(…, note=)` puts the user's answer, or `the user resolved what you were blocked on`, in `TicketState.sent_back`; `--note` on another gate is refused (SP15).
 - 2026-11-07: `run_tests` reuses in-step checks that passed on the same commit (SP15).
 - 2026-11-07: `checks` and `steps._verify`: the project's checks run inside editing steps with fix turns on the same session (SP15).
