@@ -19,6 +19,7 @@ from pydantic import ValidationError
 
 import kengash_ai
 from kengash_ai import journal
+from kengash_ai.adapters import stream
 from kengash_ai.adapters.base import positional
 from kengash_ai.adapters.env import worker_env
 from kengash_ai.adapters.process import run_process
@@ -38,6 +39,28 @@ CHEAPEST: dict[str, str | None] = {
     "antigravity": "gemini-3.8-flash-low",
 }
 CLAUDE_TOOLS = ("Read", "Grep", "Glob", "Bash(kengash:*)")
+# agy's allow-rules for the same, plus the read-only commands agy reaches for to look
+# around (a denied command ends a headless agy turn with no reply). agy checks each part of
+# a chained or redirected command line, so `ls && touch x` and `ls > x` stay denied.
+AGY_ALLOW = (
+    "command(kengash)",
+    "command(ls)",
+    "command(pwd)",
+    "command(git status)",
+    "command(git diff)",
+    "command(git log)",
+    "read_file(*)",
+)
+# Headless agy ends its turn, with no reply, on the first command these rules deny; claude
+# is told of a denial and goes on. agy reads a workspace AGENTS.md, so its runs get this.
+AGY_RULE = """\
+# Eval session rules
+
+The shell here runs only `kengash`, `ls`, `pwd`, `git status`, `git diff` and `git log`.
+Any other command is denied and ends your turn with no reply. Look at files with your file
+tools (`read_file`, `list_dir`, `grep_search`), never with `find`, `cat` or `grep` in the
+shell, and run each `kengash` command as its own call.
+"""
 BIN = Path(sys.executable).parent  # this interpreter's console scripts, kengash among them
 TAIL = 400
 
@@ -151,10 +174,14 @@ def conductor_argv(
         argv += ["--setting-sources", "project,local", "--strict-mcp-config"]
         return [*argv, "--permission-mode", "dontAsk", "--allowedTools", *CLAUDE_TOOLS]
     if agent == "antigravity":
-        argv = ["agy", "-p", text, "--output-format", "json"]
+        # stream-json: the transcript shows each tool call, a denied command among them
+        argv = ["agy", "-p", text, "--output-format", "stream-json"]
         argv += ["--conversation", session] if session else []
         argv += ["--model", model] if model else []
-        return [*argv, "--dangerously-skip-permissions", "--sandbox"]
+        # no --sandbox: it mounts ~/.gemini read-only, so every agy that kengash starts
+        # (its sign-in check, agy workers) failed; a denied action ends the turn headless
+        allow = {"permissions": {"allow": list(AGY_ALLOW)}}
+        return [*argv, "--settings", json.dumps(allow, separators=(",", ":"))]
     if agent == "codex":
         flags = ["--json", "--ignore-user-config", "--dangerously-bypass-approvals-and-sandbox"]
         flags += ["-m", model] if model else []
@@ -177,6 +204,15 @@ def parse_turn(agent: str, stdout: str) -> tuple[str | None, str]:
                 if event.get("type") == "item.completed" and item.get("type") == "agent_message":
                     reply = str(item.get("text", ""))
         return session, reply
+    if agent == "antigravity":
+        event = stream.result(stdout, key="event", value="result")
+        data = event.get("result") if event and event.get("event") == "result" else event
+        if isinstance(data, dict):
+            return data.get("conversation_id"), str(data.get("response") or "")
+        init = stream.first(stdout, key="event", value="init")
+        if init is not None:  # the turn ended without a result: no reply
+            return init.get("conversation_id"), ""
+        return None, stdout.strip()[-TAIL:]
     try:
         data = json.loads(stdout)
     except ValueError:
@@ -226,6 +262,8 @@ def run_scenario(
     if not baseline:
         # agy has no per-session plugin flag: copies keep the user's agy plugins untouched
         skills.install([agent], root=repo, source=source, agy_plugin=False)
+    if agent == "antigravity":  # before the turns: the clean check leaves it out
+        (repo / "AGENTS.md").write_text(AGY_RULE, encoding="utf-8")
     try:
         return _turns(name, scenario, agent, work, model, values, paths, slug, repo, env)
     finally:
