@@ -201,3 +201,13 @@ def test_watch_follows_through_a_gate_until_the_ticket_is_done(engine: Engine) -
     texts = [item.text for item in found if item is not None]
     assert texts == ["implement → antigravity", "in_process/needs_approval", "done/merged"]
     assert naps == [activity.IDLE_POLL_S, 1.0]  # slower while nothing runs
+
+
+def test_a_log_is_read_again_only_when_it_changed(tmp_path: Path) -> None:
+    log = tmp_path / "t-1.out"
+    log.write_text('{"type": "system"}\n', encoding="utf-8")
+    first = activity._read(log)
+    assert activity._read(log) is first  # unchanged: the cached tail
+    with log.open("a", encoding="utf-8") as out:
+        out.write('{"type": "result"}\n')
+    assert activity._read(log) is not first

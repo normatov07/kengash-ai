@@ -10,7 +10,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-OPEN_TIMEOUT_S = 10.0
+OPEN_WAIT_S = 5.0  # how long `run` waits to learn whether a tab opened
 OFF = "KENGASH_WATCH"  # "off" turns every tab and notification off (tests, evals, CI)
 
 type Which = Callable[[str], str | None]
@@ -43,18 +43,22 @@ def detect(env: Mapping[str, str], template: str, which: Which = shutil.which) -
 
 
 def open_tab(terminal: Terminal, title: str, command: list[str], *, cwd: Path) -> bool:
-    """Run the terminal's opener; True once it exits 0 within OPEN_TIMEOUT_S."""
+    """Start the terminal's opener, detached. True once it exits 0, or while it still runs
+    after OPEN_WAIT_S: some openers (`xterm -e`, a template) run as long as their window,
+    and are never killed."""
     with contextlib.suppress(OSError, subprocess.SubprocessError, ValueError):
-        done = subprocess.run(
+        proc = subprocess.Popen(
             terminal.argv(title, command),
             cwd=cwd,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            timeout=OPEN_TIMEOUT_S,
-            check=False,
+            start_new_session=True,
         )
-        return done.returncode == 0
+        try:
+            return proc.wait(timeout=OPEN_WAIT_S) == 0
+        except subprocess.TimeoutExpired:
+            return True
     return False
 
 

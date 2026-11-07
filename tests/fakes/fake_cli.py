@@ -12,6 +12,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 FIXTURES = Path(__file__).parent / "fixtures"
 WATCHED = (
@@ -62,12 +63,10 @@ def main(cli: str, args: list[str]) -> int:
     }
     with (state / "calls.jsonl").open("a", encoding="utf-8") as calls:
         calls.write(json.dumps(call) + "\n")
-    queued = sorted((state / "queue").glob("*.json"))
-    if not queued:
+    reply = _take(sorted((state / "queue").glob("*.json")))
+    if reply is None:
         sys.stderr.write(f"fake {cli}: no reply queued\n")
         return NO_REPLY
-    reply = json.loads(queued[0].read_text(encoding="utf-8"))
-    queued[0].unlink()
     for name, content in reply.get("edits", {}).items():
         target = Path.cwd() / name
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -80,6 +79,21 @@ def main(cli: str, args: list[str]) -> int:
     sys.stdout.write(stdout)
     sys.stderr.write(reply.get("stderr", ""))
     return int(reply.get("exit", 0))
+
+
+def _take(queued: list[Path]) -> dict[str, Any] | None:
+    """The first queued reply, claimed by an atomic rename: parallel workers never get the
+    same one (SP13)."""
+    for path in queued:
+        taken = path.with_suffix(f".{os.getpid()}.taken")
+        try:
+            path.rename(taken)
+        except FileNotFoundError:
+            continue  # another worker took it
+        reply: dict[str, Any] = json.loads(taken.read_text(encoding="utf-8"))
+        taken.unlink()
+        return reply
+    return None
 
 
 if __name__ == "__main__":

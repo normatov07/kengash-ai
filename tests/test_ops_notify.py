@@ -91,3 +91,9 @@ def test_record_notifies_once_switched_on_and_never_raises(
     write_settings(store_paths, "watch.notify: false\n")
     records.record(store_paths, "kengash: test", gate)
     assert len(sent) == 1
+
+
+def test_macos_keeps_non_ascii_text() -> None:
+    gate = event("ticket.failed", reason="crash: “quoted” — ünïcode")
+    line = notify.argv(gate, platform="darwin", which=found("osascript"))
+    assert line is not None and "“quoted” — ünïcode" in line[2] and "\\u" not in line[2]

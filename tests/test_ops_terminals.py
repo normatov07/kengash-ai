@@ -1,6 +1,7 @@
 """Terminal detection and tab commands (SP13 spec §3.2)."""
 
 import sys
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -83,11 +84,16 @@ def test_open_tab_never_raises(tmp_path: Path) -> None:
     assert terminals.open_tab(working, "t", CMD, cwd=tmp_path) is True
 
 
-def test_open_tab_gives_up_on_a_hanging_terminal(
+def test_an_opener_that_stays_is_left_running(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(terminals, "OPEN_TIMEOUT_S", 0.5)
-    hanging = terminals.Terminal(
-        "x", lambda title, cmd: [sys.executable, "-c", "import time; time.sleep(30)"]
-    )
-    assert terminals.open_tab(hanging, "t", CMD, cwd=tmp_path) is False  # caught, not raised
+    # a template like `xterm -e {command}` runs as long as its window: never kill it
+    monkeypatch.setattr(terminals, "OPEN_WAIT_S", 0.3)
+    marker = tmp_path / "still-running"
+    script = f"import time, pathlib; time.sleep(1); pathlib.Path({str(marker)!r}).touch()"
+    staying = terminals.Terminal("x", lambda title, cmd: [sys.executable, "-c", script])
+    assert terminals.open_tab(staying, "t", CMD, cwd=tmp_path) is True
+    deadline = time.monotonic() + 10
+    while not marker.exists():
+        assert time.monotonic() < deadline, "the opener was killed"
+        time.sleep(0.1)

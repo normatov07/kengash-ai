@@ -39,7 +39,7 @@ def argv(
     if platform == "darwin":
         if not which("osascript"):
             return None
-        script = f"display notification {json.dumps(body)} with title {json.dumps(title)}"
+        script = f"display notification {_quoted(body)} with title {_quoted(title)}"
         return ["osascript", "-e", script]
     if not which("notify-send"):
         return None
@@ -63,6 +63,11 @@ def send(paths: StorePaths, events: Sequence[Event]) -> None:
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
             )
+
+
+def _quoted(text: str) -> str:
+    """An AppleScript string: it reads JSON's quote and backslash escapes, not \\uXXXX."""
+    return json.dumps(text, ensure_ascii=False)
 
 
 def _body(event: Event) -> str | None:

@@ -19,6 +19,7 @@ from kengash_ai.store.paths import StorePaths
 type Kind = Literal["step", "read", "edit", "run", "reply", "error", "status"]
 TAIL_BYTES = 64 * 1024  # a long step's log is read from its end
 TEXT_MAX = 160
+TAILS_MAX = 64  # logs whose tail is kept between polls
 IDLE_POLL_S = 3.0  # `until_done` polls this slowly while the ticket waits at a gate
 
 # tool names per CLI → kind; anything else counts as `run`
@@ -226,8 +227,25 @@ class _Tail:
     start: datetime | None  # the log's first stamp: a time that stays put as the log grows
 
 
+_tails: dict[Path, tuple[tuple[int, int], _Tail]] = {}  # log → (size, mtime) and its tail
+
+
 def _read(log: Path) -> _Tail:
-    """The log's last TAIL_BYTES, and the stamps of those lines (else the file's mtime)."""
+    """The log's last TAIL_BYTES, and the stamps of those lines (else the file's mtime);
+    read again only when the log changed, since viewers poll every second (SP13)."""
+    info = log.stat()
+    key = (info.st_size, info.st_mtime_ns)
+    cached = _tails.get(log)
+    if cached is not None and cached[0] == key:
+        return cached[1]
+    tail = _read_tail(log)
+    _tails[log] = (key, tail)
+    if len(_tails) > TAILS_MAX:
+        _tails.pop(next(iter(_tails)))
+    return tail
+
+
+def _read_tail(log: Path) -> _Tail:
     data = log.read_bytes()
     cut = len(data) > TAIL_BYTES
     skipped = data[: max(len(data) - TAIL_BYTES, 0)].count(b"\n")
