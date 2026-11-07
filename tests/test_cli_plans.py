@@ -123,3 +123,11 @@ def test_plan_review_needs_review_on_and_sections_to_review(
     )
     off = review(reviewable())
     assert off.exit_code == 1 and "plan review is off" in off.stderr
+
+
+def test_cli_approve_prints_decisions_count(inside_registered_repo: Path) -> None:
+    plan_id = runner.invoke(app, [*NEW, "quick"], input="Rotate keys.\n").stdout.split()[1]
+    body = "## Goal\nShip it.\n## Lasting decisions\n- keyring over env var. why: rotation.\n"
+    runner.invoke(app, ["plan", "save", plan_id], input=body)
+    approved = runner.invoke(app, ["plan", "approve", plan_id])
+    assert approved.stdout == f"plan {plan_id} approved\nDECISIONS.md +1 line\n"

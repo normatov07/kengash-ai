@@ -21,6 +21,7 @@ The agents' long-term memory: MEMORY.md (who the user is, how they work, what th
 
 ## Changes
 
+- 2026-11-07: `parse_decision(line)` → (decision, why, rejected) from `<decision>. why: … rejected: ….` (SP16).
 - 2026-11-07: `key(line)`: near-duplicates count as recorded (lowercased, spaces collapsed, trailing punctuation dropped; a decision compares tag and decision only); `add_process(paths, text, why=, project=, by=)` appends under `## Process notes` of the project's PROCESS.md (cap 100, refused at the cap), journaled and committed; `RECORD_HINT`: when to record what (SP16).
 - 2026-11-07: `digest(paths, project)`: the `## Memory` body of every new worker session: the head of the project's PROCESS.md (from its first `## `, 3,000 characters), the newest `[project]` and `[global]` DECISIONS.md entries (2,500) and the newest MEMORY.md entries as `- [<section>] text` (1,500), with `… N older/more lines in <file>` notes, redacted (SP16).
 - 2026-10-26: messages name the `kengash` command; `KengashError` replaces `HarnessError` (SP8).

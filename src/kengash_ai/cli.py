@@ -475,7 +475,11 @@ def plan_approve(
     """Record the user's approval of a draft plan."""
     with _errors():
         result = plans.approve_plan(plan_id, skip_review=skip_review, project=project, by=by)
-    _emit(result, as_json, f"plan {result.id} approved")
+    lines = [f"plan {result.id} approved"]
+    if result.decisions:
+        lines.append(f"DECISIONS.md +{result.decisions} line{'' if result.decisions == 1 else 's'}")
+    lines += [f"warning: {warning}" for warning in result.warnings]
+    _emit(result, as_json, "\n".join(lines))
 
 
 @plan_app.command("reject")

@@ -30,6 +30,7 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 
 
 ## Changes
 
+- 2026-11-07: `kengash plan approve` adds `DECISIONS.md +N lines` and any `warning:` lines (SP16).
 - 2026-11-07: `kengash memory add --process` (not with `--decision`, `--rejected` or `--section`); `kengash context` ends with `# Record` and the when-to-record hint (SP16).
 - 2026-11-07: `approve --note TEXT` answers a ticket's BLOCKED line; on any other gate it is refused (SP15).
 - 2026-11-07: `doctor` prints a line it fixed without `warning:` (SP14).

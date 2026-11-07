@@ -324,3 +324,16 @@ def test_add_process_refuses_at_cap(store: StorePaths) -> None:
     _process(store, "app", "## Process notes\n\n" + "".join(f"- r{n}\n" for n in range(95)))
     with pytest.raises(UserError, match=r"PROCESS\.md is at its 100-line cap; edit it"):
         memory.add_process(store, "one too many", project="app", by="test")
+
+
+@pytest.mark.parametrize(
+    ("line", "parts"),
+    [
+        ("- use X. why: fast. rejected: Y.", ("use X", "fast", "Y")),
+        ("- use X. Why: fast", ("use X", "fast", "")),
+        ("* use X", ("use X", "", "")),
+        ("use X. rejected: Y", ("use X", "", "Y")),
+    ],
+)
+def test_parse_decision_splits_why_and_rejected(line: str, parts: tuple[str, str, str]) -> None:
+    assert memory.parse_decision(line) == parts

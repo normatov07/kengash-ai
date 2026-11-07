@@ -38,6 +38,8 @@ ARCHIVE_HEADER = (
 MAX_WORDS = 30
 # the `## Memory` block of a new worker session (SP16 spec §3.1): characters per part
 DIGEST_CAPS = {"PROCESS.md": 3_000, "DECISIONS.md": 2_500, "MEMORY.md": 1_500}
+_BULLET = re.compile(r"^[-*+]\s+")
+_LABEL = re.compile(r"\s*\b(why|rejected):\s*", re.IGNORECASE)
 _TAG = re.compile(r"^- \d{4}-\d{2}-\d{2} \[([^\]]+)\] ")
 
 
@@ -226,6 +228,19 @@ def add_process(paths: StorePaths, text: str, *, why: str = "", project: str, by
     journal.append(paths, Event.model_validate(event))
     storegit.commit_store(paths, "kengash: memory add PROCESS.md")
     return AddResult("PROCESS.md", entry, len(lines), PROCESS_CAP, added=True)
+
+
+def parse_decision(line: str) -> tuple[str, str, str]:
+    """A `Lasting decisions` or ticket `Decisions` line, `<decision>. why: <reason>. rejected:
+    <alternative>.`, as (decision, why, rejected); a missing part is ""."""
+    text = _BULLET.sub("", line.strip())
+    pieces = _LABEL.split(text)
+    found = {label.lower(): value for label, value in zip(pieces[1::2], pieces[2::2], strict=True)}
+
+    def clean(value: str) -> str:
+        return value.strip().rstrip(".").strip()
+
+    return clean(pieces[0]), clean(found.get("why", "")), clean(found.get("rejected", ""))
 
 
 def key(line: str) -> str:
