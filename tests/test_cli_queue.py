@@ -20,9 +20,12 @@ def test_next_lists_runnable_tickets(
     documents.save_ticket(project, make_ticket("a91b3d07", touches=["services/webhooks/keys"]))
     result = runner.invoke(app, ["next"])
     assert result.exit_code == 0
-    assert result.stdout == "7b55e0c1 payments-api critical plan→claude Rotate keys\n"
+    assert result.stdout == (
+        "7b55e0c1 payments-api critical plan→claude Rotate keys\n"
+        "a91b3d07 payments-api critical plan→claude Rotate keys\n"
+    )  # planning steps edit nothing, so overlapping touches start together (SP16)
     data = json.loads(runner.invoke(app, ["next", "--json"]).stdout)
-    assert data["held_back"] == {"a91b3d07": "touches overlap 7b55e0c1"}
+    assert data["held_back"] == {}
 
 
 def test_next_says_why_nothing_can_run(
@@ -30,11 +33,11 @@ def test_next_says_why_nothing_can_run(
 ) -> None:
     assert runner.invoke(app, ["next"]).stdout == "nothing runnable: the queue is empty\n"
     project = store_paths.project("payments-api")
-    gate = make_ticket(status="in_process/needs_approval", step="implement")
+    gate = make_ticket(status="in_process/awaiting_merge", step=None)  # still holds its paths
     documents.save_ticket(project, gate)
     blocked = make_ticket("a91b3d07", status="in_queue/blocked", depends_on=["7b55e0c1"])
     documents.save_ticket(project, blocked)
-    documents.save_ticket(project, make_ticket("3c9d0e11"))
+    documents.save_ticket(project, make_ticket("3c9d0e11", step="implement", loop=2))
     result = runner.invoke(app, ["next"])
     assert result.stdout == "nothing runnable: 1 held back, 1 blocked, 1 at gates\n"
 

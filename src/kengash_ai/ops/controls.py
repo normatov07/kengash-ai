@@ -10,9 +10,11 @@ from kengash_ai.model import (
     Doc,
     Event,
     Folder,
+    Gate,
     NeedsSetup,
     ProviderStatus,
     SentBack,
+    Settings,
     SlotEntry,
     Ticket,
     UserError,
@@ -257,6 +259,22 @@ def resume(project: str | None, *, by: str) -> Resumed:
     return Resumed([started.id for started in result.started])
 
 
+def _clash(
+    paths: StorePaths, slug: str, resolved: Settings, ticket: Ticket, step: str
+) -> str | None:
+    """The path holder a ticket starting at `step` would overlap: only a start in the editing
+    phase checks paths, and only against holders (SP16 spec §3.7)."""
+    hitl = ticket.gate is Gate.hitl
+    if not workflow.edit_phase(resolved, ticket.workflow, step, hitl=hitl):
+        return None
+    for other in records.project_tickets(paths, slug).values():
+        meta = other.meta
+        holder = meta.id != ticket.id and lifecycle.holds_paths(resolved, meta)
+        if holder and scheduler.overlaps(meta.touches, ticket.touches):
+            return meta.id
+    return None
+
+
 def _claim(
     paths: StorePaths,
     slug: str,
@@ -277,11 +295,6 @@ def _claim(
             return _Skip(f"status {ticket.status}")
         if runtime.pause_state(paths).covers(slug):
             return _Skip("paused")
-        for other in records.project_tickets(paths, slug).values():
-            meta = other.meta
-            busy = meta.folder is Folder.in_process and meta.id != ticket_id
-            if busy and scheduler.overlaps(meta.touches, ticket.touches):
-                return _Skip(f"touches overlap {meta.id}")
         resolved = settings.load(paths, slug)
         if ticket.workflow not in resolved.workflows:
             return _Skip(f"settings have no workflow {ticket.workflow!r}")
@@ -300,6 +313,9 @@ def _claim(
         else:
             halt = decision.decision
             return _Skip(halt.reason if isinstance(halt, workflow.Halt) else "every step passed")
+        clash = _clash(paths, slug, resolved, ticket, step)
+        if clash is not None:
+            return _Skip(f"touches overlap {clash}")
         role = resolved.role_of(step)
         provider = "user"
         if role is not None:

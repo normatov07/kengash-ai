@@ -67,3 +67,42 @@ def test_slots_pauses_and_settings_hold_tickets_back(
     project.settings.write_text(off, encoding="utf-8")
     held_back = queue.next_tickets().held_back
     assert held_back["7b55e0c1"] == "role security-reviewer is off and blocking"
+
+
+def test_next_starts_overlapping_tickets_that_plan(
+    store_paths: StorePaths, registered_repo: Path, make_ticket: Make
+) -> None:
+    project = store_paths.project("payments-api")
+    documents.save_ticket(project, make_ticket(touches=["test/"]))
+    documents.save_ticket(project, make_ticket("a91b3d07", touches=["test/"]))
+    found = queue.next_tickets()
+    assert sorted(t.id for t in found.runnable) == ["7b55e0c1", "a91b3d07"]
+
+
+def test_gate_ticket_does_not_hold_paths_but_an_editor_does(
+    store_paths: StorePaths, registered_repo: Path, make_ticket: Make
+) -> None:
+    project = store_paths.project("payments-api")
+    ready = make_ticket(status="in_queue/ready", step="implement", touches=["src/a.py"], loop=2)
+    documents.save_ticket(project, ready)
+    gate = make_ticket(
+        "a91b3d07", status="in_process/needs_approval", step="implement", touches=["src/"]
+    )
+    documents.save_ticket(project, gate)
+    assert [t.id for t in queue.next_tickets().runnable] == ["7b55e0c1"]
+    editor = gate.meta.model_copy(update={"status": "in_process/under_implementation"})
+    documents.save_ticket(project, Doc(editor, gate.sections))
+    assert queue.next_tickets().held_back == {"7b55e0c1": "touches overlap a91b3d07"}
+
+
+def test_ready_tickets_on_the_longest_chain_go_first(
+    store_paths: StorePaths, registered_repo: Path, make_ticket: Make
+) -> None:
+    project = store_paths.project("payments-api")
+    documents.save_ticket(project, make_ticket(importance="critical", touches=["a"]))
+    documents.save_ticket(project, make_ticket("a91b3d07", importance="simple", touches=["b"]))
+    blocked = make_ticket(
+        "c0ffee00", status="in_queue/blocked", depends_on=["a91b3d07"], touches=["c"]
+    )
+    documents.save_ticket(project, blocked)
+    assert [t.id for t in queue.next_tickets().runnable] == ["a91b3d07", "7b55e0c1"]

@@ -70,15 +70,17 @@ def test_run_skips_with_reasons(
     spawned: list[tuple[str, int | None]],
 ) -> None:
     project = store_paths.project("payments-api")
-    documents.save_ticket(project, make_ticket(importance="simple", workflow="simple", loop_max=3))
-    documents.save_ticket(
-        project, make_ticket("a91b3d07", importance="simple", workflow="simple", loop_max=3)
-    )
+    simple = {"importance": "simple", "workflow": "simple", "loop_max": 3}
+    documents.save_ticket(project, make_ticket(**simple))  # plans: overlap does not matter
+    editing = {"step": "implement", "loop": 2, **simple}
+    documents.save_ticket(project, make_ticket("a91b3d07", **editing))
+    holder = make_ticket("c0ffee00", status="in_process/under_implementation", **editing)
+    documents.save_ticket(project, holder)
     documents.save_ticket(project, make_ticket("3c9d0e11", status="in_queue/parked"))
     result = controls.run_tickets(["7b55e0c1", "a91b3d07", "3c9d0e11"], by="claude")
     assert [s.id for s in result.started] == ["7b55e0c1"]
     assert result.skipped == {
-        "a91b3d07": "touches overlap 7b55e0c1",
+        "a91b3d07": "touches overlap c0ffee00",
         "3c9d0e11": "status in_queue/parked",
     }
     again = controls.run_tickets(["7b55e0c1"], by="claude")

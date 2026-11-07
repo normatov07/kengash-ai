@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from conftest import Engine, Events, FakeClis, write_settings
 
-from kengash_ai.model import Running, SentBack, StepRequest, StepResult, TicketState
+from kengash_ai.model import Doc, Running, SentBack, StepRequest, StepResult, Ticket, TicketState
 from kengash_ai.ops import calls, prompts, steps
 from kengash_ai.ops.steps import JobEnd
 from kengash_ai.store import StorePaths, documents, runtime
@@ -960,3 +960,78 @@ def test_work_reply_decisions_wait_for_the_merge(engine: Engine, fake_clis: Fake
     assert engine.ticket().sections["Decisions"] == "- retries use full jitter. why: herd."
     decisions = (engine.paths.memory / "DECISIONS.md").read_text(encoding="utf-8")
     assert "full jitter" not in decisions
+
+
+def _holder(engine: Engine, make_ticket: Callable[..., Doc[Ticket]]) -> None:
+    holder = make_ticket(
+        "c0ffee00",
+        status="in_process/under_implementation",
+        step="implement",
+        workflow="simple",
+        importance="simple",
+        touches=engine.ticket().meta.touches,
+    )
+    documents.save_ticket(engine.paths.project(engine.slug), holder)
+
+
+def _move(engine: Engine, ticket_id: str, status: str) -> None:
+    project = engine.paths.project(engine.slug)
+    path = documents.find_ticket(project, ticket_id)
+    assert path is not None
+    doc = documents.load_ticket(path)
+    doc.meta.status = status
+    documents.save_ticket(project, doc)
+
+
+def test_job_waits_for_overlapping_holder_then_runs(
+    engine: Engine,
+    fake_clis: FakeClis,
+    make_ticket: Callable[..., Doc[Ticket]],
+    monkeypatch: pytest.MonkeyPatch,
+    journal_events: Events,
+) -> None:
+    _holder(engine, make_ticket)
+    naps: list[float] = []
+
+    def nap(seconds: float) -> None:
+        naps.append(seconds)
+        assert engine.ticket().meta.status == "in_process/waiting_paths"
+        if len(naps) == 2:
+            _move(engine, "c0ffee00", "in_process/needs_approval")  # a gate lets go
+
+    monkeypatch.setattr(steps, "sleep", nap)
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "x = 1\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    assert naps == [steps.PATH_POLL_S, steps.PATH_POLL_S]
+    waited = [e for e in journal_events() if e["type"] == "ticket.waiting"]
+    assert [(e["holder"], e["reason"]) for e in waited] == [
+        ("c0ffee00", "touches overlap c0ffee00")
+    ]
+    assert len(fake_clis.calls("codex")) == 1 and engine.state().waiting_on == ""
+
+
+def test_job_enters_editing_without_wait_when_free(
+    engine: Engine, fake_clis: FakeClis, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    naps: list[float] = []
+    monkeypatch.setattr(steps, "sleep", naps.append)
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "x = 1\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    assert naps == [] and len(fake_clis.calls("codex")) == 1
+
+
+def test_park_while_waiting_paths(
+    engine: Engine,
+    fake_clis: FakeClis,
+    make_ticket: Callable[..., Doc[Ticket]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _holder(engine, make_ticket)
+    monkeypatch.setattr(
+        steps, "sleep", lambda _: runtime.set_park(engine.paths, "7b55e0c1", on=True)
+    )
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    assert steps.run_job("7b55e0c1").status == "in_queue/parked"
+    assert fake_clis.calls("codex") == []

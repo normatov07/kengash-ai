@@ -12,12 +12,13 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from kengash_ai import adapters, gitops, journal, memory, settings, workflow
+from kengash_ai import adapters, gitops, journal, memory, scheduler, settings, workflow
 from kengash_ai.model import (
     Checked,
     Doc,
     Event,
     Folder,
+    Gate,
     KengashError,
     NeedsSetup,
     ProviderOptions,
@@ -46,6 +47,8 @@ from kengash_ai.store.redact import redact
 from kengash_ai.store.registry import load_registry
 
 SLOT_POLL_S = 5
+PATH_POLL_S = 5  # a job waiting for another ticket's paths looks again this often (SP16)
+WAITING_PATHS = "in_process/waiting_paths"
 QUOTA_WAIT_S = 900
 sleep = time.sleep
 
@@ -106,6 +109,10 @@ def run_job(ticket_id: str, *, project: str | None = None, steps: int | None = N
     done = 0
     while True:
         began = _begin(job, budget_left=steps is None or done < steps)
+        if isinstance(began, _WaitPaths):
+            runtime.beat(paths, ticket_id)
+            sleep(PATH_POLL_S)
+            continue
         if isinstance(began, JobEnd):
             return _merge_now(job, began)
         ended = _step(job, began)
@@ -152,7 +159,14 @@ def fail_ticket(
         return ticket.status
 
 
-def _begin(job: _Job, *, budget_left: bool) -> _Ready | JobEnd:
+@dataclass(frozen=True)
+class _WaitPaths:
+    """The next step edits, and another ticket holds overlapping paths (SP16 spec §3.8)."""
+
+    holder: str
+
+
+def _begin(job: _Job, *, budget_left: bool) -> _Ready | JobEnd | _WaitPaths:
     """Under the project lock: honour flags and caps, then pick the step to run."""
     paths = job.paths
     with locked(_lock(paths, job.slug)):
@@ -180,12 +194,38 @@ def _begin(job: _Job, *, budget_left: bool) -> _Ready | JobEnd:
             runtime.save_ticket_state(paths, job.ticket_id, state)
             job.merge_pending = True
             return _halt(job, doc, workflow.AWAITING_MERGE, "every step passed")
+        if ticket.status == WAITING_PATHS:
+            holder = _holder(paths, job.slug, resolved, ticket)
+            if holder is not None:
+                if state.waiting_on != holder:  # journaled once per holder
+                    state.waiting_on = holder
+                    runtime.save_ticket_state(paths, job.ticket_id, state)
+                    _journal(
+                        job,
+                        "ticket.waiting",
+                        step=decision.step,
+                        holder=holder,
+                        reason=f"touches overlap {holder}",
+                    )
+                return _WaitPaths(holder)
+            state.waiting_on = ""
         ticket.status = lifecycle.step_status(resolved, decision.step)
         ticket.updated = utc_now()
         documents.save_ticket(paths.project(job.slug), doc)
         runtime.save_ticket_state(paths, job.ticket_id, state)
         runtime.set_worker_step(paths, job.ticket_id, decision.step)
         return _Ready(doc, state, resolved, decision.step)
+
+
+def _holder(paths: StorePaths, slug: str, resolved: Settings, ticket: Ticket) -> str | None:
+    """Another ticket of the project that holds paths overlapping this one's, if any."""
+    for other in records.project_tickets(paths, slug).values():
+        meta = other.meta
+        if meta.id == ticket.id or not lifecycle.holds_paths(resolved, meta):
+            continue
+        if scheduler.overlaps(meta.touches, ticket.touches):
+            return meta.id
+    return None
 
 
 def _step(job: _Job, ready: _Ready) -> JobEnd | None:
@@ -763,6 +803,11 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
             if ticket.loop > ran.loop:
                 events.append(_recirculated(job, ticket, step, decision.step))
             ticket.status = lifecycle.step_status(resolved, decision.step)
+            hitl = ticket.gate is Gate.hitl
+            if not workflow.edit_phase(
+                resolved, ticket.workflow, step, hitl=hitl
+            ) and workflow.edit_phase(resolved, ticket.workflow, decision.step, hitl=hitl):
+                ticket.status = WAITING_PATHS  # takes its paths in _begin, under the lock
             ticket.updated = utc_now()
             documents.save_ticket(paths.project(job.slug), doc)
         else:

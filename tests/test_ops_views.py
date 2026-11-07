@@ -609,3 +609,12 @@ def test_check_runs_show_on_the_timeline_but_not_in_the_chain(
     assert (row.kind, row.step, row.verdict) == ("checks.end", "implement", "fail")
     assert row.note == "fail · lint failed (exit 1) · turn 1"
     assert {step.step: step.runs for step in found.chain}["implement"] == 0
+
+
+def test_views_show_waiting_paths(seeded: StorePaths, make_ticket: Make) -> None:
+    project = seeded.project("payments-api")
+    doc = make_ticket("bbbbbbb4", status="in_process/waiting_paths", step="implement")
+    documents.save_ticket(project, doc)
+    columns = {c.key: c for c in views.board(seeded, project=None).columns}
+    card = {card.id: card for card in columns["implement"].cards}["bbbbbbb4"]
+    assert card.chip == "waiting paths"
