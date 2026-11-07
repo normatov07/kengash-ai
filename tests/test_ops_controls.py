@@ -121,6 +121,24 @@ def test_approve_grants_loops_and_restarts(
         controls.approve_ticket("7b55e0c1", loops=None, tokens=None, project=None, by="user")
 
 
+def test_approve_into_editing_waits_for_a_path_holder(
+    engine: Engine, make_ticket: Make, spawned: list[tuple[str, int | None]]
+) -> None:
+    doc = engine.ticket()
+    doc.meta.status, doc.meta.step, doc.meta.loop = "in_process/needs_approval", "implement", 3
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    runtime.save_ticket_state(engine.paths, "7b55e0c1", TicketState(approval="loop_cap"))
+    holder = make_ticket(
+        "c0ffee00",
+        status="in_process/under_implementation",
+        step="implement",
+        touches=doc.meta.touches,
+    )
+    documents.save_ticket(engine.paths.project(engine.slug), holder)
+    approved = controls.approve_ticket("7b55e0c1", loops=2, tokens=None, project=None, by="user")
+    assert approved.status == "in_process/waiting_paths" and spawned == [("7b55e0c1", None)]
+
+
 def test_park_defers_while_a_worker_runs(engine: Engine) -> None:
     runtime.save_worker(
         engine.paths, WorkerRecord(id="7b55e0c1", project=engine.slug, pid=os.getpid())

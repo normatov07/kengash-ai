@@ -164,6 +164,8 @@ def approve_ticket(
         restart = isinstance(decision, workflow.Run)
         if isinstance(decision, workflow.Run):
             ticket.status = lifecycle.step_status(resolved, decision.step)
+            if _clash(paths, slug, resolved, ticket, decision.step) is not None:
+                ticket.status = steps.WAITING_PATHS  # its job takes the paths when free (SP16)
         elif isinstance(decision, workflow.Halt):
             ticket.status = decision.status
             state.approval = decision.approval

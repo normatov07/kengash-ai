@@ -29,16 +29,19 @@ def test_tickets_plan_at_once_and_an_overlapping_one_waits_to_edit(
     documents.save_ticket(project, _ready(make_ticket, "7b55e0c1", "retry/"))  # engine's own
     documents.save_ticket(project, _ready(make_ticket, "0b1c2d3e", "billing/"))
     documents.save_ticket(project, _ready(make_ticket, "1c2d3e4f", "retry/backoff.py"))
-    # the workers take replies in call order, not ticket order: three plans first
+    # The fake CLIs hand out replies in call order, not ticket order: the later replies are
+    # queued only once all three plan calls hold theirs, so a fast ticket's review cannot
+    # take a slow worker's plan reply.
     for _ in range(3):
-        fake_clis.queue("claude", fixture="claude/work_resume.json", sleep=1.5)  # plan
+        fake_clis.queue("claude", fixture="claude/work_resume.json", sleep=4)  # plan
+    started = runner.invoke(app, ["run", "7b55e0c1", "0b1c2d3e", "1c2d3e4f"]).stdout
+    for ticket_id in ("7b55e0c1", "0b1c2d3e", "1c2d3e4f"):  # planning edits nothing (SP16)
+        assert f"started {ticket_id} plan→claude" in started
+    wait_until(lambda: len(fake_clis.calls("claude")) == 3, 30)
     for _ in range(3):
         fake_clis.queue("codex", fixture="codex/work_resume.jsonl", shell=WRITE)  # implement
     for _ in range(3):
         fake_clis.queue("claude", stdout=fake_clis.claude_output(REVIEW_PASS))  # review_code
-    started = runner.invoke(app, ["run", "7b55e0c1", "0b1c2d3e", "1c2d3e4f"]).stdout
-    for ticket_id in ("7b55e0c1", "0b1c2d3e", "1c2d3e4f"):  # planning edits nothing (SP16)
-        assert f"started {ticket_id} plan→claude" in started
     wait_until(lambda: _statuses(engine, ["7b55e0c1", "0b1c2d3e"]) == {AWAITING}, 60)
     assert _statuses(engine, ["1c2d3e4f"]) == {"in_process/waiting_paths"}
     events = journal_events()
