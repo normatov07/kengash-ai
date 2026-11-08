@@ -12,7 +12,7 @@ All notable changes to this project are written here. The format follows [Keep a
 - Failures agents can act on: a failing check writes a digest (headline, file and line, a fenced excerpt) to Findings and a new `## Check output` section. Prompts name the checks and say which step sent the work back and why. agy implementers may now run the project's test and lint commands.
 - A handoff line `BLOCKED: <what>` stops a ticket at `needs_approval` for what only you can give; `kengash approve <id> --note "<answer>"` hands your answer to the next step.
 - Every new worker session starts with a `## Memory` block: the project's PROCESS.md notes, its and the global decisions, and your preferences, each capped, newest winning.
-- Decisions are recorded without anyone remembering to. A plan's `## Lasting decisions` reach DECISIONS.md when you approve it. Workers propose `decisions` in their replies; the code reviewer checks them, and they land in DECISIONS.md when the ticket merges.
+- Decisions are recorded without anyone remembering to. A plan's `## Lasting decisions` reach DECISIONS.md when you approve it. Workers propose `decisions` in their replies; the code reviewer can strike any that is not a lasting choice, and the rest land in DECISIONS.md when the ticket merges.
 - `kengash memory add --process` appends a process note to the project's PROCESS.md, and `kengash context` ends with a `# Record` hint saying what goes where. Near-duplicate memory lines count as already recorded.
 - Tickets run in parallel:
   - planning steps neither hold nor check paths, so overlapping tickets plan at once;
@@ -25,7 +25,7 @@ All notable changes to this project are written here. The format follows [Keep a
 
 ### Changed
 
-- `merge.mode` defaults to `auto`: a green ticket merges into your local main by itself (kengash never pushes), after a recheck when main moved. Stores seeded before 0.6.0 keep the `merge.mode: ask` they were written with.
+- `merge.mode` defaults to `auto`: a green ticket merges into your local main by itself (kengash never pushes), after a recheck unless its checks passed on that exact commit. It asks you only when the merge cannot finish (for example, uncommitted changes in the main working tree), and says why. Stores seeded before 0.6.0 keep the `merge.mode: ask` they were written with.
 - Read steps reply with the new `plan` output (`files`, `decisions`), and work replies carry `decisions`; both may be empty lists.
 
 ## [0.5.0] - 2026-11-07
