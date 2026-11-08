@@ -148,11 +148,23 @@ def decision_lines(existing: str, proposed: Sequence[Decision]) -> str:
         if not found or found in seen:
             continue
         seen.add(found)
-        lines.append(
-            redact(memory.decision_text(*map(_flat, (item.decision, item.why, item.rejected))))
-        )
+        parts = (_fit(item.decision), _fit(item.why), _fit(item.rejected))
+        lines.append(redact(memory.decision_text(*parts)))
         added += 1
     return "\n".join(lines)
+
+
+def _fit(text: str) -> str:
+    """One line within memory's word cap, so a proposal is never refused at merge: its first
+    sentence when that fits, else its first words and `…`."""
+    flat = _flat(text)
+    words = flat.split()
+    if len(words) <= memory.MAX_WORDS:
+        return flat
+    first = flat.split(". ", 1)[0]
+    if len(first.split()) <= memory.MAX_WORDS:
+        return first
+    return " ".join(words[: memory.MAX_WORDS - 1]) + " …"
 
 
 def checks_block(test_cmd: str, lint_cmd: str) -> str:

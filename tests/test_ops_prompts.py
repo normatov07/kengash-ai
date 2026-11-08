@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from kengash_ai import memory
 from kengash_ai.model import Decision, Doc, Finding, SentBack, Settings, Ticket
 from kengash_ai.ops import prompts
 from kengash_ai.store import StorePaths
@@ -92,6 +93,15 @@ def test_decision_lines_dedupe_then_cap() -> None:
     last = prompts.decision_lines(full, proposed[1:]).splitlines()[-1]
     assert last == "- b. why: y. rejected: c."
     assert len(prompts.decision_lines(full, proposed[1:]).splitlines()) == 6
+
+
+def test_long_proposals_are_shortened_to_fit_memory() -> None:
+    long = "Move duration = lerp(minMs, maxMs, (squares-1)/6) / speed. " + "detail " * 40
+    why = "because " * 40
+    [line] = prompts.decision_lines("", [Decision(decision=long, why=why)]).splitlines()
+    decision, reason, _ = memory.parse_decision(line)
+    assert decision == "Move duration = lerp(minMs, maxMs, (squares-1)/6) / speed"
+    assert len(reason.split()) <= memory.MAX_WORDS and reason.endswith("…")
 
 
 def test_review_prompts_show_decisions(make_ticket: Make) -> None:
