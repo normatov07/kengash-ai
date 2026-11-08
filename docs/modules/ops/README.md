@@ -62,6 +62,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-08: `prompts.fit` is public; the merge fits a stored decision line to memory's cap too, so a long line written before the fix is shortened, not dropped.
 - 2026-11-08: `prompts.decision_lines` fits each proposed decision, why and rejected within memory's 30-word cap (the first sentence, else the first words and `…`), so none is refused at merge; a 62-word chess-samurai proposal was dropped silently before.
 - 2026-11-07: review prompts number the ticket's `## Decisions` under `prompts.STRIKE_LEAD`; a review finding whose file is `DECISIONS` strikes that line (`decision_findings`, `strike`), and a fail whose only findings struck decisions counts as a pass; `new_prompt(review=)` (SP16 review).
 - 2026-11-07: under `merge.mode: auto` a ticket whose steps passed journals `ticket.merging` (`merging.MERGING`, `MERGING_EVENT`; not a gate) in `steps._begin`, `steps._finish` and `controls.approve_ticket`; `merge_if_clean` catches any `KengashError` (a busy queue too) and journals the `awaiting_merge` gate with why when the ticket is left there (SP16 review).

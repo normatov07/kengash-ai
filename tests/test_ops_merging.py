@@ -218,3 +218,15 @@ def test_a_merge_retry_after_unfinished_checks_reruns_them(
     with pytest.raises(UserError, match="checks failed after rebase onto main"):
         merging.merge_ticket("7b55e0c1", project=None, by="user")  # the rebase moves nothing now
     assert not (engine.repo / "retry.py").exists()
+
+
+def test_merge_records_a_long_stored_decision_shortened(
+    engine: Engine, run_git: Callable[..., str]
+) -> None:
+    ready_to_merge(engine, run_git)
+    doc = engine.ticket()
+    doc.sections["Decisions"] = "- Retries back off. " + "detail " * 40 + "why: herd."
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    assert merging.merge_ticket("7b55e0c1", project=None, by="user").decisions == 1
+    text = (engine.paths.memory / "DECISIONS.md").read_text(encoding="utf-8")
+    assert "[payments-api] Retries back off. why: herd." in text

@@ -176,12 +176,12 @@ def _record_decisions(paths: StorePaths, slug: str, ticket_id: str, section: str
         if not decision:
             continue
         with contextlib.suppress(UserError):
-            recorded += memory.add(
+            recorded += memory.add(  # fit: a line stored before 0.6.0 may be too long
                 paths,
-                decision,
-                why or f"ticket {ticket_id}",
+                prompts.fit(decision),
+                prompts.fit(why) or f"ticket {ticket_id}",
                 decision=True,
-                rejected=rejected or None,
+                rejected=prompts.fit(rejected) or None,
                 project=slug,
                 by=by,
             ).added
