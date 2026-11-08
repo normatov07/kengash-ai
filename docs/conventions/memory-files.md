@@ -6,11 +6,12 @@ Formats of the files in the `~/.kengash` store. They are the contract sub-projec
 
 | File | Scope | Read by | Written by | Cap |
 |---|---|---|---|---|
-| `MEMORY.md` | global | the conductor at the start of every command (`kengash context`); workers get a digest | `kengash memory add` | 200 lines |
-| `DECISIONS.md` | global; entries tagged `[project]` | planner, plan reviewer, conductor | `kengash memory add --decision` | 300 lines, then the oldest move to `memory/archive/` |
-| `PROCESS.md` | project | workers of that project | user, conductor | 100 lines |
+| `MEMORY.md` | global | the conductor at the start of every command (`kengash context`); every new worker session (`## Memory`) | `kengash memory add` | 200 lines |
+| `DECISIONS.md` | global; entries tagged `[project]` | the conductor; every new worker session | `kengash memory add --decision`; `plan approve` (`## Lasting decisions`); `merge` (the ticket's `## Decisions`) | 300 lines, then the oldest move to `memory/archive/` |
+| `PROCESS.md` | project | every new worker session of that project | user, conductor (`kengash memory add --process`) | 100 lines |
 | `SETTINGS.md` | project | `kengash` only | user, UI | schema-validated |
 | ticket `## Handoff` | ticket | the next worker | `kengash`, from worker JSON | 15 lines |
+| ticket `## Decisions` | ticket | reviewers; DECISIONS.md once merged | `kengash`, from worker JSON | 6 lines |
 | ticket `## Check output` | ticket | the implementer, the user | `kengash`, from a failing check's digest | 62 lines |
 
 ## Line formats
@@ -26,6 +27,13 @@ DECISIONS.md  - 2026-10-22 [payments-api] keyring over single secret, 48h overla
 ## Writing and compaction
 
 - Write only through `kengash memory add`; the journal records who wrote each line and why.
+- What goes where (SP16; `kengash context` prints it under `# Record`):
+  - DECISIONS.md takes a settled choice later work must follow that the code does not make obvious: architecture and module boundaries, interfaces, data formats, libraries and tools, design-system values, platform or performance targets, a source of truth, naming.
+  - MEMORY.md takes how the user works in every project: preferences, working style, goals, approaches turned down for good.
+  - PROCESS.md takes how this project builds, tests or ships.
+  - Never record one ticket's details, what the code or plan already says, a guess, or a secret.
+- Near-duplicates (case, spacing, trailing punctuation; for decisions the date, why and rejected) count as recorded.
+- Plans write `## Lasting decisions` (`- <decision>. why: <reason>. rejected: <alternative>.`), recorded on approval; workers propose `decisions`, recorded when their ticket merges.
 - Mark a line `(pin)` to keep it through compaction.
 - When a file passes its cap, a one-shot worker on the cheapest configured model merges duplicates and drops stale lines. `kengash` accepts the result only if it is under the cap and keeps every pinned line. The previous version stays in the store's git history.
 
@@ -48,4 +56,4 @@ Formats are in spec §4.4.
 - One plan file per request (`plans/<id8>.md`) holds the user's prompt verbatim; tickets reference it by id and never copy it.
 - One file per ticket (`tasks/<folder>/<id8>.md`) moves between `in_queue/`, `in_process/` and `done/` as its status changes.
 - Agents never edit frontmatter; `kengash` writes it.
-- `## Handoff` is replaced at every step; `## Check output` holds the last failing check and is cleared when checks pass; `## Log` gains one line per step and per in-step check run.
+- `## Decisions` gathers what workers propose (at most 6) and lands in DECISIONS.md with the merge; `## Handoff` is replaced at every step; `## Check output` holds the last failing check and is cleared when checks pass; `## Log` gains one line per step and per in-step check run.

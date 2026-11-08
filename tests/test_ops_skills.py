@@ -370,9 +370,11 @@ def test_show_prints_the_body_without_frontmatter() -> None:
 
 
 def test_show_inlines_references() -> None:
-    rubric = (skills.packaged() / "ticket" / "references" / "importance.md").read_text()
+    folder = skills.packaged() / "ticket" / "references"
+    rubric, width = ((folder / name).read_text() for name in ("importance.md", "width.md"))
     shown = skills.show("ticket", agent="claude", cli_name="kengash")
-    assert shown.endswith(f"\n## references/importance.md\n\n{rubric}")
+    assert f"\n## references/importance.md\n\n{rubric}" in shown
+    assert shown.endswith(f"\n## references/width.md\n\n{width}")
 
 
 def test_show_spells_codex_commands() -> None:
@@ -415,3 +417,24 @@ def test_role_skills_carry_the_sp15_rules() -> None:
         encoding="utf-8"
     )
     assert "--note" in events and "blocked" in events
+
+
+def test_skills_carry_the_sp16_rules() -> None:
+    root = Path(__file__).parent.parent
+    roles = root / "src" / "kengash_ai" / "roles"
+
+    def text(path: Path) -> str:
+        return " ".join(path.read_text(encoding="utf-8").split())
+
+    assert "`files`" in text(roles / "plan" / "SKILL.md")
+    for role in ("plan", "implement"):
+        assert "`decisions`" in text(roles / role / "SKILL.md")
+    assert "## Decisions" in text(roles / "review-code" / "SKILL.md")
+    for skill in ("grill", "plan"):
+        assert "## Lasting decisions" in text(root / "skills" / skill / "SKILL.md")
+    assert "references/width.md" in text(root / "skills" / "ticket" / "SKILL.md")
+    width = text(root / "skills" / "ticket" / "references" / "width.md")
+    assert "depends_on" in width and "touches" in width
+    memory = text(root / "skills" / "memory" / "SKILL.md")
+    assert "--process" in memory and "design-system" in memory
+    assert "kengash memory add" in text(root / "skills" / "loop" / "references" / "events.md")

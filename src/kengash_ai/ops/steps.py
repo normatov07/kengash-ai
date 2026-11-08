@@ -4,6 +4,7 @@ A job runs steps until a gate, the end, a pause or park request, or its step bud
 Ticket and state writes happen under the project lock; CLI calls happen outside it.
 """
 
+import contextlib
 import os
 import time
 from collections.abc import Callable
@@ -12,13 +13,16 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from kengash_ai import adapters, gitops, journal, settings, workflow
+from kengash_ai import adapters, gitops, journal, memory, scheduler, settings, workflow
 from kengash_ai.model import (
     Checked,
     Doc,
     Event,
     Folder,
+    Gate,
+    KengashError,
     NeedsSetup,
+    PlanOutput,
     ProviderOptions,
     ProviderStatus,
     ReviewOutput,
@@ -45,6 +49,10 @@ from kengash_ai.store.redact import redact
 from kengash_ai.store.registry import load_registry
 
 SLOT_POLL_S = 5
+PATH_POLL_S = 5  # a job waiting for another ticket's paths looks again this often (SP16)
+WAITING_PATHS = "in_process/waiting_paths"
+MERGING = merging.MERGING
+MERGING_EVENT = merging.MERGING_EVENT
 QUOTA_WAIT_S = 900
 sleep = time.sleep
 
@@ -105,6 +113,10 @@ def run_job(ticket_id: str, *, project: str | None = None, steps: int | None = N
     done = 0
     while True:
         began = _begin(job, budget_left=steps is None or done < steps)
+        if isinstance(began, _WaitPaths):
+            runtime.beat(paths, ticket_id)
+            sleep(PATH_POLL_S)
+            continue
         if isinstance(began, JobEnd):
             return _merge_now(job, began)
         ended = _step(job, began)
@@ -151,7 +163,14 @@ def fail_ticket(
         return ticket.status
 
 
-def _begin(job: _Job, *, budget_left: bool) -> _Ready | JobEnd:
+@dataclass(frozen=True)
+class _WaitPaths:
+    """The next step edits, and another ticket holds overlapping paths (SP16 spec §3.8)."""
+
+    holder: str
+
+
+def _begin(job: _Job, *, budget_left: bool) -> _Ready | JobEnd | _WaitPaths:
     """Under the project lock: honour flags and caps, then pick the step to run."""
     paths = job.paths
     with locked(_lock(paths, job.slug)):
@@ -178,13 +197,57 @@ def _begin(job: _Job, *, budget_left: bool) -> _Ready | JobEnd:
         if isinstance(decision, workflow.Merge):
             runtime.save_ticket_state(paths, job.ticket_id, state)
             job.merge_pending = True
-            return _halt(job, doc, workflow.AWAITING_MERGE, "every step passed")
+            return _halt(job, doc, workflow.AWAITING_MERGE, MERGING, kind=MERGING_EVENT)
+        if ticket.status == WAITING_PATHS:
+            holder = _holder(paths, job.slug, resolved, ticket)
+            if holder is not None:
+                if state.waiting_on != holder:  # journaled once per holder
+                    state.waiting_on = holder
+                    runtime.save_ticket_state(paths, job.ticket_id, state)
+                    _journal(
+                        job,
+                        "ticket.waiting",
+                        step=decision.step,
+                        holder=holder,
+                        reason=f"touches overlap {holder}",
+                    )
+                return _WaitPaths(holder)
+            state.waiting_on = ""
         ticket.status = lifecycle.step_status(resolved, decision.step)
         ticket.updated = utc_now()
         documents.save_ticket(paths.project(job.slug), doc)
         runtime.save_ticket_state(paths, job.ticket_id, state)
         runtime.set_worker_step(paths, job.ticket_id, decision.step)
         return _Ready(doc, state, resolved, decision.step)
+
+
+def _narrow(resolved: Settings, ticket: Ticket, step: str, files: list[str]) -> int:
+    """Narrow the ticket's touches to a planning step's files; the new count, or 0 when the
+    touches stay (SP16 spec §3.12)."""
+    hitl = ticket.gate is Gate.hitl
+    paths = prompts.narrowed(files)
+    if paths is None or workflow.edit_phase(resolved, ticket.workflow, step, hitl=hitl):
+        return 0
+    ticket.touches = paths
+    return len(paths)
+
+
+def _catch_up(job: _Job) -> None:
+    """Start an edit from the newest base when the branch has no work yet (SP16 spec §3.11);
+    a git error leaves the worktree as it is."""
+    with locked(job.paths.locks / f"repo-{job.slug}.lock"), contextlib.suppress(gitops.GitError):
+        gitops.catch_up(job.worktree, job.base)
+
+
+def _holder(paths: StorePaths, slug: str, resolved: Settings, ticket: Ticket) -> str | None:
+    """Another ticket of the project that holds paths overlapping this one's, if any."""
+    for other in records.project_tickets(paths, slug).values():
+        meta = other.meta
+        if meta.id == ticket.id or not lifecycle.holds_paths(resolved, meta):
+            continue
+        if scheduler.overlaps(meta.touches, ticket.touches):
+            return meta.id
+    return None
 
 
 def _step(job: _Job, ready: _Ready) -> JobEnd | None:
@@ -198,6 +261,8 @@ def _step(job: _Job, ready: _Ready) -> JobEnd | None:
         return _fail(job, str(exc))
     if pick.provider != "shell":
         _take_slot(job, ready, pick)
+    if ready.resolved.kind_of(ready.step) == "edit":
+        _catch_up(job)
     ran = _call(job, ready, pick)
     if isinstance(ran, JobEnd):
         return ran
@@ -345,6 +410,14 @@ def _prepare(job: _Job, ready: _Ready, pick: agents.Pick) -> StepRequest:
     return _request(job, ready, pick, session_id=session_id, resume=resume, log=log)
 
 
+def _memory(job: _Job) -> str:
+    """The memory digest for a new session; "" when the store cannot give one."""
+    try:
+        return memory.digest(job.paths, job.slug)
+    except KengashError:
+        return ""
+
+
 def _never_started(request: StepRequest, result: StepResult) -> bool:
     """A new claude session whose CLI failed before creating it (no id, no timeout)."""
     fresh = not request.resume and request.session_id is not None
@@ -464,6 +537,8 @@ def _request(
             diff_stat=diff_stat,
             instruction=told,
             feedback=feedback,
+            memory=_memory(job),
+            review=review,
         )
         skill = prompts.role_skill(job.paths, job.slug, resolved.agents[pick.role].skill)
     if resolved.kind_of(step) == "edit" and gitops.changed_files(job.worktree):
@@ -708,23 +783,40 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
         output = result.output
         fingerprints: tuple[str, ...] = ()
         blocked = ""
+        narrowed = 0
         if isinstance(output, ReviewOutput):
-            verdict = output.verdict
-            failing = output.findings if verdict == "fail" else []
+            findings, struck = prompts.decision_findings(output.findings)
+            if struck:  # the reviewer's veto on proposed decisions (SP16 spec §3.3)
+                doc.sections["Decisions"] = prompts.strike(
+                    doc.sections.get("Decisions", ""), struck
+                )
+            # a fail that only struck decisions leaves implement nothing to fix
+            verdict = output.verdict if findings or output.verdict == "pass" else "pass"
+            failing = findings if verdict == "fail" else []
             doc.sections["Findings"] = prompts.findings_text(failing)
             fingerprints = tuple(workflow.fingerprint(f.file, f.issue) for f in failing)
             if resolved.kind_of(step) == "check":
                 doc.sections["Check output"] = redact(result.check_output) if failing else ""
+                if verdict == "pass":  # the merge recheck skips this commit (SP16 §3.9)
+                    head = gitops.head(job.worktree)
+                    state.checked = Checked(commit=head, step=step, summary=output.summary)
         else:
             verdict = "pass"
             if isinstance(output, WorkOutput):
                 doc.sections["Handoff"] = prompts.handoff_text(output.handoff)
                 blocked = prompts.blocked_line(output.handoff)
+                if isinstance(output, PlanOutput):
+                    narrowed = _narrow(resolved, ticket, step, output.files)
+                if output.decisions:  # recorded only when the ticket merges (SP16 §3.3)
+                    existing = doc.sections.get("Decisions", "")
+                    doc.sections["Decisions"] = prompts.decision_lines(existing, output.decisions)
         tokens = ran.usage.tokens
         ticket.tokens += tokens
         line = prompts.log_line(
             utc_now(), step, pick.role, pick.provider, pick.model, verdict, tokens
         )
+        if narrowed:
+            line += f" · touches narrowed to {narrowed} files"
         if result.warning:  # the CLI's error after a valid output (SP12 spec §3.1)
             line += f" · warning: {result.warning.strip().splitlines()[0][:160]}"
         doc.sections["Log"] = "\n".join(filter(None, [doc.sections.get("Log", "").strip(), line]))
@@ -750,6 +842,11 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
             if ticket.loop > ran.loop:
                 events.append(_recirculated(job, ticket, step, decision.step))
             ticket.status = lifecycle.step_status(resolved, decision.step)
+            hitl = ticket.gate is Gate.hitl
+            if not workflow.edit_phase(
+                resolved, ticket.workflow, step, hitl=hitl
+            ) and workflow.edit_phase(resolved, ticket.workflow, decision.step, hitl=hitl):
+                ticket.status = WAITING_PATHS  # takes its paths in _begin, under the lock
             ticket.updated = utc_now()
             documents.save_ticket(paths.project(job.slug), doc)
         else:
@@ -757,9 +854,10 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
                 status, reason = decision.status, decision.reason
                 state.approval = decision.approval
             else:
-                status, reason = workflow.AWAITING_MERGE, "every step passed"
+                status, reason = workflow.AWAITING_MERGE, MERGING
                 job.merge_pending = True
-            events.append(_set_status(paths, job.slug, doc, status, reason))
+            kind = MERGING_EVENT if job.merge_pending else None  # not a gate: kengash merges
+            events.append(_set_status(paths, job.slug, doc, status, reason, kind=kind))
             end = JobEnd(status, reason)
         runtime.save_ticket_state(paths, job.ticket_id, state)
         slots.release(paths, job.ticket_id)
@@ -767,9 +865,11 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
     return end
 
 
-def _halt(job: _Job, doc: Doc[Ticket], status: str, reason: str) -> JobEnd:
+def _halt(
+    job: _Job, doc: Doc[Ticket], status: str, reason: str, *, kind: str | None = None
+) -> JobEnd:
     """Stop the job at `status` (caller holds the project lock)."""
-    event = _set_status(job.paths, job.slug, doc, status, reason)
+    event = _set_status(job.paths, job.slug, doc, status, reason, kind=kind)
     slots.release(job.paths, job.ticket_id)
     records.record(job.paths, f"kengash: {job.ticket_id} {doc.meta.sub_status}", event)
     return JobEnd(status, reason)

@@ -4,9 +4,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
+from kengash_ai import memory
 from kengash_ai.model import (
     BUILTIN_KINDS,
     PLAN_SECTIONS,
+    Decision,
     Finding,
     Kind,
     OutputKind,
@@ -67,6 +69,102 @@ class Feedback:
 
 
 NO_FEEDBACK = Feedback()
+
+
+MEMORY_LEAD = (
+    "The user's preferences and this project's settled decisions and process. Follow them; "
+    "newer lines override older ones. When the Scope conflicts with one, follow the Scope and "
+    "say so in your handoff."
+)
+
+
+def memory_block(memory: str) -> list[tuple[str, str]]:
+    """The `## Memory` block of a new session (SP16 spec §3.1); none when memory is empty."""
+    return [("Memory", f"{MEMORY_LEAD}\n\n{memory}")] if memory.strip() else []
+
+
+MAX_FILES = 40
+
+
+def narrowed(files: Sequence[str]) -> list[str] | None:
+    """A planner's `files` as the ticket's new touches (SP16 spec §3.12): repo-relative,
+    normalised, deduplicated and sorted; None (keep the touches) for an empty list, more than
+    40 paths, or any path that is empty, absolute or climbs out with `..`."""
+    found: set[str] = set()
+    for raw in files:
+        path = raw.strip()
+        parts = [part for part in path.split("/") if part not in ("", ".")]
+        if not parts or path.startswith(("/", "~", "\\")) or ".." in parts or ":" in parts[0]:
+            return None
+        found.add("/".join(parts))
+    return sorted(found) if 0 < len(found) <= MAX_FILES else None
+
+
+STRIKE_LEAD = (
+    "Each line reaches DECISIONS.md for every later ticket when this one merges. Strike one "
+    "that is not a lasting choice, or contradicts the Memory, with a low finding whose `file` "
+    "is `DECISIONS` and `line` its number; it needs no fail."
+)
+DECISIONS_FILE = "decisions"
+
+
+def _decisions_block(sections: Mapping[str, str], *, review: bool) -> tuple[str, str]:
+    """The ticket's `## Decisions`; a reviewer sees them numbered, to strike (SP16 §3.3)."""
+    text = sections.get("Decisions", "")
+    lines = [line for line in text.splitlines() if line.strip()]
+    if not review or not lines:
+        return ("Decisions", text)
+    numbered = [f"{n}. {line.removeprefix('- ')}" for n, line in enumerate(lines, 1)]
+    return ("Decisions", "\n".join([STRIKE_LEAD, *numbered]))
+
+
+def decision_findings(findings: Sequence[Finding]) -> tuple[list[Finding], set[int]]:
+    """Split a review's findings: the others, and the Decisions line numbers it strikes."""
+    others = [f for f in findings if f.file.strip().lower() != DECISIONS_FILE]
+    struck = {f.line for f in findings if f.file.strip().lower() == DECISIONS_FILE}
+    return others, struck
+
+
+def strike(section: str, numbers: set[int]) -> str:
+    """`section` without its lines numbered in `numbers` (1-based, blank lines skipped)."""
+    lines = [line for line in section.splitlines() if line.strip()]
+    return "\n".join(line for n, line in enumerate(lines, 1) if n not in numbers)
+
+
+DECISIONS_PER_REPLY = 3
+DECISIONS_PER_TICKET = 6
+
+
+def decision_lines(existing: str, proposed: Sequence[Decision]) -> str:
+    """The ticket's `## Decisions` after a reply proposed `proposed` (SP16 spec §3.3): new
+    ones (near-duplicates dropped) up to 3 per reply and 6 per ticket, redacted."""
+    lines = [line for line in existing.splitlines() if line.strip()]
+    seen = {memory.key(f"- {memory.parse_decision(line)[0]}") for line in lines}
+    added = 0
+    for item in proposed:
+        if added == DECISIONS_PER_REPLY or len(lines) == DECISIONS_PER_TICKET:
+            break
+        found = memory.key(f"- {_flat(item.decision)}")
+        if not found or found in seen:
+            continue
+        seen.add(found)
+        parts = (fit(item.decision), fit(item.why), fit(item.rejected))
+        lines.append(redact(memory.decision_text(*parts)))
+        added += 1
+    return "\n".join(lines)
+
+
+def fit(text: str) -> str:
+    """One line within memory's word cap, so a proposal is never refused at merge: its first
+    sentence when that fits, else its first words and `…`."""
+    flat = _flat(text)
+    words = flat.split()
+    if len(words) <= memory.MAX_WORDS:
+        return flat
+    first = flat.split(". ", 1)[0]
+    if len(first.split()) <= memory.MAX_WORDS:
+        return first
+    return " ".join(words[: memory.MAX_WORDS - 1]) + " …"
 
 
 def checks_block(test_cmd: str, lint_cmd: str) -> str:
@@ -131,7 +229,11 @@ def kind(step: str, settings: Settings | None = None) -> Kind | None:
 
 
 def output_kind(step: str, settings: Settings | None = None) -> OutputKind:
-    return "review" if kind(step, settings) in ("review", "check") else "work"
+    """review and check steps give verdicts, read steps plans, edit steps work."""
+    found = kind(step, settings)
+    if found in ("review", "check"):
+        return "review"
+    return "plan" if found == "read" else "work"
 
 
 def profile(step: str, settings: Settings | None = None) -> Profile:
@@ -157,18 +259,22 @@ def new_prompt(
     diff_stat: str,
     instruction: str | None = None,
     feedback: Feedback = NO_FEEDBACK,
+    memory: str = "",
+    review: bool | None = None,
 ) -> str:
-    """A new session's prompt: who it is, the step, and the ticket inline; `instruction`
-    defaults to the built-in step's."""
+    """A new session's prompt: who it is, the step, the memory digest, and the ticket inline;
+    `instruction` defaults to the built-in step's."""
     head = (
         f'You are the {role} for ticket {ticket.id} "{ticket.title}", '
         f"loop {ticket.loop} of {ticket.loop_max}, step {step}."
     )
     blocks = [
+        *memory_block(memory),
         (f"Goal (plan {ticket.plan})", goal),
         ("Scope", sections.get("Scope", "")),
         ("Acceptance", sections.get("Acceptance", "")),
         ("Handoff", sections.get("Handoff", "")),
+        _decisions_block(sections, review=kind(step) == "review" if review is None else review),
         ("Findings", sections.get("Findings", "")),
         *_check_blocks(sections, feedback),
         ("Diff stat", diff_stat),
@@ -199,7 +305,11 @@ def resumed_prompt(
         if feedback.sent_back:
             head = f"{head}\n{feedback.sent_back}"
     if review if review is not None else kind(step) == "review":
-        blocks = [("Handoff", sections.get("Handoff", "")), ("Diff stat", diff_stat)]
+        blocks = [
+            ("Handoff", sections.get("Handoff", "")),
+            _decisions_block(sections, review=True),
+            ("Diff stat", diff_stat),
+        ]
         blocks += _check_blocks(sections, feedback)
     else:
         blocks = [("Findings", sections.get("Findings", "")), *_check_blocks(sections, feedback)]
@@ -213,10 +323,10 @@ def _check_blocks(sections: Mapping[str, str], feedback: Feedback) -> list[tuple
 
 
 def plan_review_prompt(
-    plan: Plan, sections: Mapping[str, str], decisions: str, *, round: int, resumed: bool
+    plan: Plan, sections: Mapping[str, str], memory: str, *, round: int, resumed: bool
 ) -> str:
-    """A plan-review round: the whole plan inline; a new session also gets the decision log,
-    a resumed one the Review log (SP3 spec decision 29)."""
+    """A plan-review round: the whole plan inline; a new session also gets the memory digest,
+    a resumed one the Review log (SP3 spec decision 29; SP16 spec §3.1)."""
     of = f"round {round} of {plan.review.max}"
     if resumed:
         head = f"Round {round} of {plan.review.max}: the planner revised the plan. {PLAN_REVIEW}"
@@ -224,7 +334,7 @@ def plan_review_prompt(
     else:
         head = f'You are the plan-reviewer for plan {plan.id} "{plan.title}", {of}.\n{PLAN_REVIEW}'
         blocks = [(name, sections.get(name, "")) for name in PLAN_SECTIONS if name != "Review log"]
-        blocks.append(("Decisions log", decisions))
+        blocks += memory_block(memory)
     return _join(head, blocks, REPLY)
 
 

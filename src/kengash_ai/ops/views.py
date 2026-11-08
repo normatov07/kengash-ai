@@ -44,7 +44,7 @@ from kengash_ai.store.paths import StorePaths
 from kengash_ai.store.registry import load_registry
 
 Window = Literal["today", "7d", "all"]
-WAITING = ("waiting_slot", "waiting_quota", "paused")
+WAITING = ("waiting_slot", "waiting_paths", "waiting_quota", "paused")
 TAIL = 30
 NEARBY_DEPTH = 2  # levels below each registered repo's parent folder
 FRESH_PING = timedelta(minutes=10)
@@ -74,6 +74,7 @@ CHIPS = {
     "failed": "failed",
     "awaiting_merge": "ready to merge",
     "waiting_slot": "waiting slot",
+    "waiting_paths": "waiting paths",
     "waiting_quota": "waiting quota",
     "paused": "paused",
 }
@@ -1170,6 +1171,8 @@ STATUS_EVENTS = frozenset(
         "ticket.recirculated",
         "ticket.paused",
         "ticket.stopped",
+        "ticket.waiting",  # a job waits for another ticket's paths (SP16)
+        "ticket.merging",  # every step passed; kengash merges (SP16)
     }
 )
 

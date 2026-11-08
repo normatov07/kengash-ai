@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from typer.testing import CliRunner
 
+from kengash_ai import __version__
 from kengash_ai.cli import app
 from kengash_ai.model import UserError
 from kengash_ai.ops import ui_server
@@ -88,3 +89,13 @@ def test_without_the_extra_open_names_the_install(
     monkeypatch.setattr(ui_server, "has_extra", lambda: False)
     result = runner.invoke(app, ["ui", "open", "--no-browser"])
     assert result.exit_code == 4 and "kengash-ai[ui]" in result.stderr
+
+
+def test_a_server_of_another_version_is_replaced(stopped: None, store_paths: StorePaths) -> None:
+    first = ui_server.open_ui(browser=False)
+    record = json.loads(store_paths.ui_file.read_text())
+    assert record["version"] == __version__
+    store_paths.ui_file.write_text(json.dumps({**record, "version": "0.5.0"}))  # an upgrade
+    second = ui_server.open_ui(browser=False)
+    assert not second.reused and second.pid != first.pid
+    assert get_overview(second.url)["projects"] == ["payments-api"]

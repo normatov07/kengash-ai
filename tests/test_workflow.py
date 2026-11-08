@@ -46,7 +46,8 @@ DONE = Halt(AWAITING_MERGE, "every step passed")
 
 
 def settings(agents: dict[str, Any] | None = None, **fields: Any) -> Settings:
-    data = {"agents": AGENTS | (agents or {}), "workflows": WORKFLOWS} | fields
+    data = {"agents": AGENTS | (agents or {}), "workflows": WORKFLOWS, "merge": {"mode": "ask"}}
+    data |= fields
     return Settings.model_validate(data)
 
 
@@ -108,6 +109,8 @@ def test_a_pass_moves_on_and_the_last_pass_follows_merge_mode() -> None:
     assert after(settings(), progress("implement"), PASS).decision == Run("review_code", 1)
     assert after(settings(), progress(), PASS).decision == DONE
     assert after(settings(merge={"mode": "auto"}), progress(), PASS).decision == Merge()
+    default = Settings.model_validate({"agents": AGENTS, "workflows": WORKFLOWS})
+    assert after(default, progress(), PASS).decision == Merge()  # auto by default (SP16)
     branch = after(settings(merge={"mode": "branch"}), progress(), PASS)
     waiting = "every step passed; the branch waits for the user"
     assert (branch.decision, branch.progress.step) == (Halt(BRANCH_READY, waiting), None)
@@ -255,3 +258,25 @@ def test_approving_a_blocked_edit_step_runs_it_again_in_the_same_loop() -> None:
 
 def test_approving_a_blocked_plan_moves_on() -> None:
     assert approve(settings(), progress("plan"), "blocked").decision == Run("review_plan", 1)
+
+
+def test_edit_phase_starts_at_first_edit_step() -> None:
+    from kengash_ai.workflow import edit_phase
+
+    resolved = settings()
+    flags = [
+        edit_phase(resolved, "standard", step, hitl=False)
+        for step in WORKFLOWS["standard"]["steps"]
+    ]
+    assert flags == [False, False, True, True]
+    assert edit_phase(resolved, "standard", "approve", hitl=True) is False
+    assert edit_phase(resolved, "standard", None, hitl=False) is False
+    assert edit_phase(resolved, "nope", "implement", hitl=False) is False
+
+
+def test_edit_phase_false_without_edit_step() -> None:
+    from kengash_ai.workflow import edit_phase
+
+    reviews = {"steps": ["plan", "review_plan"], "on_fail": {"review_plan": "plan"}}
+    resolved = settings(workflows=WORKFLOWS | {"reviews": reviews})
+    assert edit_phase(resolved, "reviews", "review_plan", hitl=False) is False

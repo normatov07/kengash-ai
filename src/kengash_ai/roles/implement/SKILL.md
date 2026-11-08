@@ -14,7 +14,7 @@ You implement one ticket in this worktree. The Handoff holds the plan; the Findi
 5. When Findings are given, fix every one, or say in the handoff why one is wrong.
 6. Do not commit, push or switch branches: kengash commits after the step.
 7. When part of the Scope needs what only the user can give (a login, a file or download, a tool you cannot run, a choice the Scope leaves open), do the rest and write one handoff line `BLOCKED: <what you need and why>`. kengash stops the ticket and asks the user. Never write it for a failing check: fix that.
-8. Reply with JSON: `summary` in one line (it becomes the commit subject); `handoff` for the reviewer, at most 15 lines:
+8. Reply with JSON: `summary` in one line (it becomes the commit subject); `decisions`: a lasting choice you made that later tickets must follow (an interface, data format, library, design value or convention) as `decision`, `why`, `rejected`, usually none; `handoff` for the reviewer, at most 15 lines:
 
 ```
 Changed: <what changed, one line each>

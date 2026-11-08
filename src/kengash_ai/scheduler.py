@@ -17,7 +17,9 @@ NEVER = datetime.min.replace(tzinfo=UTC)
 
 @dataclass(frozen=True)
 class Candidate:
-    """A ready ticket; `provider` is the CLI its first step needs (None: no slot)."""
+    """A ready ticket; `provider` is the CLI its first step needs (None: no slot). `editing`:
+    that step is in the editing phase, so its paths matter; `weight`: its longest chain of
+    waiting dependents (SP16 spec §3.7, §3.13)."""
 
     id: str
     project: str
@@ -25,6 +27,8 @@ class Candidate:
     created: datetime
     touches: tuple[str, ...]
     provider: str | None
+    editing: bool = True
+    weight: int = 0
 
 
 @dataclass(frozen=True)
@@ -73,19 +77,25 @@ def select(
     projects: Mapping[str, Limits],
     last_claims: Mapping[str, datetime],
 ) -> Selection:
-    """Walk candidates in turn order; keep each one that overlaps nothing running or chosen
-    in its project and fits a free slot on this machine and in its project."""
+    """Walk candidates in turn order; keep each one that fits a free slot on this machine and
+    in its project and, when it starts editing, overlaps no path holder in `busy` or editor
+    already chosen. A candidate that starts by planning edits nothing, so paths do not matter."""
     selection = Selection()
     taken = list(busy)
     used = list(held)
     for candidate in _in_turns(candidates, last_claims):
-        clash = next(
-            (
-                other.id
-                for other in taken
-                if other.project == candidate.project and overlaps(other.touches, candidate.touches)
-            ),
-            None,
+        clash = (
+            next(
+                (
+                    other.id
+                    for other in taken
+                    if other.project == candidate.project
+                    and overlaps(other.touches, candidate.touches)
+                ),
+                None,
+            )
+            if candidate.editing
+            else None
         )
         if clash is not None:
             selection.held_back[candidate.id] = f"touches overlap {clash}"
@@ -97,8 +107,33 @@ def select(
                 continue
             used.append(Held(candidate.project, provider))
         selection.chosen.append(candidate)
-        taken.append(Busy(candidate.id, candidate.project, candidate.touches))
+        if candidate.editing:
+            taken.append(Busy(candidate.id, candidate.project, candidate.touches))
     return selection
+
+
+def chain_weights(depends: Mapping[str, Sequence[str]]) -> dict[str, int]:
+    """Each ticket's longest chain of tickets waiting on it, transitively (0: none). Starting
+    the longest chain first shortens the whole run (Hu's rule); a cycle counts as no chain."""
+    dependents: dict[str, list[str]] = {ticket: [] for ticket in depends}
+    for ticket, needs in depends.items():
+        for need in needs:
+            dependents.setdefault(need, []).append(ticket)
+    weights: dict[str, int] = {}
+    visiting: set[str] = set()
+
+    def weight(ticket: str) -> int:
+        if ticket in weights:
+            return weights[ticket]
+        if ticket in visiting:
+            return 0
+        visiting.add(ticket)
+        found = max((1 + weight(child) for child in dependents.get(ticket, [])), default=0)
+        visiting.discard(ticket)
+        weights[ticket] = found
+        return found
+
+    return {ticket: weight(ticket) for ticket in depends}
 
 
 def fits(
@@ -123,10 +158,12 @@ def _fits(provider: str, used: Sequence[Held], limits: Limits) -> bool:
 def _in_turns(
     candidates: Sequence[Candidate], last_claims: Mapping[str, datetime]
 ) -> list[Candidate]:
-    """Projects take turns, the one with the oldest last claim first; inside a project,
-    critical before standard before simple, then oldest first."""
+    """Projects take turns, the one with the oldest last claim first; inside a project, the
+    longest chain of waiting dependents first, then critical before standard before simple,
+    then oldest first."""
     queues: dict[str, list[Candidate]] = {}
-    for candidate in sorted(candidates, key=lambda c: (RANK[c.importance], c.created, c.id)):
+    ranked = sorted(candidates, key=lambda c: (-c.weight, RANK[c.importance], c.created, c.id))
+    for candidate in ranked:
         queues.setdefault(candidate.project, []).append(candidate)
     order = sorted(queues, key=lambda slug: (last_claims.get(slug, NEVER), slug))
     turns = zip_longest(*(queues[slug] for slug in order))

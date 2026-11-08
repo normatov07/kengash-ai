@@ -35,6 +35,10 @@ Leave out `[ui]` for the CLI alone. The latest code: `uv tool install 'kengash-a
 
 The skills install as the `kengash` plugin: in Claude Code and Antigravity you type `/kengash:plan`, `/kengash:grill`, `/kengash:ticket`, `/kengash:loop` and `/kengash:ui`; Codex has no plugin namespace, so it gets `$kengash-plan` and so on. Claude Code can also take the plugin from its marketplace: `/plugin marketplace add normatov07/kengash-ai`, then `/plugin install kengash@kengash-ai`.
 
+### Upgrading from 0.5.0
+
+`uv tool upgrade kengash-ai`, then `kengash skills install --agent … --global` again: the plan, grill, ticket, loop and memory skills now record lasting decisions and slice tickets for parallel work. Tickets now merge by themselves once green (`merge.mode: auto`), but a store seeded before 0.6.0 says `merge.mode: ask`: switch it in Settings or in SETTINGS.md (the store's defaults and each project's) when you want that, or keep `ask` to merge each ticket yourself. Workers now see your memory and each project's PROCESS.md, so what you record there reaches them. If the web UI was open during the upgrade, run `kengash ui stop` once, then `kengash ui open`.
+
 ### Upgrading from 0.4.0
 
 `uv tool upgrade kengash-ai`, then `kengash doctor --fix`: it moves a `run_tests` step that runs after the code review, or has no way back to `implement`, right after `implement`. A project whose repo is gone for good is removed with `kengash forget <project>`; commands run inside an Orca workspace or any other git worktree of a registered repo now use that repo's project.
@@ -55,7 +59,7 @@ Run `kengash skills install --agent … --global` again: the commands are now `/
 Then, in your agent:
 
 1. `/kengash:plan` (or `/kengash:grill` to be interviewed first): a plan, reviewed by an agent on another provider. Once you approve it, it becomes tickets with importance, dependencies and touched paths, and the loop follows: at once when Auto mode is on (Settings or Overview in the UI), otherwise your agent asks once. `/kengash:ticket "<prompt>"` makes tickets from a short prompt instead.
-2. `/kengash:loop`: tickets run in their loops; the agent waits, reports gates and asks before granting loops or merging. One loop covers a project at a time: a second one is refused and told which session runs it.
+2. `/kengash:loop`: tickets run in their loops, independent ones at once; the agent waits, reports gates and asks before granting loops. Green tickets merge into your local main by themselves after a recheck (`merge.mode: ask` keeps each merge for you). One loop covers a project at a time: a second one is refused and told which session runs it.
 3. Watch the workers: each one opens its own terminal tab (`kg <id>`) showing every read, edit and command as it happens, and the loop opens a dashboard tab (`kengash watch`): running workers, sessions and tokens per CLI, what needs you, the latest actions. Tabs open in Orca, tmux or gnome-terminal (`watch.terminal` names any other; `watch.tabs: off` turns them off), and a desktop notification tells you when a ticket needs you. `kengash ps`, `kengash logs <id> -f` and the UI's Live tab show the same. To talk to one worker yourself once it stops: `kengash ticket attach <id> --tab`.
 4. `/kengash:ui` (or `kengash ui open`): the web UI on 127.0.0.1 behind a private link.
 

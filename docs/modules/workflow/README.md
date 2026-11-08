@@ -25,6 +25,7 @@ Decide what a ticket does next (SP3 spec §6): which steps its workflow runs, wh
 
 ## Changes
 
+- 2026-11-07: `edit_phase(settings, workflow, step, hitl=)`: the step is the workflow's first `edit`-kind step or after it (SP16).
 - 2026-11-07: `Outcome.blocked` halts a passing step for the user; `approve(…, "blocked")` (SP15).
 - 2026-11-07: `Approval` gains `blocked` (SP15).
 - 2026-11-06: the token-cap reason reads `token cap: <used:,> of <max:,> used; approve with --tokens N` (SP12 M1).

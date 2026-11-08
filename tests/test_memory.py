@@ -1,5 +1,6 @@
 import json
 from collections.abc import Callable
+from datetime import date
 
 import pytest
 
@@ -235,3 +236,104 @@ def test_decisions_past_300_lines_move_their_oldest_to_the_archive(store: StoreP
         json.loads(line) for line in next(store.journal.glob("*.jsonl")).read_text().splitlines()
     ]
     assert events[-1]["archived"] == 1
+
+
+def _process(store: StorePaths, slug: str, body: str) -> None:
+    project = ensure_project(store, slug)
+    project.process.write_text(f"# PROCESS.md\n\nIntro line.\n\n{body}", encoding="utf-8")
+
+
+def test_digest_orders_process_decisions_memory(store: StorePaths) -> None:
+    _process(store, "app", "## Process notes\n\n- design values live in design/\n")
+    memory.add(store, "keyring over env var", "rotation", decision=True, project="app")
+    memory.add(store, "wants the diff, not prose", "said so", section="Working style")
+    text = memory.digest(store, "app")
+    assert text.index("design values live in design/") < text.index("keyring over env var")
+    assert text.index("keyring over env var") < text.index("wants the diff, not prose")
+    assert "Intro line." not in text
+    assert "- [Working style] wants the diff, not prose" in text
+
+
+def test_digest_keeps_project_and_global_decisions_only(store: StorePaths) -> None:
+    memory.add(store, "mine", "x", decision=True, project="app")
+    memory.add(store, "theirs", "x", decision=True, project="other")
+    memory.add(store, "everyone", "x", decision=True)
+    text = memory.digest(store, "app")
+    assert "mine" in text and "everyone" in text and "theirs" not in text
+
+
+def test_digest_drops_oldest_over_cap_with_note(store: StorePaths) -> None:
+    for number in range(80):
+        memory.add(store, f"decision number {number} keeps a long tail", "x", decision=True)
+    text = memory.digest(store, None)
+    assert "decision number 79 keeps" in text
+    assert "decision number 0 keeps" not in text
+    assert "older lines in DECISIONS.md" in text
+    assert len(text) < 2_500 + 200
+
+
+def test_digest_keeps_process_head_over_cap(store: StorePaths) -> None:
+    notes = "".join(f"- process rule {n} with words to fill the line up\n" for n in range(100))
+    _process(store, "app", f"## Process notes\n\n{notes}")
+    text = memory.digest(store, "app")
+    assert "process rule 0 with" in text and "process rule 99 with" not in text
+    assert "more lines in PROCESS.md" in text
+
+
+def test_digest_empty_store_is_empty(store: StorePaths) -> None:
+    ensure_project(store, "app")
+    assert memory.digest(store, "app") == ""
+
+
+def test_digest_is_redacted(store: StorePaths) -> None:
+    _process(store, "app", "## Process notes\n\n- token=abc123def456ghi789jkl\n")
+    assert "abc123def456ghi789jkl" not in memory.digest(store, "app")
+
+
+def test_add_treats_case_and_punctuation_variants_as_recorded(store: StorePaths) -> None:
+    assert memory.add(store, "Likes small diffs.", "x").added is True
+    assert memory.add(store, "likes   small diffs", "y", section="Working style").added is False
+
+
+def test_add_decision_dedupe_ignores_date_and_why(store: StorePaths) -> None:
+    memory.add(store, "keyring over env var", "rotation", decision=True, project="app")
+    path = store.memory / "DECISIONS.md"
+    path.write_text(path.read_text().replace(date.today().isoformat(), "1999-01-01"))
+    again = memory.add(store, "Keyring over env var.", "other", decision=True, project="app")
+    assert again.added is False
+    other = memory.add(store, "keyring over env var", "rotation", decision=True, project="web")
+    assert other.added is True
+
+
+def test_add_keeps_decisions_sharing_a_prefix(store: StorePaths) -> None:
+    assert memory.add(store, "use flutter_scene", "x", decision=True, project="app").added
+    assert memory.add(
+        store, "use flutter_scene for 3D boards", "x", decision=True, project="app"
+    ).added
+
+
+def test_add_process_appends_under_process_notes(store: StorePaths) -> None:
+    _process(store, "app", "## Process notes\n\n- first rule\n\n## Later\n\n- other\n")
+    result = memory.add_process(store, "second rule", project="app", by="test")
+    text = store.project("app").process.read_text(encoding="utf-8")
+    assert result.added and "- first rule\n- second rule\n\n## Later" in text
+    assert memory.add_process(store, "Second rule.", project="app", by="test").added is False
+
+
+def test_add_process_refuses_at_cap(store: StorePaths) -> None:
+    _process(store, "app", "## Process notes\n\n" + "".join(f"- r{n}\n" for n in range(95)))
+    with pytest.raises(UserError, match=r"PROCESS\.md is at its 100-line cap; edit it"):
+        memory.add_process(store, "one too many", project="app", by="test")
+
+
+@pytest.mark.parametrize(
+    ("line", "parts"),
+    [
+        ("- use X. why: fast. rejected: Y.", ("use X", "fast", "Y")),
+        ("- use X. Why: fast", ("use X", "fast", "")),
+        ("* use X", ("use X", "", "")),
+        ("use X. rejected: Y", ("use X", "", "Y")),
+    ],
+)
+def test_parse_decision_splits_why_and_rejected(line: str, parts: tuple[str, str, str]) -> None:
+    assert memory.parse_decision(line) == parts

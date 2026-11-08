@@ -6,7 +6,7 @@ metadata: {source: kengash-ai}
 ---
 # Plan it without questions
 
-You write the plan; kengash stores it and has another agent review it. Read with your file tools; use the shell only for the `kengash` commands below, each as its own call with nothing chained before or after it. Never edit the repo's files or the `.kengash` store yourself.
+You write the plan; another agent reviews it. Read with your file tools; use the shell only for the `kengash` commands below, each as its own call with nothing chained before or after it. Never edit the repo's files or the `.kengash` store yourself.
 
 `<scope>` below is `-p <project>` when the request names its project or folder (a path kept as typed), else empty. On exit 4 `not a kengash project`, ask whether to register that folder; only on yes, run `kengash init <folder>`, then retry.
 
@@ -21,14 +21,15 @@ You write the plan; kengash stores it and has another agent review it. Read with
    ```
 
    It prints `plan <id> draft`; keep the id.
-3. Read the code, docs and memory the request touches. Decide what the request leaves open yourself; each such call becomes one Assumptions line: the decision, the default you chose, why.
-4. Save the plan, one `##` heading per section:
+3. Read the code, docs and memory the request touches. Decide what the request leaves open yourself; each call becomes one Assumptions line: the default you chose and why.
+4. Save the plan, one `##` heading per section; one Lasting decisions line `- <decision>. why: <reason>.` per choice later work must follow:
 
    ```
    kengash plan save <id> <<'EOF'
    ## Goal
    <1-3 lines: the outcome and why>
    ## Assumptions
+   ## Lasting decisions
    ## Scope
    ## Out of scope
    ## Design
@@ -41,11 +42,11 @@ You write the plan; kengash stores it and has another agent review it. Read with
    ```
 
    It prints `plan <id> draft, N sections`.
-5. Run `kengash plan review <id>` with a 10-minute shell timeout; on exit 3, run it again. It prints `plan <id> round r: pass|fail, N findings`, then the findings.
+5. Run `kengash plan review <id>` with a 10-minute shell timeout; on exit 3, run it again. It prints the verdict, then the findings.
 6. Show the user the verdict and every finding; ask: approve, edit or reject? Wait for the answer.
 7. Act on it:
    - edit: change the sections, then repeat steps 4 and 5;
-   - approve: `kengash plan approve <id>` (on exit 5, the review failed: add `--skip-review`, as the user approved), then run `kengash skills show ticket` and follow it from step 1 for plan `<id>`;
+   - approve: `kengash plan approve <id>` (exit 5: add `--skip-review`, as the user approved), then run `kengash skills show ticket` and follow it from step 1 for plan `<id>`;
    - reject: `kengash plan reject <id> --why "<the user's reason>"`.
 
 Done when `kengash plan show <id>` prints `status: ticketed` or `status: rejected`.

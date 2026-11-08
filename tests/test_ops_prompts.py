@@ -5,7 +5,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from kengash_ai.model import Doc, Finding, SentBack, Settings, Ticket
+from kengash_ai import memory
+from kengash_ai.model import Decision, Doc, Finding, SentBack, Settings, Ticket
 from kengash_ai.ops import prompts
 from kengash_ai.store import StorePaths
 from kengash_ai.store.seed import ensure_project, ensure_store
@@ -51,6 +52,105 @@ def test_resumed_prompts_carry_only_the_delta(make_ticket: Make) -> None:
     assert "## Handoff" in review and "## Diff stat" in review and "## Findings" not in review
 
 
+def test_new_prompt_puts_memory_first(make_ticket: Make) -> None:
+    ticket = make_ticket().meta
+    text = prompts.new_prompt(
+        ticket,
+        SECTIONS,
+        "Webhooks retry.",
+        role="implementer",
+        step="implement",
+        diff_stat="",
+        memory="Decisions (DECISIONS.md, newest last):\n- keyring over env var",
+    )
+    assert text.index("## Memory") < text.index("## Goal")
+    assert f"## Memory\n{prompts.MEMORY_LEAD}\n\nDecisions" in text
+    plain = prompts.new_prompt(
+        ticket, SECTIONS, "Webhooks retry.", role="implementer", step="implement", diff_stat=""
+    )
+    assert "## Memory" not in plain
+
+
+def test_resumed_prompt_has_no_memory(make_ticket: Make) -> None:
+    ticket = make_ticket().meta
+    assert "## Memory" not in prompts.resumed_prompt(
+        ticket, SECTIONS, step="implement", diff_stat=""
+    )
+
+
+def test_decision_lines_dedupe_then_cap() -> None:
+    def proposal(text: str, rejected: str = "") -> Decision:
+        return Decision(decision=text, why="y", rejected=rejected)
+
+    proposed = [proposal("A"), proposal("b", "c"), proposal("c"), proposal("d"), proposal("e")]
+    assert prompts.decision_lines("- a. why: x.", proposed).splitlines() == [
+        "- a. why: x.",
+        "- b. why: y. rejected: c.",
+        "- c. why: y.",
+        "- d. why: y.",
+    ]
+    full = "\n".join(f"- old {n}. why: x." for n in range(5))
+    last = prompts.decision_lines(full, proposed[1:]).splitlines()[-1]
+    assert last == "- b. why: y. rejected: c."
+    assert len(prompts.decision_lines(full, proposed[1:]).splitlines()) == 6
+
+
+def test_long_proposals_are_shortened_to_fit_memory() -> None:
+    long = "Move duration = lerp(minMs, maxMs, (squares-1)/6) / speed. " + "detail " * 40
+    why = "because " * 40
+    [line] = prompts.decision_lines("", [Decision(decision=long, why=why)]).splitlines()
+    decision, reason, _ = memory.parse_decision(line)
+    assert decision == "Move duration = lerp(minMs, maxMs, (squares-1)/6) / speed"
+    assert len(reason.split()) <= memory.MAX_WORDS and reason.endswith("…")
+
+
+def test_review_prompts_show_decisions(make_ticket: Make) -> None:
+    ticket = make_ticket().meta
+    sections = {**SECTIONS, "Decisions": "- keep X. why: y."}
+    new = prompts.new_prompt(
+        ticket, sections, "Goal.", role="code-reviewer", step="review_code", diff_stat="d"
+    )
+    shown = f"## Decisions\n{prompts.STRIKE_LEAD}\n1. keep X. why: y."
+    assert new.index("## Handoff") < new.index(shown)
+    resumed = prompts.resumed_prompt(ticket, sections, step="review_code", diff_stat="d")
+    assert shown in resumed
+    work = prompts.new_prompt(
+        ticket, sections, "Goal.", role="implementer", step="implement", diff_stat=""
+    )
+    assert "## Decisions\n- keep X. why: y." in work and prompts.STRIKE_LEAD not in work
+
+
+def test_decision_findings_strike_lines() -> None:
+    def finding(file: str, line: int) -> Finding:
+        return Finding(severity="low", file=file, line=line, issue="not lasting", fix="drop")
+
+    found = [finding("DECISIONS", 2), finding("retry.py", 3), finding("decisions", 9)]
+    others, struck = prompts.decision_findings(found)
+    assert [f.file for f in others] == ["retry.py"] and struck == {2, 9}
+    assert prompts.strike("- a.\n- b.\n- c.", struck) == "- a.\n- c."
+
+
+def test_narrowed_normalises_and_dedupes() -> None:
+    files = ["./lib/a.dart", "lib//b.dart", "lib/a.dart", " test/a_test.dart "]
+    assert prompts.narrowed(files) == ["lib/a.dart", "lib/b.dart", "test/a_test.dart"]
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        [],
+        ["/etc/passwd"],
+        ["../outside.py"],
+        ["lib/../../x"],
+        ["", "lib/a"],
+        ["~/x"],
+        [f"f{n}.py" for n in range(41)],
+    ],
+)
+def test_narrowed_rejects_unsafe_or_empty_lists(files: list[str]) -> None:
+    assert prompts.narrowed(files) is None
+
+
 def test_sections_and_log_lines() -> None:
     assert prompts.handoff_text("\n".join(f"l{i}" for i in range(20))).splitlines()[-1] == "l14"
     finding = Finding(severity="high", file="", line=0, issue="token=abc123def456ghi789", fix="f")
@@ -63,6 +163,14 @@ def test_sections_and_log_lines() -> None:
         "review",
         "edit_worktree",
     )
+
+
+def test_read_steps_reply_with_plan_output() -> None:
+    assert [prompts.output_kind(s) for s in ("plan", "implement", "review_plan")] == [
+        "plan",
+        "work",
+        "review",
+    ]
 
 
 def test_role_skills_come_from_the_package_by_default(store_paths: StorePaths) -> None:
@@ -86,7 +194,7 @@ def test_custom_step_prompts_follow_their_kind() -> None:
     )
     assert prompts.instruction(settings, "implement") == prompts.INSTRUCTIONS["implement"]
     assert [prompts.output_kind(s, settings) for s in ("advise", "tidy", "perf_review")] == [
-        "work",
+        "plan",
         "work",
         "review",
     ]

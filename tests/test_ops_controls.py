@@ -16,7 +16,7 @@ from kengash_ai.model import (
     UserError,
     WorkerRecord,
 )
-from kengash_ai.ops import controls
+from kengash_ai.ops import controls, records
 from kengash_ai.ops.controls import Paused, Resumed, Started
 from kengash_ai.store import StorePaths, documents, runtime
 
@@ -70,15 +70,17 @@ def test_run_skips_with_reasons(
     spawned: list[tuple[str, int | None]],
 ) -> None:
     project = store_paths.project("payments-api")
-    documents.save_ticket(project, make_ticket(importance="simple", workflow="simple", loop_max=3))
-    documents.save_ticket(
-        project, make_ticket("a91b3d07", importance="simple", workflow="simple", loop_max=3)
-    )
+    simple = {"importance": "simple", "workflow": "simple", "loop_max": 3}
+    documents.save_ticket(project, make_ticket(**simple))  # plans: overlap does not matter
+    editing = {"step": "implement", "loop": 2, **simple}
+    documents.save_ticket(project, make_ticket("a91b3d07", **editing))
+    holder = make_ticket("c0ffee00", status="in_process/under_implementation", **editing)
+    documents.save_ticket(project, holder)
     documents.save_ticket(project, make_ticket("3c9d0e11", status="in_queue/parked"))
     result = controls.run_tickets(["7b55e0c1", "a91b3d07", "3c9d0e11"], by="claude")
     assert [s.id for s in result.started] == ["7b55e0c1"]
     assert result.skipped == {
-        "a91b3d07": "touches overlap 7b55e0c1",
+        "a91b3d07": "touches overlap c0ffee00",
         "3c9d0e11": "status in_queue/parked",
     }
     again = controls.run_tickets(["7b55e0c1"], by="claude")
@@ -117,6 +119,24 @@ def test_approve_grants_loops_and_restarts(
     assert (engine.ticket().meta.loop, engine.ticket().meta.loop_max) == (4, 5)
     with pytest.raises(UserError, match="7b55e0c1 is not waiting for approval"):
         controls.approve_ticket("7b55e0c1", loops=None, tokens=None, project=None, by="user")
+
+
+def test_approve_into_editing_waits_for_a_path_holder(
+    engine: Engine, make_ticket: Make, spawned: list[tuple[str, int | None]]
+) -> None:
+    doc = engine.ticket()
+    doc.meta.status, doc.meta.step, doc.meta.loop = "in_process/needs_approval", "implement", 3
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    runtime.save_ticket_state(engine.paths, "7b55e0c1", TicketState(approval="loop_cap"))
+    holder = make_ticket(
+        "c0ffee00",
+        status="in_process/under_implementation",
+        step="implement",
+        touches=doc.meta.touches,
+    )
+    documents.save_ticket(engine.paths.project(engine.slug), holder)
+    approved = controls.approve_ticket("7b55e0c1", loops=2, tokens=None, project=None, by="user")
+    assert approved.status == "in_process/waiting_paths" and spawned == [("7b55e0c1", None)]
 
 
 def test_park_defers_while_a_worker_runs(engine: Engine) -> None:
@@ -221,3 +241,21 @@ def test_the_answer_to_a_blocked_plan_stays_in_the_handoff(
     controls.approve_ticket("7b55e0c1", loops=None, tokens=None, project=None, by="user", note=note)
     handoff = engine.ticket().sections["Handoff"]
     assert handoff.splitlines()[-1] == "The user answered: assets are in raw/."
+
+
+def test_resume_lets_an_overlapping_editor_wait_instead_of_stranding_it(
+    engine: Engine, make_ticket: Make, spawned: list[tuple[str, int | None]]
+) -> None:
+    project = engine.paths.project(engine.slug)
+    doc = engine.ticket()
+    doc.meta.status, doc.meta.step, doc.meta.loop = "in_process/paused", "implement", 2
+    documents.save_ticket(project, doc)
+    other = make_ticket(
+        "0a000000", status="in_process/paused", step="implement", touches=doc.meta.touches
+    )
+    documents.save_ticket(project, other)
+    resumed = controls.resume(None, by="user")
+    assert sorted(resumed.started) == ["0a000000", "7b55e0c1"] and resumed.skipped == {}
+    tickets = records.project_tickets(engine.paths, engine.slug)
+    statuses = {tickets[i].meta.status for i in ("0a000000", "7b55e0c1")}
+    assert statuses == {"in_process/under_implementation", "in_process/waiting_paths"}

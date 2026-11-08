@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -118,3 +119,15 @@ def test_ticket_state_loads_old_files_and_round_trips_the_new_fields(
     )
     runtime.save_ticket_state(store_paths, "7b55e0c1", state)
     assert runtime.load_ticket_state(store_paths, "7b55e0c1") == state
+
+
+def test_ticket_state_starts_waiting_on_nobody() -> None:
+    assert TicketState().waiting_on == ""
+
+
+def test_runtime_files_from_a_newer_version_still_load(store_paths: StorePaths) -> None:
+    runtime.save_ticket_state(store_paths, "7b55e0c1", TicketState(plan_rounds=2))
+    path = store_paths.runtime / "tickets" / "7b55e0c1.json"
+    data = json.loads(path.read_text())
+    path.write_text(json.dumps({**data, "added_in_a_later_version": True}))
+    assert runtime.load_ticket_state(store_paths, "7b55e0c1").plan_rounds == 2

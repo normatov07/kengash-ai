@@ -6,7 +6,7 @@ metadata: {source: kengash-ai}
 ---
 # Grill, then plan
 
-You question the user until nothing is left to assume, then write the plan for kengash to store and review. Read with your file tools; use the shell only for the `kengash` commands below, each as its own call with nothing chained. Never edit the repo's files or the `.kengash` store yourself.
+You question the user until nothing is left to assume, then write the plan. Read with your file tools; use the shell only for the `kengash` commands below, each as its own call with nothing chained. Never edit the repo's files or the `.kengash` store yourself.
 
 `<scope>` below is `-p <project>` when the request names its project or folder (a path kept as typed), else empty. On exit 4 `not a kengash project`, ask whether to register that folder; only on yes, run `kengash init <folder>`, then retry.
 
@@ -21,15 +21,16 @@ You question the user until nothing is left to assume, then write the plan for k
    ```
 
    It prints `plan <id> grilling`; keep the id.
-3. Look facts up yourself (code, docs, memory; a subagent if any). Ask only what the user alone decides.
+3. Look facts up yourself (code, docs, memory). Ask only what the user alone decides.
 4. Ask a round of at most `grill.round_size` questions, each with your recommended answer; use your multiple-choice tool if any. Wait for answers; repeat until nothing is left.
-5. Restate the shared understanding briefly; wait for the user's confirmation.
-6. Save the plan; Decisions holds one `question → answer` line per answer:
+5. Restate the shared understanding; wait for confirmation.
+6. Save the plan: one Decisions line `question → answer` per answer; one Lasting decisions line `- <decision>. why: <reason>.` per choice later work follows:
 
    ```
    kengash plan save <id> <<'EOF'
    ## Goal
    ## Decisions
+   ## Lasting decisions
    ## Assumptions
    ## Scope
    ## Out of scope

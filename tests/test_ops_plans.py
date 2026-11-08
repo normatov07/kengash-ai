@@ -170,3 +170,27 @@ def test_approve_accepts_a_pass_or_used_up_rounds(
     for plan_id in (passed, used_up):
         result = plans.approve_plan(plan_id, skip_review=False, project=None, by="x")
         assert (result.status, result.review_skipped) == ("approved", False)
+
+
+def test_approve_records_lasting_decisions(store_paths: StorePaths, registered_repo: Path) -> None:
+    plan_id = new(registered_repo, PlanMode.quick)
+    lasting = (
+        "## Lasting decisions\n"
+        "- 2D board falls back when no GPU. why: low-end phones. rejected: 3D only.\n"
+        "- design values come only from design/\n"
+    )
+    plans.save_plan(plan_id, f"## Goal\nShip it.\n{lasting}", project=None, by="x")
+    result = plans.approve_plan(plan_id, skip_review=False, project=None, by="x")
+    assert result.decisions == 2
+    text = (store_paths.memory / "DECISIONS.md").read_text(encoding="utf-8")
+    assert "[payments-api] 2D board falls back when no GPU. why: low-end phones." in text
+    assert "rejected: 3D only." in text
+    assert f"[payments-api] design values come only from design/. why: plan {plan_id}." in text
+
+
+def test_approve_without_section_records_nothing(
+    store_paths: StorePaths, registered_repo: Path
+) -> None:
+    plan_id = new(registered_repo, PlanMode.quick)
+    assert plans.approve_plan(plan_id, skip_review=False, project=None, by="x").decisions == 0
+    assert "[payments-api]" not in (store_paths.memory / "DECISIONS.md").read_text()

@@ -46,7 +46,6 @@ CONDUCTORS = {
     "agy": "antigravity",
     "antigravity": "antigravity",
 }
-DECISION_LINES = 40
 REVIEWED = [name for name in PLAN_SECTIONS if name not in ("Prompt", "Review log")]
 
 
@@ -319,8 +318,8 @@ def _request(
         session_id: str | None = ref.id
     else:
         session_id = str(uuid4()) if provider == "claude" else None
-    decisions = "" if resume else _decisions(paths, slug)
-    prompt = prompts.plan_review_prompt(plan, doc.sections, decisions, round=number, resumed=resume)
+    digest = "" if resume else _memory(paths, slug)
+    prompt = prompts.plan_review_prompt(plan, doc.sections, digest, round=number, resumed=resume)
     options = resolved.provider(provider)
     prior = runtime.load_ticket_state(paths, plan.id).totals.get(ROLE) if resume else None
     return StepRequest(
@@ -342,14 +341,12 @@ def _request(
     )
 
 
-def _decisions(paths: StorePaths, slug: str) -> str:
-    """The newest project and global DECISIONS.md entries."""
+def _memory(paths: StorePaths, slug: str) -> str:
+    """The memory digest a new plan-review session gets (SP16 spec §3.1)."""
     try:
-        text = memory.show(paths, decisions=True, project=slug)
+        return memory.digest(paths, slug)
     except KengashError:
         return ""
-    entries = [line for line in text.splitlines() if line.startswith("- ")]
-    return "\n".join(entries[-DECISION_LINES:])
 
 
 def _next_log(paths: StorePaths, plan_id: str) -> Path:

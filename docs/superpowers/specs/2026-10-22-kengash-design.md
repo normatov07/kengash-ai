@@ -193,7 +193,7 @@ loop_max: 6
 tokens: 148600                  # input + output tokens of every step
 tokens_max:                     # empty = tokens.per_ticket_max; approvals raise it
 depends_on: [a91b3d07]
-touches: [services/webhooks]    # repo path prefixes; empty = whole repo, so always runs alone
+touches: [services/webhooks]    # repo path prefixes; empty = whole repo; a planner's `files` narrow them (SP16)
 tags: [payments, security]
 branch: hrn/7b55e0c1
 sessions:
@@ -206,6 +206,7 @@ updated: 2026-10-22T12:05:00Z
 ## Acceptance     - [ ] checkable criteria
 ## Handoff        latest step's notes for the next agent; replaced each step; at most 15 lines
 ## Findings       open review findings: severity · file:line · issue · fix
+## Decisions      lasting choices workers proposed: `- <decision>. why: … rejected: ….`; at most 6; recorded in DECISIONS.md when the ticket merges (SP16)
 ## Check output   the last failing check's digest (headline, fenced excerpt); cleared when checks pass; at most 62 lines (SP15)
 ## Log            one line per step: time · step · role · provider/model · verdict · tokens
 ```
@@ -222,9 +223,9 @@ Statuses, written `<folder>/<sub_status>`:
 
 | File | Scope | Read by | Written by | Cap |
 |---|---|---|---|---|
-| MEMORY.md | global | conductor at the start of every command (via `harness context`); workers get a digest | `harness memory add` | 200 lines |
-| DECISIONS.md | global; entries tagged `[project]` | planner, plan reviewer, conductor | `harness memory add --decision` | 300 lines, then the oldest move to `archive/` |
-| PROCESS.md | project | workers of that project | user, conductor | 100 lines |
+| MEMORY.md | global | conductor at the start of every command (via `harness context`); every new worker session in its `## Memory` block (SP16) | `harness memory add` | 200 lines |
+| DECISIONS.md | global; entries tagged `[project]` | conductor; every new worker session (`[project]` and `[global]` lines, newest kept) | `harness memory add --decision`; `plan approve` (the plan's `## Lasting decisions`); `merge` (the ticket's `## Decisions`) (SP16) | 300 lines, then the oldest move to `archive/` |
+| PROCESS.md | project | every new worker session of that project (its head) | user, conductor (`harness memory add --process`, SP16) | 100 lines |
 | SETTINGS.md | project | harness only; agents never parse it | user, UI | schema-validated |
 | Ticket `## Handoff` | ticket | the next worker | harness, from worker JSON | 15 lines |
 
@@ -323,7 +324,7 @@ status.names: {plan: under_planning, review_plan: under_plan_review, implement: 
                docs: under_docs, approve: needs_approval}
 
 # merge: ask | auto | branch
-merge.mode: ask
+merge.mode: auto              # ask: the user merges each ticket (SP16 changed the default)
 ```
 
 ## 5. Loop semantics
@@ -336,10 +337,12 @@ Steps map to roles: `plan` → planner, `review_plan` → plan-reviewer, `implem
 - If a failing verdict arrives when `loop` already equals `loop_max`, the ticket goes to `needs_approval` (or `parked` when `loop_ask_at_cap: false`) instead of recirculating. `harness approve <id> [--loops N]` raises `loop_max` by N (default `loop_grant`), and the recirculation proceeds.
 - Before every step, `tokens ≥ tokens_max` (empty: `tokens.per_ticket_max`) also sends the ticket to `needs_approval`. A step adds its input and output tokens; cache reads and writes are journaled only.
 - Review steps return schema-validated JSON: `{verdict: pass|fail, findings: [{severity, file, line, issue, fix}], summary}`. Each finding gets a fingerprint (normalised file plus issue text). The same fingerprint failing `stall_repeat` loops in a row → `stalled`. Planner and plan reviewer disagreeing beyond `plan.review_max` rounds → `stalled`; the same limit applies to plan-level reviews (`harness plan review`) and to tickets' `review_plan` steps.
+- Work steps reply `{summary, handoff, decisions}`; read (planning) steps reply `{summary, handoff, files, decisions}`. `files` (1–40 repo-relative paths, none absolute or climbing out) replace the ticket's `touches`; `decisions` (`decision`, `why`, `rejected`) go to the ticket's `## Decisions`, at most 3 per reply and 6 per ticket, near-duplicates dropped (SP16).
 - A plan or edit step whose Handoff has a line starting `BLOCKED:` commits its work and goes to `needs_approval` (approval `blocked`, reason `blocked: <text>`) without adding a loop; `kengash approve <id> [--note TEXT]` runs an editing step again in the same loop, or moves a plan step on, and the next prompt carries the user's answer (SP15).
 - `gate: hitl` tickets add an `approve` step after `plan` (first, when the workflow has no `plan` step) and always require approval before merge, whatever `merge.mode` says.
-- After the last step: `merge.mode: ask` → `awaiting_merge`; `auto` → merge at once if the repo's main working tree is clean and on the base branch, otherwise `awaiting_merge`; `branch` → `done/branch_ready`.
-- `harness merge <id>` rebases the ticket branch onto the base branch inside its worktree (a conflict sends the ticket back to `implement` with loop + 1), runs `git merge --ff-only` in the main working tree (refused unless it is clean and on the base branch), removes the worktree, deletes the branch, and moves the ticket to `done/merged`. Harness never pushes.
+- After the last step: `merge.mode: auto` (the default since SP16) → merge at once if the repo's main working tree is clean and on the base branch, journaling `ticket.merging`, not a gate, meanwhile; a merge that cannot finish (a dirty or off-base working tree, checks that cannot run, a busy queue) leaves `awaiting_merge` and journals that gate with why; `ask` → `awaiting_merge`; `branch` → `done/branch_ready`.
+- `harness merge <id>` takes the project's merge queue (`merge-<slug>.lock`, one merge at a time), rebases the ticket branch onto the base branch inside its worktree (a conflict sends the ticket back to `implement` with loop + 1), reruns the project's checks when the rebase moved the branch and the workflow has a check step (a fail sends it back the same way, with `## Check output`), runs `git merge --ff-only` in the main working tree (refused unless it is clean and on the base branch), removes the worktree, deletes the branch, moves the ticket to `done/merged` and records its `## Decisions`. Harness never pushes.
+- Every new worker session's prompt starts with `## Memory`: the head of PROCESS.md, the newest project and global decisions, the newest MEMORY.md lines, each capped, newest winning (SP16).
 
 ## 6. Conductor contract
 
@@ -365,7 +368,7 @@ Status and action commands print at most 5 lines; `context` and `show` print the
 | `harness skills install\|lint\|eval\|show` | Packaging (§8); `show <name>` prints a skill rendered for the calling agent, how one skill hands over to the next (SP11) |
 | `harness ui [open\|stop]` | Local UI (§9) |
 
-Every `--project`/`-p` takes a project name or a folder inside a registered repo (SP9 spec decision 1). `harness next` orders round-robin across projects, then by importance (critical first), then by age. A ticket is runnable when every `depends_on` ticket is merged or closed, its `touches` do not overlap any `in_process` ticket of the same project (two paths overlap when one is a prefix of the other, compared segment by segment, so `services/web` and `services/webhooks` do not; empty `touches` overlaps everything), and its next step's provider has a free slot within `sessions.max` and `sessions.per_provider`. Workers take slots per step, not per ticket.
+Every `--project`/`-p` takes a project name or a folder inside a registered repo (SP9 spec decision 1). `harness next` orders round-robin across projects, then by the longest chain of waiting dependents, then by importance (critical first), then by age (SP16). A ticket is runnable when every `depends_on` ticket is merged or closed and its next step's provider has a free slot within `sessions.max` and `sessions.per_provider`; a ticket whose next step is in its workflow's editing phase (the first `edit`-kind step and after) must also not overlap a ticket holding its paths (two paths overlap when one is a prefix of the other, compared segment by segment, so `services/web` and `services/webhooks` do not; empty `touches` overlaps everything). A ticket holds its paths while in_process in its editing phase and not at `needs_approval`, `stalled`, `failed`, `paused` or `waiting_paths`, or while `awaiting_merge`; planning edits nothing, so it holds and checks nothing. A job reaching the editing phase while another ticket holds an overlapping path waits as `in_process/waiting_paths` (SP16). Workers take slots per step, not per ticket.
 
 `next` and `wait` record a conductor ping in `runtime/conductors/` (process id, agent if detectable, project filter); the UI shows these as live conductors.
 
@@ -383,7 +386,7 @@ One JSON object per line in `journal/YYYY-MM-DD.jsonl`:
 {"ts":"2026-10-22T12:04:11Z","type":"step.end","project":"payments-api","ticket":"4f2a1b7c","step":"implement","role":"implementer","provider":"codex","model":"default","session":"019a…","loop":2,"verdict":"pass","tokens":{"in":12000,"out":3400,"cache_read":80000},"duration_s":252,"files":3,"added":128,"removed":14,"commit":"abc1234"}
 ```
 
-Types: `plan.created`, `plan.saved`, `plan.reviewed`, `plan.approved`, `plan.rejected`, `ticket.created`, `ticket.claimed`, `step.start`, `step.end`, `ticket.recirculated`, `ticket.needs_approval`, `ticket.approved`, `ticket.stalled`, `ticket.failed`, `ticket.awaiting_merge`, `ticket.merged`, `ticket.moved`, `ticket.updated`, `ticket.paused`, `ticket.resumed`, `ticket.stopped`, `memory.write`, `memory.compacted`, `session.created`, `session.resumed`, `worker.started`, `worker.exited`, `settings.changed`, `link.broken`, `link.repaired`, `link.adopted`, `loop.started`, `loop.ended` (reason `released`, `taken_over` or `gone`; SP11), `project.forgotten` (SP14), `checks.end` (`step`, `turn`, `verdict` pass, fail, timeout or error, `summary`, `duration_s`, `log`; SP15). Secrets are redacted before writing.
+Types: `plan.created`, `plan.saved`, `plan.reviewed`, `plan.approved`, `plan.rejected`, `ticket.created`, `ticket.claimed`, `step.start`, `step.end`, `ticket.recirculated`, `ticket.needs_approval`, `ticket.approved`, `ticket.stalled`, `ticket.failed`, `ticket.awaiting_merge`, `ticket.merged`, `ticket.moved`, `ticket.updated`, `ticket.paused`, `ticket.resumed`, `ticket.stopped`, `memory.write`, `memory.compacted`, `session.created`, `session.resumed`, `worker.started`, `worker.exited`, `settings.changed`, `link.broken`, `link.repaired`, `link.adopted`, `loop.started`, `loop.ended` (reason `released`, `taken_over` or `gone`; SP11), `project.forgotten` (SP14), `checks.end` (`step`, `turn`, `verdict` pass, fail, timeout or error, `summary`, `duration_s`, `log`; SP15; step `merge` for the recheck of a moved base, SP16), `ticket.waiting` (`step`, `holder`, `reason`: a job waits for another ticket's paths; SP16), `ticket.merging` (every step passed under `merge.mode: auto` and kengash merges; not a gate; SP16). Secrets are redacted before writing.
 
 ## 7. Workers and provider adapters
 
@@ -501,7 +504,7 @@ super-harness/
 - **Credentials:** only official binaries run, under the user's login. Token files are never read and `claude --bare` is never used. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CODEX_API_KEY`, `GEMINI_API_KEY` and `GOOGLE_API_KEY` are removed from worker environments unless `providers.<p>.allow_api_key: true`, so work is billed to the subscription.
 - **Trust:** workers run only in registered repos. `harness doctor` warns once when a repo ships agent hooks or MCP config (`.claude/settings.json` hooks, `.mcp.json`), because `claude -p` runs them without a trust prompt.
 - **Least privilege:** planners and reviewers get `read_only`. Implementers get `edit_worktree`: their worktree, plus `project.test_cmd`, `project.lint_cmd` and read-only git. Permission-bypass flags (`--dangerously-skip-permissions` and equivalents) are off by default and need an explicit per-agent setting.
-- **Git:** local fast-forward merges only; harness never pushes; `merge.mode: ask` by default.
+- **Git:** local fast-forward merges only; harness never pushes; `merge.mode: auto` by default since SP16 (a merge onto a moved base is tested first); `ask` keeps every merge for the user.
 - **Secrets:** journal, memory and Handoff text pass through a redactor (common key and token patterns) before they are written.
 - **UI:** bound to 127.0.0.1; per-run token; Host and Origin checks against DNS rebinding and CSRF; no CORS.
 - **Store and skills:** `~/.harness` is mode 0700. Skills are plain text and fetch nothing from the network; updates show a diff before install.

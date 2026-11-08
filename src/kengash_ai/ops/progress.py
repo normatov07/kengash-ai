@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from kengash_ai import gitops, journal, settings
-from kengash_ai.model import Folder, KengashError, utc_now
+from kengash_ai.model import Folder, KengashError, Ticket, TicketState, utc_now
 from kengash_ai.ops import activity, lifecycle, records
 from kengash_ai.store import runtime
 from kengash_ai.store.paths import StorePaths
@@ -62,9 +62,9 @@ def running(paths: StorePaths, slugs: list[str]) -> list[Progress]:
                     elapsed_s=max((now - started).total_seconds(), 0),
                     alive=_alive(paths, ticket.id, now),
                     active_s=active,
-                    action=_action(run.log, worktree) if run is not None else "",
+                    action=_waiting(ticket, state) or (_action(run.log, worktree) if run else ""),
                     changed=changed,
-                    quiet=active is not None and active >= QUIET_S,
+                    quiet=not _waiting(ticket, state) and active is not None and active >= QUIET_S,
                     tokens=ticket.tokens,
                     tokens_max=ticket.tokens_max or _cap(paths, slug),
                 )
@@ -138,6 +138,13 @@ def _alive(paths: StorePaths, ticket_id: str, now: datetime) -> bool:
     if record is None or not lifecycle.pid_alive(record.pid):
         return False
     return (now - record.heartbeat).total_seconds() < lifecycle.DEAD_AFTER_S
+
+
+def _waiting(ticket: Ticket, state: TicketState) -> str:
+    """What a job waiting for another ticket's paths is doing; it is never quiet (SP16)."""
+    if ticket.sub_status != "waiting_paths":
+        return ""
+    return f"waiting for {state.waiting_on or 'another ticket'} to finish editing its paths"
 
 
 def _worktree(worktree: Path) -> tuple[int, float | None]:

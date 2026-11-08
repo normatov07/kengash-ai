@@ -237,7 +237,7 @@ class StatusNames(_Section):
 
 
 class Merge(_Section):
-    mode: Literal["ask", "auto", "branch"] = "ask"
+    mode: Literal["ask", "auto", "branch"] = "auto"  # auto: merges are rechecked (SP16)
 
 
 class Settings(_Section):

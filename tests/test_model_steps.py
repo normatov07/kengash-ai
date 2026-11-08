@@ -9,7 +9,9 @@ from pydantic import BaseModel, ValidationError
 from kengash_ai.model import (
     OUTPUT_SCHEMAS,
     CompactOutput,
+    Decision,
     Finding,
+    PlanOutput,
     ProviderStatus,
     ReviewOutput,
     StepRequest,
@@ -37,9 +39,11 @@ def _objects(node: object) -> list[dict[str, Any]]:
 def test_output_schemas_are_strict_and_match_the_models() -> None:
     models: dict[str, type[BaseModel]] = {
         "work": WorkOutput,
+        "plan": PlanOutput,
         "review": ReviewOutput,
         "compact": CompactOutput,
     }
+    assert set(OUTPUT_SCHEMAS) == set(models)
     for kind, schema in OUTPUT_SCHEMAS.items():
         assert set(schema["properties"]) == set(models[kind].model_fields)
         for node in _objects(schema):
@@ -47,6 +51,31 @@ def test_output_schemas_are_strict_and_match_the_models() -> None:
             assert sorted(node["required"]) == sorted(node["properties"])
     finding = OUTPUT_SCHEMAS["review"]["properties"]["findings"]["items"]
     assert set(finding["properties"]) == set(Finding.model_fields)
+    for kind in ("work", "plan"):
+        item = OUTPUT_SCHEMAS[kind]["properties"]["decisions"]["items"]
+        assert set(item["properties"]) == set(Decision.model_fields)
+
+
+def test_plan_output_parses_files_and_decisions() -> None:
+    data = {
+        "summary": "s",
+        "handoff": "h",
+        "files": ["lib/a.dart"],
+        "decisions": [{"decision": "use X", "why": "fast", "rejected": "Y"}],
+    }
+    parsed = parse_output("plan", data)
+    assert isinstance(parsed, PlanOutput)
+    assert parsed.files == ["lib/a.dart"]
+    assert parsed.decisions == [Decision(decision="use X", why="fast", rejected="Y")]
+
+
+def test_work_output_without_decisions_still_parses() -> None:
+    parsed = parse_output("work", {"summary": "s", "handoff": "h"})
+    assert isinstance(parsed, WorkOutput)
+    assert parsed.decisions == []
+    plan = parse_output("plan", {"summary": "s", "handoff": "h"})
+    assert isinstance(plan, PlanOutput)
+    assert plan.files == []
 
 
 def test_parse_output_validates_each_kind() -> None:

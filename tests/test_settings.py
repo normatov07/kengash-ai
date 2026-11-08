@@ -18,7 +18,7 @@ def test_package_defaults_are_valid(store_paths: StorePaths) -> None:
     resolved = settings.load(store_paths)
     assert (resolved.loop_max.critical, resolved.merge.mode, resolved.grill.round_size) == (
         6,
-        "ask",
+        "auto",
         3,
     )
     assert resolved.workflows["critical"].steps[-1] == "security"

@@ -6,7 +6,7 @@ import os
 from dataclasses import replace
 
 from kengash_ai import workflow
-from kengash_ai.model import Doc, Event, Gate, Settings, Ticket, TicketState
+from kengash_ai.model import Doc, Event, Folder, Gate, Settings, Ticket, TicketState
 
 DEAD_AFTER_S = 120  # a worker heartbeats every 15 s
 
@@ -18,6 +18,23 @@ EVENT_TYPES = {
     "paused": "ticket.paused",
     "merged": "ticket.merged",
 }
+
+
+# in_process sub-statuses whose ticket lets its paths go: no worker writes its branch now
+RELEASED = ("needs_approval", "stalled", "failed", "paused", "waiting_paths")
+
+
+def holds_paths(resolved: Settings, ticket: Ticket) -> bool:
+    """The ticket keeps other writers off its `touches` (SP16 spec §3.7): it is in_process in
+    its workflow's editing phase and not at a gate, or it is awaiting its merge."""
+    if ticket.folder is not Folder.in_process:
+        return False
+    if ticket.sub_status == "awaiting_merge":
+        return True
+    if ticket.sub_status in RELEASED:
+        return False
+    hitl = ticket.gate is Gate.hitl
+    return workflow.edit_phase(resolved, ticket.workflow, ticket.step, hitl=hitl)
 
 
 def step_status(resolved: Settings, step: str) -> str:

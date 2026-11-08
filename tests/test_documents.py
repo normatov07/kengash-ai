@@ -3,7 +3,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from kengash_ai.model import Doc, Folder, Plan, PlanMode, PlanStatus, Ticket
+from kengash_ai.model import (
+    PLAN_SECTIONS,
+    SUB_STATUSES,
+    Doc,
+    Folder,
+    Plan,
+    PlanMode,
+    PlanStatus,
+    Ticket,
+)
 from kengash_ai.store import documents
 from kengash_ai.store.paths import ProjectPaths
 
@@ -76,3 +85,27 @@ def test_check_output_is_saved_between_findings_and_log(
     text = path.read_text(encoding="utf-8")
     assert text.index("## Findings") < text.index("## Check output") < text.index("## Log")
     assert documents.load_ticket(path).sections["Check output"] == doc.sections["Check output"]
+
+
+def test_ticket_sections_include_decisions_before_check_output(
+    tmp_path: Path, make_ticket: MakeTicket
+) -> None:
+    project = ProjectPaths(tmp_path)
+    doc = make_ticket()
+    doc.sections["Findings"] = "- high · a.py:1 · x · y"
+    doc.sections["Decisions"] = "- keep X. why: speed. rejected: Y."
+    doc.sections["Check output"] = "`x` exit 1: error"
+    path = documents.save_ticket(project, doc)
+    text = path.read_text(encoding="utf-8")
+    assert text.index("## Findings") < text.index("## Decisions") < text.index("## Check output")
+    assert documents.load_ticket(path).sections["Decisions"] == doc.sections["Decisions"]
+
+
+def test_plan_sections_include_lasting_decisions() -> None:
+    assert PLAN_SECTIONS.index("Lasting decisions") == PLAN_SECTIONS.index("Decisions") + 1
+
+
+def test_waiting_paths_is_an_in_process_status(make_ticket: MakeTicket) -> None:
+    ticket = make_ticket().meta.model_copy(update={"status": "in_process/waiting_paths"})
+    assert ticket.sub_status == "waiting_paths"
+    assert "waiting_paths" in SUB_STATUSES[Folder.in_process]

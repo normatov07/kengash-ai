@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from kengash_ai import settings
+from kengash_ai import memory, settings
 from kengash_ai.model import (
     PLAN_SECTIONS,
     Doc,
@@ -36,6 +36,8 @@ class PlanResult:
     status: str
     sections: list[str] = field(default_factory=list)
     review_skipped: bool = False
+    decisions: int = 0  # Lasting decisions recorded on approval (SP16 spec §3.2)
+    warnings: list[str] = field(default_factory=list)
 
 
 def new_plan(
@@ -148,7 +150,36 @@ def approve_plan(plan_id: str, *, skip_review: bool, project: str | None, by: st
         type="plan.approved", project=slug, plan=plan.id, review_skipped=unreviewed, by=by
     )
     records.record(paths, f"kengash: plan approve {plan.id}", approved)
-    return PlanResult(plan.id, slug, plan.status.value, review_skipped=unreviewed)
+    result = PlanResult(plan.id, slug, plan.status.value, review_skipped=unreviewed)
+    _record_lasting(paths, slug, plan.id, doc.sections.get("Lasting decisions", ""), result, by)
+    return result
+
+
+def _record_lasting(
+    paths: StorePaths, slug: str, plan_id: str, section: str, result: PlanResult, by: str
+) -> None:
+    """Record each `Lasting decisions` line in DECISIONS.md; a line memory refuses becomes a
+    warning, since the approval already stands."""
+    for line in section.splitlines():
+        if not line.strip().startswith(("- ", "* ", "+ ")):
+            continue
+        decision, why, rejected = memory.parse_decision(line)
+        if not decision:
+            continue
+        try:
+            added = memory.add(
+                paths,
+                decision,
+                why or f"plan {plan_id}",
+                decision=True,
+                rejected=rejected or None,
+                project=slug,
+                by=by,
+            )
+        except UserError as exc:
+            result.warnings.append(f"not recorded: {decision[:60]}: {exc}")
+            continue
+        result.decisions += added.added
 
 
 def reject_plan(plan_id: str, why: str, *, project: str | None, by: str) -> PlanResult:

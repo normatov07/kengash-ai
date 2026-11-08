@@ -1,7 +1,16 @@
 from datetime import UTC, datetime, timedelta
 
 from kengash_ai.model import Importance
-from kengash_ai.scheduler import Busy, Candidate, Held, Limits, fits, overlaps, select
+from kengash_ai.scheduler import (
+    Busy,
+    Candidate,
+    Held,
+    Limits,
+    chain_weights,
+    fits,
+    overlaps,
+    select,
+)
 
 T0 = datetime(2026, 10, 22, 9, 0, tzinfo=UTC)
 ROOMY = Limits(total=8, per_provider={"claude": 8, "codex": 8})
@@ -15,9 +24,11 @@ def candidate(
     age: int = 0,
     touches: tuple[str, ...] = ("src",),
     provider: str | None = "claude",
+    editing: bool = True,
+    weight: int = 0,
 ) -> Candidate:
     created = T0 - timedelta(minutes=age)
-    return Candidate(ticket_id, project, importance, created, touches, provider)
+    return Candidate(ticket_id, project, importance, created, touches, provider, editing, weight)
 
 
 def test_paths_overlap_by_whole_segments() -> None:
@@ -92,3 +103,42 @@ def test_fits_checks_machine_and_project_limits() -> None:
     assert not fits("claude", "a", [Held("a", "claude")], machine, projects)
     assert not fits("claude", "b", [Held("a", "claude"), Held("b", "claude")], machine, projects)
     assert not fits("codex", "b", [], machine, projects)
+
+
+def test_planning_candidates_ignore_overlap() -> None:
+    picks = select(
+        [
+            candidate("t1", touches=("src",), editing=False),
+            candidate("t2", touches=("src",), editing=False),
+            candidate("t3", touches=("src",)),
+        ],
+        busy=[Busy("r1", "app", ("src/api",))],
+        held=[],
+        machine=ROOMY,
+        projects={},
+        last_claims={},
+    )
+    assert [c.id for c in picks.chosen] == ["t1", "t2"]
+    assert picks.held_back == {"t3": "touches overlap r1"}
+
+
+def test_chain_weights_longest_dependent_chain() -> None:
+    depends = {"a": [], "b": ["a"], "c": ["b"], "d": ["a"], "e": [], "x": ["y"], "y": ["x"]}
+    weights = chain_weights(depends)
+    assert (weights["a"], weights["b"], weights["c"], weights["d"], weights["e"]) == (2, 1, 0, 0, 0)
+    assert weights["x"] >= 0 and weights["y"] >= 0  # a cycle neither loops nor crashes
+
+
+def test_critical_path_before_importance() -> None:
+    picks = select(
+        [
+            candidate("leaf", importance=Importance.critical, touches=("a",)),
+            candidate("root", importance=Importance.simple, touches=("b",), weight=3),
+        ],
+        busy=[],
+        held=[],
+        machine=Limits(total=1, per_provider={"claude": 1}),
+        projects={},
+        last_claims={},
+    )
+    assert [c.id for c in picks.chosen] == ["root"]

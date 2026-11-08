@@ -10,7 +10,8 @@ from typing import Any
 import pytest
 from conftest import Engine, Events, FakeClis, write_settings
 
-from kengash_ai.model import Running, SentBack, StepRequest, StepResult, TicketState
+from kengash_ai import gitops
+from kengash_ai.model import Doc, Running, SentBack, StepRequest, StepResult, Ticket, TicketState
 from kengash_ai.ops import calls, prompts, steps
 from kengash_ai.ops.steps import JobEnd
 from kengash_ai.store import StorePaths, documents, runtime
@@ -136,7 +137,7 @@ def test_schema_errors_get_one_repair_turn(engine: Engine, fake_clis: FakeClis) 
     steps.run_job("7b55e0c1", steps=1)
     second = fake_clis.calls("claude")[1]["argv"]
     assert "--resume" in second and second[1].startswith(
-        "Your last reply failed: output does not match the work schema"
+        "Your last reply failed: output does not match the plan schema"
     )
     assert engine.ticket().meta.step == "implement"
 
@@ -251,6 +252,32 @@ def test_auto_merge_ends_the_job_merged(
     assert (engine.repo / "retry.py").exists() and not engine.worktree.exists()
 
 
+def test_auto_merge_never_announces_a_gate(
+    engine: Engine, fake_clis: FakeClis, store_paths: StorePaths, journal_events: Events
+) -> None:
+    write_settings(store_paths, "merge.mode: auto\n")
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "retries = 3\n"})
+    fake_clis.queue("claude", stdout=fake_clis.claude_output(REVIEW_PASS))
+    assert steps.run_job("7b55e0c1").status == "done/merged"
+    kinds = [e["type"] for e in journal_events() if e.get("ticket") == "7b55e0c1"]
+    assert "ticket.awaiting_merge" not in kinds
+    assert kinds[-2:] == ["ticket.merging", "ticket.merged"]
+
+
+def test_auto_merge_that_cannot_finish_announces_why(
+    engine: Engine, fake_clis: FakeClis, store_paths: StorePaths, journal_events: Events
+) -> None:
+    write_settings(store_paths, "merge.mode: auto\n")
+    (engine.repo / "README.md").write_text("half-edited by the user\n")
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "retries = 3\n"})
+    fake_clis.queue("claude", stdout=fake_clis.claude_output(REVIEW_PASS))
+    assert steps.run_job("7b55e0c1").status == "in_process/awaiting_merge"
+    gates = [e for e in journal_events() if e["type"] == "ticket.awaiting_merge"]
+    assert [e["reason"] for e in gates] == ["main working tree has changes; merge waits for you"]
+
+
 def test_a_new_claude_session_that_never_started_is_forgotten(
     engine: Engine, fake_clis: FakeClis
 ) -> None:
@@ -285,6 +312,7 @@ def test_a_denied_command_gets_one_repair_turn(engine: Engine, fake_clis: FakeCl
 
 
 CUSTOM = """\
+merge.mode: ask
 agents:
   helper: {{cli: claude/sonnet, skill: helper}}
 steps.{step}: {{role: helper, kind: {kind}, does: Polish the change.}}
@@ -939,3 +967,152 @@ def test_the_implementer_session_survives_a_check_run(
     assert sessions and sessions[0] is not None
     assert sessions[0].id == "0199a213-81c0-7800-8aa1-bbab2a035a53"
     assert roles == ["implementer"]
+
+
+def test_new_session_prompt_carries_project_memory(engine: Engine, fake_clis: FakeClis) -> None:
+    process = engine.paths.project("payments-api").process
+    process.write_text("# PROCESS.md\n\n## Process notes\n\n- money is integer cents\n")
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    steps.run_job("7b55e0c1", steps=1)
+    prompt = fake_clis.calls("claude")[0]["argv"][1]
+    assert prompt.index("## Memory") < prompt.index("## Goal")
+    assert "- money is integer cents" in prompt
+
+
+def test_work_reply_decisions_wait_for_the_merge(engine: Engine, fake_clis: FakeClis) -> None:
+    proposal = {"decision": "retries use full jitter", "why": "herd", "rejected": ""}
+    reply = {"summary": "Planned.", "handoff": "h", "files": [], "decisions": [proposal]}
+    fake_clis.queue("claude", stdout=fake_clis.claude_output(reply))
+    steps.run_job("7b55e0c1", steps=1)
+    assert engine.ticket().sections["Decisions"] == "- retries use full jitter. why: herd."
+    decisions = (engine.paths.memory / "DECISIONS.md").read_text(encoding="utf-8")
+    assert "full jitter" not in decisions
+
+
+def _holder(engine: Engine, make_ticket: Callable[..., Doc[Ticket]]) -> None:
+    holder = make_ticket(
+        "c0ffee00",
+        status="in_process/under_implementation",
+        step="implement",
+        workflow="simple",
+        importance="simple",
+        touches=engine.ticket().meta.touches,
+    )
+    documents.save_ticket(engine.paths.project(engine.slug), holder)
+
+
+def _move(engine: Engine, ticket_id: str, status: str) -> None:
+    project = engine.paths.project(engine.slug)
+    path = documents.find_ticket(project, ticket_id)
+    assert path is not None
+    doc = documents.load_ticket(path)
+    doc.meta.status = status
+    documents.save_ticket(project, doc)
+
+
+def test_job_waits_for_overlapping_holder_then_runs(
+    engine: Engine,
+    fake_clis: FakeClis,
+    make_ticket: Callable[..., Doc[Ticket]],
+    monkeypatch: pytest.MonkeyPatch,
+    journal_events: Events,
+) -> None:
+    _holder(engine, make_ticket)
+    naps: list[float] = []
+
+    def nap(seconds: float) -> None:
+        naps.append(seconds)
+        assert engine.ticket().meta.status == "in_process/waiting_paths"
+        if len(naps) == 2:
+            _move(engine, "c0ffee00", "in_process/needs_approval")  # a gate lets go
+
+    monkeypatch.setattr(steps, "sleep", nap)
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "x = 1\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    assert naps == [steps.PATH_POLL_S, steps.PATH_POLL_S]
+    waited = [e for e in journal_events() if e["type"] == "ticket.waiting"]
+    assert [(e["holder"], e["reason"]) for e in waited] == [
+        ("c0ffee00", "touches overlap c0ffee00")
+    ]
+    assert len(fake_clis.calls("codex")) == 1 and engine.state().waiting_on == ""
+
+
+def test_job_enters_editing_without_wait_when_free(
+    engine: Engine, fake_clis: FakeClis, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    naps: list[float] = []
+    monkeypatch.setattr(steps, "sleep", naps.append)
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "x = 1\n"})
+    steps.run_job("7b55e0c1", steps=2)
+    assert naps == [] and len(fake_clis.calls("codex")) == 1
+
+
+def test_park_while_waiting_paths(
+    engine: Engine,
+    fake_clis: FakeClis,
+    make_ticket: Callable[..., Doc[Ticket]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _holder(engine, make_ticket)
+    monkeypatch.setattr(
+        steps, "sleep", lambda _: runtime.set_park(engine.paths, "7b55e0c1", on=True)
+    )
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    assert steps.run_job("7b55e0c1").status == "in_queue/parked"
+    assert fake_clis.calls("codex") == []
+
+
+def test_implement_starts_from_newest_base(
+    engine: Engine, fake_clis: FakeClis, run_git: Callable[..., str]
+) -> None:
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    steps.run_job("7b55e0c1", steps=1)  # planned on the old main
+    _move(engine, "7b55e0c1", "in_process/waiting_paths")  # undo the step budget's pause
+    (engine.repo / "merged.py").write_text("from another ticket\n")
+    gitops.commit_all(engine.repo, "another ticket merged", {})
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "x = 1\n"})
+    steps.run_job("7b55e0c1", steps=1)
+    assert (engine.worktree / "merged.py").exists()
+    log = run_git(engine.worktree, "log", "--format=%s", "-2").splitlines()
+    assert log[1] == "another ticket merged"
+
+
+def test_plan_reply_files_narrow_touches(engine: Engine, fake_clis: FakeClis) -> None:
+    reply = {"summary": "Planned.", "handoff": "h", "files": ["./retry.py", "tests/test_retry.py"]}
+    fake_clis.queue("claude", stdout=fake_clis.claude_output({**reply, "decisions": []}))
+    steps.run_job("7b55e0c1", steps=1)
+    doc = engine.ticket()
+    assert doc.meta.touches == ["retry.py", "tests/test_retry.py"]
+    assert doc.sections["Log"].splitlines()[-1].endswith(" · touches narrowed to 2 files")
+
+
+def test_plan_reply_without_files_keeps_touches(engine: Engine, fake_clis: FakeClis) -> None:
+    before = engine.ticket().meta.touches
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    steps.run_job("7b55e0c1", steps=1)
+    assert engine.ticket().meta.touches == before
+
+
+def _reviewed_with_a_decision(engine: Engine, fake_clis: FakeClis, verdict: str) -> None:
+    doc = engine.ticket()
+    doc.meta.status, doc.meta.step = "in_process/under_review", "review_code"
+    doc.sections["Decisions"] = "- keep A. why: x.\n- one-off tweak. why: y."
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    strike = {"severity": "low", "file": "DECISIONS", "line": 2, "issue": "not lasting", "fix": "-"}
+    review = {"verdict": verdict, "summary": "ok", "findings": [strike]}
+    fake_clis.queue("claude", stdout=fake_clis.claude_output(review))
+    steps.run_job("7b55e0c1", steps=1)
+
+
+def test_a_review_strikes_a_proposed_decision(engine: Engine, fake_clis: FakeClis) -> None:
+    _reviewed_with_a_decision(engine, fake_clis, "pass")
+    assert engine.ticket().sections["Decisions"] == "- keep A. why: x."
+
+
+def test_a_fail_that_only_strikes_decisions_passes(engine: Engine, fake_clis: FakeClis) -> None:
+    _reviewed_with_a_decision(engine, fake_clis, "fail")
+    doc = engine.ticket()
+    assert doc.meta.status == "in_process/awaiting_merge" and doc.sections.get("Findings", "") == ""
+    assert doc.sections["Decisions"] == "- keep A. why: x."

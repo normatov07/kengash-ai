@@ -8,6 +8,7 @@ import pytest
 from conftest import COMPACTED, FakeClis, write_settings
 from typer.testing import CliRunner
 
+from kengash_ai import memory
 from kengash_ai.cli import app
 from kengash_ai.model import Doc, Ticket
 from kengash_ai.store import StorePaths, documents
@@ -56,7 +57,7 @@ def test_memory_commands_and_context(inside_repo: Path) -> None:
     assert "[payments-api] keyring over secret. why: rotation." in shown
     context = runner.invoke(app, ["context"]).stdout
     assert "- prefers runbooks" in context
-    assert context.endswith("# Open gates\nnone\n")
+    assert "# Open gates\nnone\n\n# Record\n" in context
 
 
 def test_memory_errors_exit_1(inside_repo: Path) -> None:
@@ -81,14 +82,34 @@ def test_context_lists_open_gates(
     )
     text = runner.invoke(app, ["context"]).stdout
     assert "\n\n# PROCESS.md (payments-api)\n# PROCESS.md\n## Process notes\n\n" in text
-    assert text.endswith("# Open gates\n- 7b55e0c1 needs_approval: Rotate keys\n")
+    assert "# Open gates\n- 7b55e0c1 needs_approval: Rotate keys\n\n# Record\n" in text
+
+
+def test_context_ends_with_record_hint(store_paths: StorePaths, inside_repo: Path) -> None:
+    text = runner.invoke(app, ["context"]).stdout
+    assert text.endswith(f"# Record\n{memory.RECORD_HINT}\n")
+    assert "--decision" in memory.RECORD_HINT and "--process" in memory.RECORD_HINT
+
+
+def test_cli_memory_add_process_appends_and_rejects_decision_flag(
+    store_paths: StorePaths, inside_repo: Path
+) -> None:
+    added = runner.invoke(app, ["memory", "add", "run make gen first", "--why", "x", "--process"])
+    assert added.stdout == "PROCESS.md +1 line (7/100)\n"
+    process = store_paths.project("payments-api").process.read_text(encoding="utf-8")
+    assert process.endswith("## Process notes\n\n- run make gen first\n")
+    mixed = runner.invoke(app, ["memory", "add", "x", "--why", "y", "--process", "--decision"])
+    assert (mixed.exit_code, mixed.stderr) == (
+        1,
+        "--process cannot be combined with --decision, --rejected or --section\n",
+    )
 
 
 def test_every_command_speaks_json(store_paths: StorePaths, inside_repo: Path) -> None:
     def call(*args: str) -> Any:
         return json.loads(runner.invoke(app, [*args, "--json"]).stdout)
 
-    assert call("settings", "get", "merge.mode") == "ask"
+    assert call("settings", "get", "merge.mode") == "auto"
     assert call("settings", "show")["loop_max"]["critical"] == 6
     assert call("settings", "check") == {"problems": []}
     assert call("memory", "add", "prefers runbooks", "--why", "said so") == {
@@ -109,6 +130,7 @@ def test_every_command_speaks_json(store_paths: StorePaths, inside_repo: Path) -
         "project": "payments-api",
         "process": ["# PROCESS.md", "## Process notes"],
         "gates": [],
+        "record": memory.RECORD_HINT,
     }
 
 

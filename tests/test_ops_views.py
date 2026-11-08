@@ -609,3 +609,32 @@ def test_check_runs_show_on_the_timeline_but_not_in_the_chain(
     assert (row.kind, row.step, row.verdict) == ("checks.end", "implement", "fail")
     assert row.note == "fail · lint failed (exit 1) · turn 1"
     assert {step.step: step.runs for step in found.chain}["implement"] == 0
+
+
+def test_views_show_waiting_paths(seeded: StorePaths, make_ticket: Make) -> None:
+    project = seeded.project("payments-api")
+    doc = make_ticket("bbbbbbb4", status="in_process/waiting_paths", step="implement")
+    documents.save_ticket(project, doc)
+    columns = {c.key: c for c in views.board(seeded, project=None).columns}
+    card = {card.id: card for card in columns["implement"].cards}["bbbbbbb4"]
+    assert card.chip == "waiting paths"
+
+
+def test_path_waits_and_held_merges_show_on_the_timeline(
+    registered_repo: Path, store_paths: StorePaths, make_ticket: Make
+) -> None:
+    project = store_paths.project("payments-api")
+    documents.save_ticket(
+        project, make_ticket("ccccccc2", status="in_process/waiting_paths", step="implement")
+    )
+    for kind, reason in (
+        ("ticket.waiting", "touches overlap ccccccc9"),
+        ("ticket.merging", "every step passed; merging"),
+    ):
+        event = {"type": kind, "project": "payments-api", "ticket": "ccccccc2", "reason": reason}
+        journal.append(store_paths, Event.model_validate(event))
+    found = views.ticket_view(store_paths, "ccccccc2", project="payments-api")
+    assert [(row.kind, row.note) for row in found.timeline] == [
+        ("ticket.waiting", "touches overlap ccccccc9"),
+        ("ticket.merging", "every step passed; merging"),
+    ]

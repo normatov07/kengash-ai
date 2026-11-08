@@ -14,7 +14,7 @@ from uuid import uuid4
 
 import pytest
 
-from kengash_ai import gitops
+from kengash_ai import gitops, settings
 from kengash_ai.model import Doc, Plan, Ticket, TicketState
 from kengash_ai.ops import projects, skills
 from kengash_ai.store import StorePaths, documents, runtime
@@ -150,8 +150,10 @@ class FakeClis:
         edits: dict[str, str] | None = None,
         sleep: float = 0,
         shell: str | None = None,
+        match: str | None = None,
     ) -> None:
-        """Queue the next reply of `cli` (claude, codex or agy) to a non-status call."""
+        """Queue the next reply of `cli` (claude, codex or agy) to a non-status call; with
+        `match`, only a call whose working directory contains it takes the reply."""
         queue = self.state / cli / "queue"
         queue.mkdir(parents=True, exist_ok=True)
         reply: dict[str, Any] = {"stdout": stdout, "stderr": stderr, "exit": exit, "sleep": sleep}
@@ -160,6 +162,8 @@ class FakeClis:
         reply["edits"] = edits or {}
         if shell is not None:
             reply["shell"] = shell
+        if match is not None:
+            reply["match"] = match
         number = self.queued.get(cli, 0)
         self.queued[cli] = number + 1
         (queue / f"{number:04d}.json").write_text(json.dumps(reply), encoding="utf-8")
@@ -283,6 +287,8 @@ def engine(
     documents.save_ticket(project, doc)
     worktree = store_paths.worktree("payments-api", "7b55e0c1")
     gitops.ensure_worktree(registered_repo, worktree, "kg/7b55e0c1", "main")
+    # step mechanics stop at awaiting_merge; tests of auto-merge set it themselves
+    settings.set_values(store_paths, "payments-api", {"merge.mode": "ask"})
     return Engine(store_paths, registered_repo)
 
 

@@ -10,9 +10,11 @@ from kengash_ai.model import (
     Doc,
     Event,
     Folder,
+    Gate,
     NeedsSetup,
     ProviderStatus,
     SentBack,
+    Settings,
     SlotEntry,
     Ticket,
     UserError,
@@ -25,6 +27,7 @@ from kengash_ai.store.locks import locked
 from kengash_ai.store.paths import StorePaths
 from kengash_ai.store.registry import load_registry
 
+WAITING_PATHS = steps.WAITING_PATHS
 RESUMABLE = ("in_queue/ready", "in_process/failed", "in_process/stalled", "in_process/paused")
 NO_SLOT = ("shell", "user")
 SANDBOXED = (
@@ -72,6 +75,7 @@ class Paused:
 @dataclass
 class Resumed:
     started: list[str]
+    skipped: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -162,13 +166,18 @@ def approve_ticket(
         restart = isinstance(decision, workflow.Run)
         if isinstance(decision, workflow.Run):
             ticket.status = lifecycle.step_status(resolved, decision.step)
+            if _clash(paths, slug, resolved, ticket, decision.step) is not None:
+                ticket.status = WAITING_PATHS  # its job takes the paths when free (SP16)
         elif isinstance(decision, workflow.Halt):
             ticket.status = decision.status
             state.approval = decision.approval
             events.append(lifecycle.status_event(slug, ticket, before, decision.reason))
-        else:
+        else:  # merge.mode auto: kengash merges below; no gate unless that cannot finish
             ticket.status = workflow.AWAITING_MERGE
-            events.append(lifecycle.status_event(slug, ticket, before, "every step passed"))
+            event = lifecycle.status_event(
+                slug, ticket, before, merging.MERGING, kind=merging.MERGING_EVENT
+            )
+            events.append(event)
         ticket.updated = utc_now()
         documents.save_ticket(paths.project(slug), doc)
         runtime.save_ticket_state(paths, ticket_id, state)
@@ -254,7 +263,23 @@ def resume(project: str | None, *, by: str) -> Resumed:
     if not paused:
         return Resumed([])
     result = run_tickets(sorted(paused), project=project, by=by)
-    return Resumed([started.id for started in result.started])
+    return Resumed([started.id for started in result.started], result.skipped)
+
+
+def _clash(
+    paths: StorePaths, slug: str, resolved: Settings, ticket: Ticket, step: str
+) -> str | None:
+    """The path holder a ticket starting at `step` would overlap: only a start in the editing
+    phase checks paths, and only against holders (SP16 spec §3.7)."""
+    hitl = ticket.gate is Gate.hitl
+    if not workflow.edit_phase(resolved, ticket.workflow, step, hitl=hitl):
+        return None
+    for other in records.project_tickets(paths, slug).values():
+        meta = other.meta
+        holder = meta.id != ticket.id and lifecycle.holds_paths(resolved, meta)
+        if holder and scheduler.overlaps(meta.touches, ticket.touches):
+            return meta.id
+    return None
 
 
 def _claim(
@@ -277,11 +302,6 @@ def _claim(
             return _Skip(f"status {ticket.status}")
         if runtime.pause_state(paths).covers(slug):
             return _Skip("paused")
-        for other in records.project_tickets(paths, slug).values():
-            meta = other.meta
-            busy = meta.folder is Folder.in_process and meta.id != ticket_id
-            if busy and scheduler.overlaps(meta.touches, ticket.touches):
-                return _Skip(f"touches overlap {meta.id}")
         resolved = settings.load(paths, slug)
         if ticket.workflow not in resolved.workflows:
             return _Skip(f"settings have no workflow {ticket.workflow!r}")
@@ -300,6 +320,9 @@ def _claim(
         else:
             halt = decision.decision
             return _Skip(halt.reason if isinstance(halt, workflow.Halt) else "every step passed")
+        clash = _clash(paths, slug, resolved, ticket, step)
+        if clash is not None and ticket.folder is not Folder.in_process:
+            return _Skip(f"touches overlap {clash}")  # stays ready; `next` lists it again
         role = resolved.role_of(step)
         provider = "user"
         if role is not None:
@@ -324,6 +347,8 @@ def _claim(
         ticket.branch = branch
         ticket.step = step
         ticket.status = lifecycle.step_status(resolved, step)
+        if clash is not None:  # a paused, failed or stalled editor waits in its job (SP16)
+            ticket.status = WAITING_PATHS
         events = [_event("ticket.claimed", slug, ticket, step=step, provider=provider, by=by)]
         events[0] = events[0].model_copy(update={"from": before})
         if step == "approve":  # the user's step: no worker until `kengash approve`

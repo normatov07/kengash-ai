@@ -41,6 +41,8 @@ _NETWORK = re.compile(
     # claude (Node): its API client's and the runtime's wording
     r"|connection error|request timed out|econnrefused|enotfound|etimedout|eai_again"
     r"|fetch failed|socket hang up"
+    # agy (Go net/http): a stream cut mid-request (2026-11-08)
+    r"|connection loss|connection lost|connection timed out"
 )
 _VERSION = re.compile(r"\d+\.\d+(?:\.\d+)?")
 

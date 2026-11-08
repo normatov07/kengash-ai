@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 
 from kengash_ai import scheduler, settings, workflow
-from kengash_ai.model import Folder, Settings, Ticket, split_cli
+from kengash_ai.model import Folder, Gate, Settings, Ticket, split_cli
 from kengash_ai.ops import lifecycle, records, waiting
 from kengash_ai.ops.workspace import GATES
 from kengash_ai.store import runtime
@@ -54,10 +54,19 @@ def compute(paths: StorePaths, project: str | None) -> Queue:
     for slug in records.scope(paths, project):
         resolved = settings.load(paths, slug)
         limits[slug] = _limits(resolved)
-        for doc in records.project_tickets(paths, slug).values():
+        docs = records.project_tickets(paths, slug)
+        weights = scheduler.chain_weights(
+            {
+                doc.meta.id: doc.meta.depends_on
+                for doc in docs.values()
+                if doc.meta.folder is not Folder.done
+            }
+        )
+        for doc in docs.values():
             ticket = doc.meta
             if ticket.folder is Folder.in_process:
-                busy.append(scheduler.Busy(ticket.id, slug, tuple(ticket.touches)))
+                if lifecycle.holds_paths(resolved, ticket):
+                    busy.append(scheduler.Busy(ticket.id, slug, tuple(ticket.touches)))
                 _count(found, ticket.sub_status)
             elif ticket.status == "in_queue/blocked":
                 found.blocked += 1
@@ -70,9 +79,18 @@ def compute(paths: StorePaths, project: str | None) -> Queue:
                 starts[ticket.id] = (ticket, step, provider)
                 slot = None if provider in NO_SLOT else provider
                 touches = tuple(ticket.touches)
+                hitl = ticket.gate is Gate.hitl
+                editing = workflow.edit_phase(resolved, ticket.workflow, step, hitl=hitl)
                 candidates.append(
                     scheduler.Candidate(
-                        ticket.id, slug, ticket.importance, ticket.created, touches, slot
+                        ticket.id,
+                        slug,
+                        ticket.importance,
+                        ticket.created,
+                        touches,
+                        slot,
+                        editing,
+                        weights.get(ticket.id, 0),
                     )
                 )
     slots = runtime.load_slots(paths)
