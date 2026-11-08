@@ -82,9 +82,17 @@ def main(cli: str, args: list[str]) -> int:
 
 
 def _take(queued: list[Path]) -> dict[str, Any] | None:
-    """The first queued reply, claimed by an atomic rename: parallel workers never get the
-    same one (SP13)."""
+    """The first queued reply meant for this call, claimed by an atomic rename: parallel
+    workers never get the same one (SP13). A reply with `match` serves only a call whose
+    working directory contains it, such as one ticket's worktree."""
+    here = os.getcwd()
     for path in queued:
+        try:
+            wanted = json.loads(path.read_text(encoding="utf-8")).get("match")
+        except (FileNotFoundError, json.JSONDecodeError):
+            continue  # another worker took it, or it is being written
+        if wanted and wanted not in here:
+            continue
         taken = path.with_suffix(f".{os.getpid()}.taken")
         try:
             path.rename(taken)

@@ -150,8 +150,10 @@ class FakeClis:
         edits: dict[str, str] | None = None,
         sleep: float = 0,
         shell: str | None = None,
+        match: str | None = None,
     ) -> None:
-        """Queue the next reply of `cli` (claude, codex or agy) to a non-status call."""
+        """Queue the next reply of `cli` (claude, codex or agy) to a non-status call; with
+        `match`, only a call whose working directory contains it takes the reply."""
         queue = self.state / cli / "queue"
         queue.mkdir(parents=True, exist_ok=True)
         reply: dict[str, Any] = {"stdout": stdout, "stderr": stderr, "exit": exit, "sleep": sleep}
@@ -160,6 +162,8 @@ class FakeClis:
         reply["edits"] = edits or {}
         if shell is not None:
             reply["shell"] = shell
+        if match is not None:
+            reply["match"] = match
         number = self.queued.get(cli, 0)
         self.queued[cli] = number + 1
         (queue / f"{number:04d}.json").write_text(json.dumps(reply), encoding="utf-8")
