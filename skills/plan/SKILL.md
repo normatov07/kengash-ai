@@ -46,7 +46,7 @@ You write the plan; another agent reviews it. Read with your file tools; use the
 6. Show the user the verdict and every finding; ask: approve, edit or reject? Wait for the answer.
 7. Act on it:
    - edit: change the sections, then repeat steps 4 and 5;
-   - approve: `kengash plan approve <id>` (on exit 5, the review failed: add `--skip-review`, as the user approved), then run `kengash skills show ticket` and follow it from step 1 for plan `<id>`;
+   - approve: `kengash plan approve <id>` (exit 5: add `--skip-review`, as the user approved), then run `kengash skills show ticket` and follow it from step 1 for plan `<id>`;
    - reject: `kengash plan reject <id> --why "<the user's reason>"`.
 
 Done when `kengash plan show <id>` prints `status: ticketed` or `status: rejected`.
