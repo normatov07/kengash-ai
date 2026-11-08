@@ -30,6 +30,7 @@ All notable changes to this project are written here. The format follows [Keep a
 
 ### Fixed
 
+- After an upgrade, a UI server started by the old version showed `damaged runtime file (Extra inputs are not permitted)` for tickets the new version had touched. Runtime files now ignore fields they do not know, and `kengash ui open` replaces a server started by another version.
 - An agy step cut by a dropped connection (`cannot rewind body after connection loss`) failed the ticket as a crash; it now counts as a network error, so the step resumes once and then uses the fallback.
 
 ## [0.5.0] - 2026-11-07

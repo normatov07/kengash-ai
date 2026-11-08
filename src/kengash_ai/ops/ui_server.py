@@ -13,6 +13,7 @@ import time
 import webbrowser
 from dataclasses import dataclass
 
+from kengash_ai import __version__
 from kengash_ai.model import NeedsSetup, UiRecord, UserError
 from kengash_ai.ops import lifecycle
 from kengash_ai.store import runtime
@@ -46,7 +47,11 @@ def open_ui(*, browser: bool) -> UiServer:
         raise NeedsSetup(INSTALL)
     with locked(paths.locks / "ui.lock"):
         record = runtime.load_ui(paths)
-        if record is not None and lifecycle.pid_alive(record.pid) and _answers(record.port):
+        alive = record is not None and lifecycle.pid_alive(record.pid)
+        if alive and record is not None and record.version != __version__:
+            _end(paths, record)  # started before an upgrade: it runs the old code
+            alive = False
+        if alive and record is not None and _answers(record.port):
             server = UiServer(_url(record), record.pid, record.port, reused=True)
         else:
             record = _start(paths)
@@ -61,15 +66,21 @@ def stop_ui() -> bool:
     paths = StorePaths.default()
     with locked(paths.locks / "ui.lock"):
         record = runtime.load_ui(paths)
-        runtime.drop_ui(paths)
         if record is None or not lifecycle.pid_alive(record.pid):
+            runtime.drop_ui(paths)
             return False
-        with contextlib.suppress(ProcessLookupError, PermissionError):
-            os.killpg(record.pid, signal.SIGTERM)
-        deadline = time.monotonic() + STOP_S
-        while lifecycle.pid_alive(record.pid) and time.monotonic() < deadline:
-            time.sleep(0.05)
+        _end(paths, record)
         return True
+
+
+def _end(paths: StorePaths, record: UiRecord) -> None:
+    """Stop `record`'s server and forget it (caller holds ui.lock)."""
+    runtime.drop_ui(paths)
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.killpg(record.pid, signal.SIGTERM)
+    deadline = time.monotonic() + STOP_S
+    while lifecycle.pid_alive(record.pid) and time.monotonic() < deadline:
+        time.sleep(0.05)
 
 
 def _start(paths: StorePaths) -> UiRecord:
@@ -86,7 +97,7 @@ def _start(paths: StorePaths) -> UiRecord:
             stderr=subprocess.STDOUT,
             env=env,
         )
-    record = UiRecord(pid=process.pid, port=port, token=token)
+    record = UiRecord(pid=process.pid, port=port, token=token, version=__version__)
     runtime.save_ui(paths, record)
     deadline = time.monotonic() + START_S
     while not _answers(port):

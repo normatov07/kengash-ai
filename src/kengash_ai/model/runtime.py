@@ -11,7 +11,9 @@ from kengash_ai.model.steps import Usage
 
 
 class _Runtime(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # Fields a newer kengash added are ignored, not refused: a UI server or worker started
+    # before an upgrade keeps reading files the new version writes (0.6.0 incident).
+    model_config = ConfigDict(extra="ignore")
 
 
 class SlotEntry(_Runtime):
@@ -124,6 +126,7 @@ class UiRecord(_Runtime):
     port: int
     token: str
     started: datetime = Field(default_factory=utc_now)
+    version: str = ""  # the kengash-ai that started it; another version gets a new server
 
 
 class JournalCursor(_Runtime):

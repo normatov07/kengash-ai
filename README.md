@@ -37,7 +37,7 @@ The skills install as the `kengash` plugin: in Claude Code and Antigravity you t
 
 ### Upgrading from 0.5.0
 
-`uv tool upgrade kengash-ai`, then `kengash skills install --agent … --global` again: the plan, grill, ticket, loop and memory skills now record lasting decisions and slice tickets for parallel work. Tickets now merge by themselves once green (`merge.mode: auto`), but a store seeded before 0.6.0 says `merge.mode: ask`: switch it in Settings or in SETTINGS.md (the store's defaults and each project's) when you want that, or keep `ask` to merge each ticket yourself. Workers now see your memory and each project's PROCESS.md, so what you record there reaches them.
+`uv tool upgrade kengash-ai`, then `kengash skills install --agent … --global` again: the plan, grill, ticket, loop and memory skills now record lasting decisions and slice tickets for parallel work. Tickets now merge by themselves once green (`merge.mode: auto`), but a store seeded before 0.6.0 says `merge.mode: ask`: switch it in Settings or in SETTINGS.md (the store's defaults and each project's) when you want that, or keep `ask` to merge each ticket yourself. Workers now see your memory and each project's PROCESS.md, so what you record there reaches them. If the web UI was open during the upgrade, run `kengash ui stop` once, then `kengash ui open`.
 
 ### Upgrading from 0.4.0
 

@@ -28,6 +28,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Changes
 
+- 2026-11-08: runtime files ignore fields they do not know (`extra="ignore"`), so a UI server or worker started before an upgrade still reads what the new version writes; `UiRecord.version` names the kengash-ai that started the server.
 - 2026-11-07: `Decision`, `WorkOutput.decisions`, `PlanOutput` and output kind `plan`; `TICKET_SECTIONS` gains `Decisions` after `Findings`, `PLAN_SECTIONS` gains `Lasting decisions` after `Decisions`; in_process sub-status `waiting_paths` and `TicketState.waiting_on`; `merge.mode` defaults to `auto` (SP16).
 - 2026-11-07: `TICKET_SECTIONS` gains `Check output` before `Log`; `Settings.checks.turns` (default 2, 0–5); `SentBack`, `Checked`, `TicketState.sent_back`, `TicketState.checked`, approval `blocked` (SP15).
 - 2026-11-07: `StepResult.check_output` (SP15).
