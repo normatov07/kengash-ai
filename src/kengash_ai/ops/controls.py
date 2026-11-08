@@ -27,6 +27,7 @@ from kengash_ai.store.locks import locked
 from kengash_ai.store.paths import StorePaths
 from kengash_ai.store.registry import load_registry
 
+WAITING_PATHS = steps.WAITING_PATHS
 RESUMABLE = ("in_queue/ready", "in_process/failed", "in_process/stalled", "in_process/paused")
 NO_SLOT = ("shell", "user")
 SANDBOXED = (
@@ -74,6 +75,7 @@ class Paused:
 @dataclass
 class Resumed:
     started: list[str]
+    skipped: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -165,7 +167,7 @@ def approve_ticket(
         if isinstance(decision, workflow.Run):
             ticket.status = lifecycle.step_status(resolved, decision.step)
             if _clash(paths, slug, resolved, ticket, decision.step) is not None:
-                ticket.status = steps.WAITING_PATHS  # its job takes the paths when free (SP16)
+                ticket.status = WAITING_PATHS  # its job takes the paths when free (SP16)
         elif isinstance(decision, workflow.Halt):
             ticket.status = decision.status
             state.approval = decision.approval
@@ -258,7 +260,7 @@ def resume(project: str | None, *, by: str) -> Resumed:
     if not paused:
         return Resumed([])
     result = run_tickets(sorted(paused), project=project, by=by)
-    return Resumed([started.id for started in result.started])
+    return Resumed([started.id for started in result.started], result.skipped)
 
 
 def _clash(
@@ -316,8 +318,8 @@ def _claim(
             halt = decision.decision
             return _Skip(halt.reason if isinstance(halt, workflow.Halt) else "every step passed")
         clash = _clash(paths, slug, resolved, ticket, step)
-        if clash is not None:
-            return _Skip(f"touches overlap {clash}")
+        if clash is not None and ticket.folder is not Folder.in_process:
+            return _Skip(f"touches overlap {clash}")  # stays ready; `next` lists it again
         role = resolved.role_of(step)
         provider = "user"
         if role is not None:
@@ -342,6 +344,8 @@ def _claim(
         ticket.branch = branch
         ticket.step = step
         ticket.status = lifecycle.step_status(resolved, step)
+        if clash is not None:  # a paused, failed or stalled editor waits in its job (SP16)
+            ticket.status = WAITING_PATHS
         events = [_event("ticket.claimed", slug, ticket, step=step, provider=provider, by=by)]
         events[0] = events[0].model_copy(update={"from": before})
         if step == "approve":  # the user's step: no worker until `kengash approve`

@@ -30,6 +30,7 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 
 
 ## Changes
 
+- 2026-11-07: `kengash resume` prints `skipped <id>: <reason>` for each ticket it could not restart (SP16 review).
 - 2026-11-07: `kengash merge` adds `DECISIONS.md +N lines` when the ticket's decisions were recorded (SP16).
 - 2026-11-07: `kengash plan approve` adds `DECISIONS.md +N lines` and any `warning:` lines (SP16).
 - 2026-11-07: `kengash memory add --process` (not with `--decision`, `--rejected` or `--section`); `kengash context` ends with `# Record` and the when-to-record hint (SP16).

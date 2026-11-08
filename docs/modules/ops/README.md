@@ -62,6 +62,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-07: `controls._claim` starts a paused, failed or stalled ticket whose editing step clashes with a holder as `waiting_paths` (its job waits) instead of skipping it; a ready one is still skipped; `Resumed.skipped` names tickets `resume` could not start (SP16 review).
 - 2026-11-07: the merge recheck runs whenever the rebased HEAD is not the commit whose checks last passed (`TicketState.checked`, now also set by a passing check step and by a passing recheck), so a retry after checks that timed out, errored or were killed tests again (SP16 review).
 - 2026-11-07: `controls.approve_ticket` routing into the editing phase while another ticket holds an overlapping path moves to `waiting_paths` instead of the step's status, so its job takes the paths under the lock (SP16 review).
 - 2026-11-07: the ticket timeline shows `ticket.waiting` and `ticket.merge_held` with their reasons (SP16).

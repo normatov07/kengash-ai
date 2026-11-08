@@ -16,7 +16,7 @@ from kengash_ai.model import (
     UserError,
     WorkerRecord,
 )
-from kengash_ai.ops import controls
+from kengash_ai.ops import controls, records
 from kengash_ai.ops.controls import Paused, Resumed, Started
 from kengash_ai.store import StorePaths, documents, runtime
 
@@ -241,3 +241,21 @@ def test_the_answer_to_a_blocked_plan_stays_in_the_handoff(
     controls.approve_ticket("7b55e0c1", loops=None, tokens=None, project=None, by="user", note=note)
     handoff = engine.ticket().sections["Handoff"]
     assert handoff.splitlines()[-1] == "The user answered: assets are in raw/."
+
+
+def test_resume_lets_an_overlapping_editor_wait_instead_of_stranding_it(
+    engine: Engine, make_ticket: Make, spawned: list[tuple[str, int | None]]
+) -> None:
+    project = engine.paths.project(engine.slug)
+    doc = engine.ticket()
+    doc.meta.status, doc.meta.step, doc.meta.loop = "in_process/paused", "implement", 2
+    documents.save_ticket(project, doc)
+    other = make_ticket(
+        "0a000000", status="in_process/paused", step="implement", touches=doc.meta.touches
+    )
+    documents.save_ticket(project, other)
+    resumed = controls.resume(None, by="user")
+    assert sorted(resumed.started) == ["0a000000", "7b55e0c1"] and resumed.skipped == {}
+    tickets = records.project_tickets(engine.paths, engine.slug)
+    statuses = {tickets[i].meta.status for i in ("0a000000", "7b55e0c1")}
+    assert statuses == {"in_process/under_implementation", "in_process/waiting_paths"}

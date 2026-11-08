@@ -795,6 +795,8 @@ def resume(project: Every = None, by: By = "unknown", as_json: AsJson = False) -
         _emit_json(resumed)
         return
     typer.echo(f"resumed {len(resumed.started)}")
+    for ticket_id, reason in resumed.skipped.items():
+        typer.echo(f"skipped {ticket_id}: {reason}")
 
 
 @app.command("merge")
