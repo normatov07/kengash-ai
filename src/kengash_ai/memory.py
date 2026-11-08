@@ -135,7 +135,7 @@ def compaction_problem(current: list[str], result: list[str], cap: int) -> str |
     kept = {line.strip() for line in result}
     if not any(kept):
         return "the result is empty"
-    pins = [line for line in current if _pinned(line) and line.strip() not in kept]
+    pins = [line for line in current if is_pinned(line) and line.strip() not in kept]
     if pins:
         return f"the result drops {len(pins)} pinned line(s): {pins[0].strip()}"
     headings = [line for line in current if line.startswith("## ") and line.strip() not in kept]
@@ -374,7 +374,7 @@ def _archive(paths: StorePaths, entries: list[str]) -> None:
     atomic_write(path, text + "".join(f"{entry}\n" for entry in entries))
 
 
-def _pinned(line: str) -> bool:
+def is_pinned(line: str) -> bool:
     return line.startswith("- ") and "(pin)" in line
 
 

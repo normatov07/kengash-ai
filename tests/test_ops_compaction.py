@@ -31,7 +31,8 @@ def test_run_compaction_rejects_a_result_without_pins(
 ) -> None:
     before = long_memory.read_text(encoding="utf-8")
     unpinned = COMPACTED.replace(f"{PINNED}\n", "")
-    fake_clis.queue("claude", stdout=fake_clis.claude_output({"text": unpinned}))
+    for _ in range(2):  # the result, and the one repair turn
+        fake_clis.queue("claude", stdout=fake_clis.claude_output({"text": unpinned}))
     assert compaction.run_compaction() == (
         f"MEMORY.md kept (19 lines): the result drops 1 pinned line(s): {PINNED}"
     )
@@ -76,3 +77,22 @@ def test_a_failed_compaction_drops_its_record_with_its_end(
     fake_clis.queue("claude", fixture="claude/auth_error.json")
     compaction.run_compaction()
     assert jobs.alive(store_paths, jobs.COMPACT) is None
+
+
+def test_a_result_that_drops_a_pin_gets_one_repair_turn(
+    long_memory: Path, fake_clis: FakeClis
+) -> None:
+    unpinned = COMPACTED.replace(f"{PINNED}\n", "")
+    fake_clis.queue("claude", stdout=fake_clis.claude_output({"text": unpinned}))
+    fake_clis.queue("claude", stdout=fake_clis.claude_output({"text": COMPACTED}))
+    assert compaction.run_compaction() == "MEMORY.md 19 → 16 lines"
+    assert long_memory.read_text(encoding="utf-8") == COMPACTED
+    first, repair = fake_clis.calls("claude")
+    assert "--resume" in repair["argv"] and "--resume" not in first["argv"]
+    assert PINNED in " ".join(repair["argv"])
+
+
+def test_a_good_result_needs_no_repair_turn(long_memory: Path, fake_clis: FakeClis) -> None:
+    fake_clis.queue("claude", stdout=fake_clis.claude_output({"text": COMPACTED}))
+    compaction.run_compaction()
+    assert len(fake_clis.calls("claude")) == 1

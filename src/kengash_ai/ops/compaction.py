@@ -3,6 +3,7 @@
 
 import os
 from contextlib import AbstractContextManager
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -109,6 +110,7 @@ def run_compaction() -> str:
             user_config=options.user_config,
         )
         called = calls.call(paths, provider, request, lambda: _next_log(paths))
+        called = _repaired(paths, provider, snapshot, cap, called)
     finally:
         slots.release(paths, jobs.COMPACT)
     result, output = called.result, called.result.output
@@ -133,6 +135,25 @@ def run_compaction() -> str:
     if outcome.accepted:
         return f"MEMORY.md {outcome.before} → {outcome.after} lines"
     return f"MEMORY.md kept ({outcome.before} lines): {outcome.reason}"
+
+
+def _repaired(
+    paths: StorePaths, provider: str, snapshot: str, cap: int, called: calls.Called
+) -> calls.Called:
+    """One more turn for a result the check would refuse: the cheap model drops a pinned line
+    now and then (live run 2026-11-08). The check stays the judge of what comes back."""
+    result, output = called.result, called.result.output
+    if result.error is not None or not isinstance(output, CompactOutput):
+        return called
+    problem = memory.compaction_problem(snapshot.splitlines(), output.text.splitlines(), cap)
+    if problem is None:
+        return called
+    prompt = prompts.compact_repair(problem, snapshot)
+    request = calls.resume(called.request, result, prompt, _next_log(paths))
+    again = calls.call(paths, provider, request, lambda: _next_log(paths))
+    if again.result.error is not None:
+        return called
+    return replace(again, usage=calls.plus(called.usage, again.usage))
 
 
 def fail_compaction(reason: str) -> None:

@@ -74,7 +74,7 @@ When a plan names more than `plan.max_files` (default 12; 0 is off) files, the p
 A split that loses an acceptance line is refused and the ticket continues whole: a deterministic guard against a model dropping scope. The Handoff then says so, since the plan may cover only part 1. A ticket splits once.
 
 ### 3.7 Check concurrency (B6)
-`checks.parallel` (0: half the CPU cores, at least 1) limits kengash's own test runs machine-wide, using lock files.
+`checks.parallel` (0: half the CPU cores, at least 1) limits kengash's own test runs machine-wide, using lock files. A merge's recheck takes no place: it runs under the project's merge lock, and waiting there would stall the queue *(call)*.
 
 ### 3.8 Verified context (C7 and the user's request)
 Rule: **what kengash can read itself it reads itself, at the moment of use.** Model recall is never passed as fact. Reviewers get no implementer narrative as fact: the coding and review agents work best with separate context (Cognition, 2026).

@@ -35,8 +35,7 @@ Read with your file tools; use the shell only for the `kengash` commands below, 
    EOF
    ```
 
-   It prints `N tickets: <ids> (R ready, B blocked)`.
 6. Run `kengash loop status -p <project>`, `<project>` being the `project:` line of `kengash plan show <id>`:
    - `loop running: …`: tell the user that loop starts these tickets once its open questions are answered; if nothing starts, run `/kengash:loop` and say to take over. Stop.
-   - last line `loop_start: auto`: run `kengash skills show loop` and follow it for `<project>`.
+   - last line `loop_start: auto`: in the shell, not the Skill tool, run `kengash skills show loop` and follow it for `<project>`.
    - else ask "Run the loop now?": yes, as for auto; no, tell the ids and that `/kengash:loop` runs them.

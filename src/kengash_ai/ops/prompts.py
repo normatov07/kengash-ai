@@ -428,6 +428,16 @@ def compact_prompt(text: str, *, cap: int) -> str:
     )
 
 
+def compact_repair(problem: str, text: str) -> str:
+    """The compactor's second try: why the check refused its result, and the pins to keep."""
+    pins = "\n".join(line for line in text.splitlines() if memory.is_pinned(line))
+    return (
+        f"kengash refused your result: {problem}. Return the whole new file again, keeping "
+        "the title, every '## ' heading and each of these lines exactly as written:\n"
+        f"{pins}\n\n{REPLY}"
+    )
+
+
 NETWORK_PROMPT = (
     "Your last turn was cut off by a network error. Your edits are kept; finish the step and reply."
 )

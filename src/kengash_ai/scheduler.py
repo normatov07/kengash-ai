@@ -72,14 +72,6 @@ class Selection:
     held_back: dict[str, str] = field(default_factory=dict)
 
 
-def overlaps(a: Sequence[str], b: Sequence[str]) -> bool:
-    """Path prefixes overlap when one contains the other, segment by segment; an empty
-    list stands for the whole repo."""
-    if not a or not b:
-        return True
-    return any(_within(x, y) or _within(y, x) for x in a for y in b)
-
-
 def clash(a: Sequence[str], b: Sequence[str], policy: PathPolicy) -> bool:
     """True when tickets touching `a` and `b` may not edit at once: an empty list is the whole
     repo, a directory clashes with whatever it holds, and exact files may overlap up to

@@ -21,6 +21,7 @@ The agents' long-term memory: MEMORY.md (who the user is, how they work, what th
 
 ## Changes
 
+- 2026-11-08: `is_pinned` is public, for the compactor's repair turn (SP17 live run).
 - 2026-11-08: a path too long for the filesystem counts as gone instead of raising on 3.12 and 3.13 (SP17 minors).
 - 2026-11-08: `digest(paths, project, root=None)`: with the code's root, a process or decision line naming a file that is gone is tagged `[stale? path gone: …]`, not hidden; age plays no part (SP17).
 - 2026-11-07: `RECORD_HINT` separates a design decision for this project from how the user works in every project (haiku dry runs: 5/5 filed each kind right) (SP16).

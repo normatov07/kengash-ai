@@ -13,6 +13,11 @@ All notable changes to this project are written here. The format follows [Keep a
 - A model per ticket importance on every agent (Agents page, or `kengash agent edit --model-for critical=claude/opus`), and "Other models" for the plan reviewer and the memory compactor.
 - `checks.parallel` limits kengash's own test runs on this machine (default: half the CPU cores).
 
+### Fixed
+
+- A cheap conductor sometimes tried the Skill tool at the plan-to-ticket handoff, was refused and stopped; the skills now say it is a shell command.
+- A compaction whose result drops a pinned line gets one repair turn before kengash refuses it.
+
 ### Changed
 
 - Two editing tickets may share up to `paths.max_overlap` exact files (default 2), and generated files (`paths.shared`) never count. A real conflict surfaces at the rebase; `paths.max_overlap: 0` restores the old behaviour.

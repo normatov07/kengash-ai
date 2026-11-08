@@ -64,6 +64,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-08: `compaction`: a result the check would refuse gets one repair turn (`prompts.compact_repair`), and the check still decides; a merge's recheck takes no check place; an eval's `reply` line may list `a | b` (SP17 live run).
 - 2026-11-08: the file pack checks a file's size before reading it; a path too long for the filesystem is absent, not an error; a part's files pass the same check as a planner's; a review's Log line counts its non-blocking findings; `new_prompt` no longer takes `files` (SP17 minors).
 - 2026-11-08: `agents.pick` honours `skip` for the shell and takes a provider or one provider/model, `Pick.cli`; a shell step has no fallback, where it once waited forever for a slot; a fallback opens a fresh session (SP17 review).
 - 2026-11-08: `relay`: an intent idle for `MAX_IDLE` (24 h) is forgotten, paused and blocked tickets keep it, a settings error no longer drops it, `covered` and `forget_unleased` (SP17 review).
