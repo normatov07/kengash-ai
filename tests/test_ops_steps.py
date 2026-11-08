@@ -252,6 +252,32 @@ def test_auto_merge_ends_the_job_merged(
     assert (engine.repo / "retry.py").exists() and not engine.worktree.exists()
 
 
+def test_auto_merge_never_announces_a_gate(
+    engine: Engine, fake_clis: FakeClis, store_paths: StorePaths, journal_events: Events
+) -> None:
+    write_settings(store_paths, "merge.mode: auto\n")
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "retries = 3\n"})
+    fake_clis.queue("claude", stdout=fake_clis.claude_output(REVIEW_PASS))
+    assert steps.run_job("7b55e0c1").status == "done/merged"
+    kinds = [e["type"] for e in journal_events() if e.get("ticket") == "7b55e0c1"]
+    assert "ticket.awaiting_merge" not in kinds
+    assert kinds[-2:] == ["ticket.merging", "ticket.merged"]
+
+
+def test_auto_merge_that_cannot_finish_announces_why(
+    engine: Engine, fake_clis: FakeClis, store_paths: StorePaths, journal_events: Events
+) -> None:
+    write_settings(store_paths, "merge.mode: auto\n")
+    (engine.repo / "README.md").write_text("half-edited by the user\n")
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "retries = 3\n"})
+    fake_clis.queue("claude", stdout=fake_clis.claude_output(REVIEW_PASS))
+    assert steps.run_job("7b55e0c1").status == "in_process/awaiting_merge"
+    gates = [e for e in journal_events() if e["type"] == "ticket.awaiting_merge"]
+    assert [e["reason"] for e in gates] == ["main working tree has changes; merge waits for you"]
+
+
 def test_a_new_claude_session_that_never_started_is_forgotten(
     engine: Engine, fake_clis: FakeClis
 ) -> None:

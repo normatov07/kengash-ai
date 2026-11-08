@@ -51,6 +51,8 @@ from kengash_ai.store.registry import load_registry
 SLOT_POLL_S = 5
 PATH_POLL_S = 5  # a job waiting for another ticket's paths looks again this often (SP16)
 WAITING_PATHS = "in_process/waiting_paths"
+MERGING = merging.MERGING
+MERGING_EVENT = merging.MERGING_EVENT
 QUOTA_WAIT_S = 900
 sleep = time.sleep
 
@@ -195,7 +197,7 @@ def _begin(job: _Job, *, budget_left: bool) -> _Ready | JobEnd | _WaitPaths:
         if isinstance(decision, workflow.Merge):
             runtime.save_ticket_state(paths, job.ticket_id, state)
             job.merge_pending = True
-            return _halt(job, doc, workflow.AWAITING_MERGE, "every step passed")
+            return _halt(job, doc, workflow.AWAITING_MERGE, MERGING, kind=MERGING_EVENT)
         if ticket.status == WAITING_PATHS:
             holder = _holder(paths, job.slug, resolved, ticket)
             if holder is not None:
@@ -845,9 +847,10 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
                 status, reason = decision.status, decision.reason
                 state.approval = decision.approval
             else:
-                status, reason = workflow.AWAITING_MERGE, "every step passed"
+                status, reason = workflow.AWAITING_MERGE, MERGING
                 job.merge_pending = True
-            events.append(_set_status(paths, job.slug, doc, status, reason))
+            kind = MERGING_EVENT if job.merge_pending else None  # not a gate: kengash merges
+            events.append(_set_status(paths, job.slug, doc, status, reason, kind=kind))
             end = JobEnd(status, reason)
         runtime.save_ticket_state(paths, job.ticket_id, state)
         slots.release(paths, job.ticket_id)
@@ -855,9 +858,11 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
     return end
 
 
-def _halt(job: _Job, doc: Doc[Ticket], status: str, reason: str) -> JobEnd:
+def _halt(
+    job: _Job, doc: Doc[Ticket], status: str, reason: str, *, kind: str | None = None
+) -> JobEnd:
     """Stop the job at `status` (caller holds the project lock)."""
-    event = _set_status(job.paths, job.slug, doc, status, reason)
+    event = _set_status(job.paths, job.slug, doc, status, reason, kind=kind)
     slots.release(job.paths, job.ticket_id)
     records.record(job.paths, f"kengash: {job.ticket_id} {doc.meta.sub_status}", event)
     return JobEnd(status, reason)

@@ -172,9 +172,12 @@ def approve_ticket(
             ticket.status = decision.status
             state.approval = decision.approval
             events.append(lifecycle.status_event(slug, ticket, before, decision.reason))
-        else:
+        else:  # merge.mode auto: kengash merges below; no gate unless that cannot finish
             ticket.status = workflow.AWAITING_MERGE
-            events.append(lifecycle.status_event(slug, ticket, before, "every step passed"))
+            event = lifecycle.status_event(
+                slug, ticket, before, merging.MERGING, kind=merging.MERGING_EVENT
+            )
+            events.append(event)
         ticket.updated = utc_now()
         documents.save_ticket(paths.project(slug), doc)
         runtime.save_ticket_state(paths, ticket_id, state)

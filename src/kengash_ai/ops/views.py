@@ -1172,7 +1172,7 @@ STATUS_EVENTS = frozenset(
         "ticket.paused",
         "ticket.stopped",
         "ticket.waiting",  # a job waits for another ticket's paths (SP16)
-        "ticket.merge_held",  # an auto-merge waits for the user (SP16)
+        "ticket.merging",  # every step passed; kengash merges (SP16)
     }
 )
 

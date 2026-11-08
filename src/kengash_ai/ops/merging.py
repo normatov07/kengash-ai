@@ -14,6 +14,7 @@ from kengash_ai.model import (
     Checked,
     Doc,
     Event,
+    KengashError,
     ReviewOutput,
     SentBack,
     Settings,
@@ -29,6 +30,9 @@ from kengash_ai.store.redact import redact
 from kengash_ai.store.registry import load_registry
 
 MERGEABLE = (workflow.AWAITING_MERGE, workflow.BRANCH_READY)
+# under `merge.mode: auto` kengash merges by itself: no gate until a merge cannot finish
+MERGING = "every step passed; merging"
+MERGING_EVENT = "ticket.merging"
 
 
 @dataclass
@@ -190,22 +194,24 @@ def merge_if_clean(paths: StorePaths, slug: str, ticket_id: str, *, by: str) -> 
     must not hold the project lock."""
     entry = load_registry(paths).projects[slug]
     current = gitops.current_branch(entry.path)
+    why = ""
     if current != entry.base:
-        _held(paths, slug, ticket_id, f"main working tree is on {current or 'a detached HEAD'}")
+        why = f"main working tree is on {current or 'a detached HEAD'}"
     elif not gitops.is_clean(entry.path):
-        _held(paths, slug, ticket_id, "main working tree has changes")
+        why = "main working tree has changes"
     else:
-        # A conflict or failed checks send it back, or the tree changed meanwhile: its
-        # status says which.
-        with contextlib.suppress(UserError):
+        # A conflict or failed checks send it back: its status says so. Anything else that
+        # stops the merge (checks that cannot run, a busy queue) leaves it for the user.
+        try:
             merge_ticket(ticket_id, project=slug, by=by)
-    return _load(paths, slug, ticket_id).meta.status
-
-
-def _held(paths: StorePaths, slug: str, ticket_id: str, why: str) -> None:
-    """Journal why an auto-merge waits for the user (SP16 spec §3.10)."""
-    event = {"type": "ticket.merge_held", "project": slug, "ticket": ticket_id}
-    journal.append(paths, Event.model_validate({**event, "reason": f"{why}; merge waits for you"}))
+        except KengashError as exc:
+            why = f"the merge did not finish: {exc}"
+    doc = _load(paths, slug, ticket_id)
+    if doc.meta.status == workflow.AWAITING_MERGE:  # now it is the user's gate (SP16 §3.10)
+        reason = f"{why or 'the merge did not finish'}; merge waits for you"
+        gate = lifecycle.status_event(slug, doc.meta, doc.meta.status, reason, by=by)
+        journal.append(paths, gate)
+    return doc.meta.status
 
 
 @dataclass(frozen=True)

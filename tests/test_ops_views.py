@@ -629,12 +629,12 @@ def test_path_waits_and_held_merges_show_on_the_timeline(
     )
     for kind, reason in (
         ("ticket.waiting", "touches overlap ccccccc9"),
-        ("ticket.merge_held", "main working tree has changes; merge waits for you"),
+        ("ticket.merging", "every step passed; merging"),
     ):
         event = {"type": kind, "project": "payments-api", "ticket": "ccccccc2", "reason": reason}
         journal.append(store_paths, Event.model_validate(event))
     found = views.ticket_view(store_paths, "ccccccc2", project="payments-api")
     assert [(row.kind, row.note) for row in found.timeline] == [
         ("ticket.waiting", "touches overlap ccccccc9"),
-        ("ticket.merge_held", "main working tree has changes; merge waits for you"),
+        ("ticket.merging", "every step passed; merging"),
     ]

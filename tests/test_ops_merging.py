@@ -197,7 +197,7 @@ def test_auto_merge_on_a_dirty_tree_journals_why_it_waits(
     (engine.repo / "README.md").write_text("half-edited by the user\n")
     status = merging.merge_if_clean(engine.paths, engine.slug, "7b55e0c1", by="kengash")
     assert status == "in_process/awaiting_merge"
-    held = [e for e in journal_events() if e["type"] == "ticket.merge_held"]
+    held = [e for e in journal_events() if e["type"] == "ticket.awaiting_merge"]
     assert [e["reason"] for e in held] == ["main working tree has changes; merge waits for you"]
 
 
