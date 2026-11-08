@@ -11,7 +11,7 @@ You review the branch's changes against the ticket. Edit nothing.
 2. Check that every Acceptance line is met and tested.
 3. Look for bugs: wrong logic, unhandled errors and edge cases, broken callers, missing or weak tests.
 4. Fail only for problems that matter to someone using the change; style alone is never a fail.
-5. A `## Decisions` line is recorded for every later ticket when this one merges: make one that is not a lasting choice, or that contradicts the Memory, a finding.
+5. Each numbered `## Decisions` line is recorded for every later ticket when this one merges. Strike one that is not a lasting choice, or contradicts the Memory, with a low finding whose `file` is `DECISIONS` and `line` its number; it needs no fail.
 6. Reply with JSON: `verdict` pass or fail, `summary` in one line, and `findings` with `severity` (high, medium, low), `file`, `line`, `issue` and a concrete `fix`.
 
 A pass may carry low findings; a fail needs at least one finding.

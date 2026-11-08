@@ -100,6 +100,37 @@ def narrowed(files: Sequence[str]) -> list[str] | None:
     return sorted(found) if 0 < len(found) <= MAX_FILES else None
 
 
+STRIKE_LEAD = (
+    "Each line reaches DECISIONS.md for every later ticket when this one merges. Strike one "
+    "that is not a lasting choice, or contradicts the Memory, with a low finding whose `file` "
+    "is `DECISIONS` and `line` its number; it needs no fail."
+)
+DECISIONS_FILE = "decisions"
+
+
+def _decisions_block(sections: Mapping[str, str], *, review: bool) -> tuple[str, str]:
+    """The ticket's `## Decisions`; a reviewer sees them numbered, to strike (SP16 §3.3)."""
+    text = sections.get("Decisions", "")
+    lines = [line for line in text.splitlines() if line.strip()]
+    if not review or not lines:
+        return ("Decisions", text)
+    numbered = [f"{n}. {line.removeprefix('- ')}" for n, line in enumerate(lines, 1)]
+    return ("Decisions", "\n".join([STRIKE_LEAD, *numbered]))
+
+
+def decision_findings(findings: Sequence[Finding]) -> tuple[list[Finding], set[int]]:
+    """Split a review's findings: the others, and the Decisions line numbers it strikes."""
+    others = [f for f in findings if f.file.strip().lower() != DECISIONS_FILE]
+    struck = {f.line for f in findings if f.file.strip().lower() == DECISIONS_FILE}
+    return others, struck
+
+
+def strike(section: str, numbers: set[int]) -> str:
+    """`section` without its lines numbered in `numbers` (1-based, blank lines skipped)."""
+    lines = [line for line in section.splitlines() if line.strip()]
+    return "\n".join(line for n, line in enumerate(lines, 1) if n not in numbers)
+
+
 DECISIONS_PER_REPLY = 3
 DECISIONS_PER_TICKET = 6
 
@@ -217,6 +248,7 @@ def new_prompt(
     instruction: str | None = None,
     feedback: Feedback = NO_FEEDBACK,
     memory: str = "",
+    review: bool | None = None,
 ) -> str:
     """A new session's prompt: who it is, the step, the memory digest, and the ticket inline;
     `instruction` defaults to the built-in step's."""
@@ -230,7 +262,7 @@ def new_prompt(
         ("Scope", sections.get("Scope", "")),
         ("Acceptance", sections.get("Acceptance", "")),
         ("Handoff", sections.get("Handoff", "")),
-        ("Decisions", sections.get("Decisions", "")),
+        _decisions_block(sections, review=kind(step) == "review" if review is None else review),
         ("Findings", sections.get("Findings", "")),
         *_check_blocks(sections, feedback),
         ("Diff stat", diff_stat),
@@ -263,7 +295,7 @@ def resumed_prompt(
     if review if review is not None else kind(step) == "review":
         blocks = [
             ("Handoff", sections.get("Handoff", "")),
-            ("Decisions", sections.get("Decisions", "")),
+            _decisions_block(sections, review=True),
             ("Diff stat", diff_stat),
         ]
         blocks += _check_blocks(sections, feedback)

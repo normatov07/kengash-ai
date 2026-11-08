@@ -22,7 +22,7 @@ You question the user until nothing is left to assume, then write the plan. Read
 
    It prints `plan <id> grilling`; keep the id.
 3. Look facts up yourself (code, docs, memory). Ask only what the user alone decides.
-4. Ask a round of at most `grill.round_size` questions, each with your recommended answer; use your multiple-choice tool if any. Repeat until nothing is left.
+4. Ask a round of at most `grill.round_size` questions, each with your recommended answer; use your multiple-choice tool if any. Wait for answers; repeat until nothing is left.
 5. Restate the shared understanding; wait for the user's confirmation.
 6. Save the plan: one Decisions line `question → answer` per answer; one Lasting decisions line `- <decision>. why: <reason>.` per choice later work follows:
 

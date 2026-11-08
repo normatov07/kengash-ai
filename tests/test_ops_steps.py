@@ -1093,3 +1093,26 @@ def test_plan_reply_without_files_keeps_touches(engine: Engine, fake_clis: FakeC
     fake_clis.queue("claude", fixture="claude/work_resume.json")
     steps.run_job("7b55e0c1", steps=1)
     assert engine.ticket().meta.touches == before
+
+
+def _reviewed_with_a_decision(engine: Engine, fake_clis: FakeClis, verdict: str) -> None:
+    doc = engine.ticket()
+    doc.meta.status, doc.meta.step = "in_process/under_review", "review_code"
+    doc.sections["Decisions"] = "- keep A. why: x.\n- one-off tweak. why: y."
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    strike = {"severity": "low", "file": "DECISIONS", "line": 2, "issue": "not lasting", "fix": "-"}
+    review = {"verdict": verdict, "summary": "ok", "findings": [strike]}
+    fake_clis.queue("claude", stdout=fake_clis.claude_output(review))
+    steps.run_job("7b55e0c1", steps=1)
+
+
+def test_a_review_strikes_a_proposed_decision(engine: Engine, fake_clis: FakeClis) -> None:
+    _reviewed_with_a_decision(engine, fake_clis, "pass")
+    assert engine.ticket().sections["Decisions"] == "- keep A. why: x."
+
+
+def test_a_fail_that_only_strikes_decisions_passes(engine: Engine, fake_clis: FakeClis) -> None:
+    _reviewed_with_a_decision(engine, fake_clis, "fail")
+    doc = engine.ticket()
+    assert doc.meta.status == "in_process/awaiting_merge" and doc.sections.get("Findings", "") == ""
+    assert doc.sections["Decisions"] == "- keep A. why: x."

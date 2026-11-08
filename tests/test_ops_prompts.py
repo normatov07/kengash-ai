@@ -100,9 +100,24 @@ def test_review_prompts_show_decisions(make_ticket: Make) -> None:
     new = prompts.new_prompt(
         ticket, sections, "Goal.", role="code-reviewer", step="review_code", diff_stat="d"
     )
-    assert new.index("## Handoff") < new.index("## Decisions\n- keep X. why: y.")
+    shown = f"## Decisions\n{prompts.STRIKE_LEAD}\n1. keep X. why: y."
+    assert new.index("## Handoff") < new.index(shown)
     resumed = prompts.resumed_prompt(ticket, sections, step="review_code", diff_stat="d")
-    assert "## Decisions\n- keep X. why: y." in resumed
+    assert shown in resumed
+    work = prompts.new_prompt(
+        ticket, sections, "Goal.", role="implementer", step="implement", diff_stat=""
+    )
+    assert "## Decisions\n- keep X. why: y." in work and prompts.STRIKE_LEAD not in work
+
+
+def test_decision_findings_strike_lines() -> None:
+    def finding(file: str, line: int) -> Finding:
+        return Finding(severity="low", file=file, line=line, issue="not lasting", fix="drop")
+
+    found = [finding("DECISIONS", 2), finding("retry.py", 3), finding("decisions", 9)]
+    others, struck = prompts.decision_findings(found)
+    assert [f.file for f in others] == ["retry.py"] and struck == {2, 9}
+    assert prompts.strike("- a.\n- b.\n- c.", struck) == "- a.\n- c."
 
 
 def test_narrowed_normalises_and_dedupes() -> None:

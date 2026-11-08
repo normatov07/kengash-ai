@@ -43,7 +43,7 @@ You write the plan; another agent reviews it. Read with your file tools; use the
 
    It prints `plan <id> draft, N sections`.
 5. Run `kengash plan review <id>` with a 10-minute shell timeout; on exit 3, run it again. It prints the verdict, then the findings.
-6. Show the user the verdict and every finding; ask: approve, edit or reject?
+6. Show the user the verdict and every finding; ask: approve, edit or reject? Wait for the answer.
 7. Act on it:
    - edit: change the sections, then repeat steps 4 and 5;
    - approve: `kengash plan approve <id>` (on exit 5, the review failed: add `--skip-review`, as the user approved), then run `kengash skills show ticket` and follow it from step 1 for plan `<id>`;

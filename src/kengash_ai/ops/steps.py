@@ -538,6 +538,7 @@ def _request(
             instruction=told,
             feedback=feedback,
             memory=_memory(job),
+            review=review,
         )
         skill = prompts.role_skill(job.paths, job.slug, resolved.agents[pick.role].skill)
     if resolved.kind_of(step) == "edit" and gitops.changed_files(job.worktree):
@@ -784,8 +785,14 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
         blocked = ""
         narrowed = 0
         if isinstance(output, ReviewOutput):
-            verdict = output.verdict
-            failing = output.findings if verdict == "fail" else []
+            findings, struck = prompts.decision_findings(output.findings)
+            if struck:  # the reviewer's veto on proposed decisions (SP16 spec §3.3)
+                doc.sections["Decisions"] = prompts.strike(
+                    doc.sections.get("Decisions", ""), struck
+                )
+            # a fail that only struck decisions leaves implement nothing to fix
+            verdict = output.verdict if findings or output.verdict == "pass" else "pass"
+            failing = findings if verdict == "fail" else []
             doc.sections["Findings"] = prompts.findings_text(failing)
             fingerprints = tuple(workflow.fingerprint(f.file, f.issue) for f in failing)
             if resolved.kind_of(step) == "check":
