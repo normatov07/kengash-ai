@@ -75,7 +75,7 @@ def compute(paths: StorePaths, project: str | None) -> Queue:
                 if step is None:
                     found.held_back[ticket.id] = problem
                     continue
-                provider = _provider(resolved, step)
+                provider = _provider(resolved, step, ticket.importance.value)
                 starts[ticket.id] = (ticket, step, provider)
                 slot = None if provider in NO_SLOT else provider
                 touches = tuple(ticket.touches)
@@ -122,17 +122,19 @@ def _start(resolved: Settings, ticket: Ticket, *, paused: bool) -> tuple[str | N
     return None, decision.reason if isinstance(decision, workflow.Halt) else "every step passed"
 
 
-def _provider(resolved: Settings, step: str) -> str:
+def _provider(resolved: Settings, step: str, importance: str | None = None) -> str:
     """The CLI a step runs on: a provider, `shell`, or `user` for the approval step."""
     role = resolved.role_of(step)
     if role is None:
         return "user"
-    provider, _ = split_cli(resolved.agents[role].cli)
+    provider, _ = split_cli(resolved.agents[role].cli_for(importance))
     return provider
 
 
 def _limits(resolved: Settings) -> scheduler.Limits:
-    return scheduler.Limits(resolved.sessions.max, resolved.sessions.per_provider)
+    return scheduler.Limits(
+        resolved.sessions.max, resolved.sessions.per_provider, lifecycle.path_policy(resolved)
+    )
 
 
 def _count(found: Queue, sub_status: str) -> None:

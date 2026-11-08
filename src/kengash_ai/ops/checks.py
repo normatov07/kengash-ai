@@ -1,11 +1,41 @@
 """The project's checks inside an editing step (SP15 spec §3.1): whether they run after a
 step, the shell request that runs them, and what a run reports."""
 
+import os
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+
+from filelock import FileLock, Timeout
 
 from kengash_ai import workflow
 from kengash_ai.model import Gate, ReviewOutput, Settings, StepRequest, StepResult, Ticket
 from kengash_ai.ops import calls
+from kengash_ai.store.paths import StorePaths
+
+TURN_POLL_S = 0.5
+
+
+@contextmanager
+def turn(paths: StorePaths, resolved: Settings) -> Iterator[None]:
+    """Hold one of the machine's `checks.parallel` places (SP17 spec §3.7), waiting for a free
+    one: test suites running side by side only slow each other down."""
+    limit = resolved.checks.parallel or max(1, (os.cpu_count() or 2) // 2)
+    paths.locks.mkdir(parents=True, exist_ok=True)
+    places = [FileLock(paths.locks / f"checks-{place}.lock") for place in range(limit)]
+    while True:
+        for place in places:
+            try:
+                place.acquire(timeout=0)
+            except Timeout:
+                continue
+            try:
+                yield
+            finally:
+                place.release()
+            return
+        time.sleep(TURN_POLL_S)
 
 
 def wanted(resolved: Settings, ticket: Ticket, step: str) -> bool:

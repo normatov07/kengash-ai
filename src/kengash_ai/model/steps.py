@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, computed_fiel
 
 Profile = Literal["read_only", "edit_worktree"]
 OutputKind = Literal["work", "plan", "review", "compact"]
-ErrorKind = Literal["auth", "rate_limit", "network", "timeout", "empty", "schema", "crash"]
+ErrorKind = Literal["auth", "rate_limit", "network", "timeout", "empty", "schema", "crash", "stuck"]
 
 
 class _Step(BaseModel):
@@ -63,10 +63,23 @@ class WorkOutput(_Step):
     decisions: list[Decision] = Field(default_factory=list)
 
 
+class Part(_Step):
+    """One slice of a ticket too large for one (SP17 spec §3.6); `after` holds the indexes of
+    earlier parts it needs."""
+
+    title: str
+    scope: str
+    acceptance: list[str]
+    files: list[str]
+    after: list[int] = Field(default_factory=list)
+
+
 class PlanOutput(WorkOutput):
-    """A read step's reply: the plan, plus the files it will change (SP16 spec §3.12)."""
+    """A read step's reply: the plan, the files it will change (SP16 spec §3.12), and the
+    parts of a ticket that has to be split (SP17 spec §3.6)."""
 
     files: list[str] = Field(default_factory=list)
+    parts: list[Part] = Field(default_factory=list)
 
 
 class ReviewOutput(_Step):
@@ -128,6 +141,18 @@ OUTPUT_SCHEMAS: dict[OutputKind, dict[str, Any]] = {
             "summary": _TEXT,
             "handoff": _TEXT,
             "files": {"type": "array", "items": _TEXT},
+            "parts": {
+                "type": "array",
+                "items": _strict(
+                    {
+                        "title": _TEXT,
+                        "scope": _TEXT,
+                        "acceptance": {"type": "array", "items": _TEXT},
+                        "files": {"type": "array", "items": _TEXT},
+                        "after": {"type": "array", "items": {"type": "integer"}},
+                    }
+                ),
+            },
             "decisions": _DECISIONS,
         }
     ),
@@ -167,6 +192,9 @@ class StepRequest(_Step):
     user_config: bool = False
     bypass: bool = False
     prior_usage: Usage | None = None
+    soft_s: int | None = None  # stop the call this far in and steer it; None: never (SP17)
+    poll_max: int = 0  # polls of a background command with no edit between them
+    full_runs_max: int = 0  # runs of the whole test command in this call
 
     @model_validator(mode="after")
     def _resume_has_session(self) -> Self:
@@ -206,6 +234,7 @@ class ProviderStatus(_Step):
     auth_method: str | None = None
     hint: str = ""
     models: list[str] = []  # what `--model` takes, when the CLI says (SP10 §5.2)
+    live_models: bool = False  # `models` is the CLI's own list, not a set of aliases (SP17)
 
     @property
     def usable(self) -> bool:

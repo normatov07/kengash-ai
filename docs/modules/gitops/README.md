@@ -26,6 +26,7 @@ The git commands kengash runs in the user's repo (SP3 spec §9): ticket worktree
 
 ## Changes
 
+- 2026-11-08: `changed_between(cwd, old, new)`: paths that differ between two commits, [] when either is gone (SP17).
 - 2026-11-07: `contains(repo, ancestor, ref)`: `ancestor` is reachable from `ref` (SP16).
 - 2026-11-07: `catch_up(worktree, base)`: fast-forward a branch with no commits of its own to `base` when the worktree has no uncommitted path; True when HEAD moved (SP16).
 - 2026-11-07: `untracked_files(cwd)` (not ignored) and `drop_untracked(cwd, keep=)`: remove files that appeared since `keep` was listed (SP15: what in-step checks leave behind).

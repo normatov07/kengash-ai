@@ -20,6 +20,7 @@ from kengash_ai.store.seed import package_default
 from kengash_ai.store.yamlio import load_yaml
 
 ATOMIC = frozenset({"workflows"})
+WHOLE = frozenset({"by_importance"})  # a narrower scope replaces it, so it can also clear it
 # keys renamed in a later version: old → new; each layer reads the old one (SP12)
 RENAMED = {"fallback_on_rate_limit": "fallback_on_error"}
 
@@ -57,6 +58,7 @@ def merge(
             isinstance(current, Mapping)
             and isinstance(value, Mapping)
             and not (path and path[-1] in ATOMIC)
+            and key not in WHOLE
         ):
             out[key] = merge(current, value, (*path, key))
         else:

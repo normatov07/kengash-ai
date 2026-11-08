@@ -5,6 +5,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 from kengash_ai import journal, settings
@@ -42,6 +43,8 @@ DIGEST_CAPS = {"PROCESS.md": 3_000, "DECISIONS.md": 2_500, "MEMORY.md": 1_500}
 _BULLET = re.compile(r"^[-*+]\s+")
 _LABEL = re.compile(r"\s*\b(why|rejected):\s*", re.IGNORECASE)
 _TAG = re.compile(r"^- \d{4}-\d{2}-\d{2} \[([^\]]+)\] ")
+# a repo-relative file a memory line names: a folder, then a name with an extension
+_PATH = re.compile(r"(?<![\w./:-])((?:[\w.-]+/)+[\w-][\w.-]*\.\w+)")
 
 
 @dataclass
@@ -266,18 +269,30 @@ def key(line: str) -> str:
     return " ".join(text.lower().split()).rstrip(".!;:, ")
 
 
-def digest(paths: StorePaths, project: str | None) -> str:
+def digest(paths: StorePaths, project: str | None, root: Path | None = None) -> str:
     """What every new worker session is told to follow (SP16 spec §3.1): the head of the
     project's process notes, the newest of its and the global decisions, and the newest of
-    the user's memory, each within its cap; redacted, and "" when there is nothing."""
+    the user's memory, each within its cap; redacted, and "" when there is nothing. With the
+    code's `root`, a line naming a file that is gone says so (SP17 spec §3.8)."""
+    process, decisions = _process_lines(paths, project), _decision_lines(paths, project)
+    if root is not None:
+        process, decisions = _tag_stale(process, root), _tag_stale(decisions, root)
     parts = [
-        _part("Process (PROCESS.md)", _process_lines(paths, project), "PROCESS.md", newest=False),
-        _part(
-            "Decisions (DECISIONS.md, newest last)", _decision_lines(paths, project), "DECISIONS.md"
-        ),
+        _part("Process (PROCESS.md)", process, "PROCESS.md", newest=False),
+        _part("Decisions (DECISIONS.md, newest last)", decisions, "DECISIONS.md"),
         _part("Preferences (MEMORY.md)", _memory_lines(paths), "MEMORY.md"),
     ]
     return redact("\n\n".join(part for part in parts if part))
+
+
+def _tag_stale(lines: list[str], root: Path) -> list[str]:
+    """Mark each line naming a repo file that no longer exists. Shown, not hidden, and age
+    plays no part: an old line whose file is still there has lost nothing."""
+    tagged: list[str] = []
+    for line in lines:
+        gone = [name for name in _PATH.findall(line) if not (root / name).exists()]
+        tagged.append(f"{line} [stale? path gone: {', '.join(gone)}]" if gone else line)
+    return tagged
 
 
 def _part(title: str, lines: list[str], name: str, *, newest: bool = True) -> str:

@@ -31,6 +31,7 @@ from kengash_ai.ops import (
     progress,
     projects,
     queue,
+    relay,
     reviews,
     skills,
     status,
@@ -806,6 +807,7 @@ def merge_ticket(
     """Rebase the ticket branch, fast-forward the base branch, remove the worktree."""
     with _errors():
         merged = merging.merge_ticket(ticket_id, project=project, by=by)
+        relay.advance_quietly()  # a merge can free the next tickets (SP17)
     if as_json:
         _emit_json(merged)
         return
@@ -1245,6 +1247,22 @@ def agent_remove(
     _emit(change, as_json, f"removed {role}")
 
 
+def _models_for(role: str, given: list[str] | None, project: str | None) -> dict[str, str] | None:
+    """The agent's `by_importance` with each `IMPORTANCE=CLI` applied; None when none given."""
+    if not given:
+        return None
+    models = dict(agent_config.show_agent(role, project=project).by_importance)
+    for item in given:
+        importance, equals, cli = item.partition("=")
+        if not equals:
+            raise UserError(f"--model-for takes IMPORTANCE=PROVIDER[/MODEL], not {item!r}")
+        if cli:
+            models[importance] = cli
+        else:
+            models.pop(importance, None)
+    return models
+
+
 @agent_app.command("edit")
 def agent_edit(
     role: Annotated[
@@ -1272,12 +1290,19 @@ def agent_edit(
     does: Annotated[str | None, typer.Option("--does", help="One line: what it does.")] = None,
     skill: SkillName = None,
     instructions_file: InstructionsFile = None,
+    model_for: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--model-for",
+            help="IMPORTANCE=CLI, such as critical=claude/opus, tried first; IMPORTANCE= clears.",
+        ),
+    ] = None,
     project: Scope = None,
     by: By = "unknown",
     as_json: AsJson = False,
 ) -> None:
-    """Change an agent: its CLI, fallbacks and switches; for yours also its kind, description,
-    skill or own instructions."""
+    """Change an agent: its CLI, fallbacks, switches and per-importance models; for yours also
+    its kind, description, skill or own instructions."""
     with _errors():
         patch = agent_config.AgentPatch(
             cli=cli,
@@ -1289,6 +1314,7 @@ def agent_edit(
             does=does,
             skill=skill,
             instructions=_instructions(instructions_file),
+            by_importance=_models_for(role, model_for, project),
         )
         change = agent_config.edit_agent(role, patch, project=project, by=by)
     line = f"edited {role}: {', '.join(change.keys) or 'nothing changed'}"
@@ -1329,6 +1355,7 @@ def agent_show(
         f"{role} · {'built-in' if found.builtin else 'yours'} · {found.kind} · "
         f"step {found.step} · {'on' if found.on else 'off'}",
         f"cli: {cli}",
+        *[f"for {name}: {model}" for name, model in found.by_importance.items()],
         f"blocking: {yes[found.blocking]} · "
         f"skip permission prompts: {yes[found.bypass_permissions]}",
         f"skill: {found.skill}{' (own instructions)' if found.instructions_own else ''}",

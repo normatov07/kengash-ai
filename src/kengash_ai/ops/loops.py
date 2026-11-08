@@ -5,7 +5,7 @@ from datetime import datetime
 
 from kengash_ai import settings
 from kengash_ai.model import UserError, utc_now
-from kengash_ai.ops import conductors, leases, queue, records, waiting, watch
+from kengash_ai.ops import conductors, leases, queue, records, relay, waiting, watch
 from kengash_ai.ops.conductors import Conductor
 from kengash_ai.store.paths import StorePaths
 
@@ -66,6 +66,7 @@ def claim(project: str | None, *, take_over: bool = False) -> Claimed:
     """Take the loop over `project` (None: every project) for the calling conductor."""
     paths = StorePaths.default()
     new = leases.claim(paths, project, conductors.conductor(), take_over=take_over)
+    relay.note_claim(paths, project)
     shown = watch.open_dashboard(paths, project) if new else ""
     return Claimed(leases.scope_name(project), new, shown)
 
@@ -90,6 +91,7 @@ def release(*, force: bool = False) -> Released:
                     f"not released: {waiting_now} ready, waiting for a slot; run: kengash wait"
                 )
         leases.ended(paths, own, "released")
+    relay.note_release(paths, own.project)
     return Released(leases.scope_name(own.project))
 
 

@@ -13,6 +13,7 @@ from kengash_ai.model import (
     JournalCursor,
     KengashError,
     LoopLease,
+    RelayIntent,
     SlotTable,
     TicketState,
     Trust,
@@ -46,6 +47,14 @@ def load_slots(paths: StorePaths) -> SlotTable:
 
 def save_slots(paths: StorePaths, table: SlotTable) -> None:
     _save(paths.slots, table)
+
+
+def load_relay(paths: StorePaths) -> RelayIntent:
+    return _load(paths.relay, RelayIntent)
+
+
+def save_relay(paths: StorePaths, intent: RelayIntent) -> None:
+    _save(paths.relay, intent)
 
 
 def load_claims(paths: StorePaths) -> Claims:

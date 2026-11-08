@@ -100,7 +100,8 @@ def _recheck(
     log = paths.logs / f"{ticket_id}-merge.out"
     log.parent.mkdir(parents=True, exist_ok=True)
     request = checks.request(resolved, worktree, log)
-    result = adapters.get("shell", runtime=paths.runtime).run(request)
+    with checks.turn(paths, resolved):
+        result = adapters.get("shell", runtime=paths.runtime).run(request)
     verdict, summary = checks.outcome(result)
     event = {"type": "checks.end", "project": slug, "ticket": ticket_id, "step": "merge"}
     journal.append(

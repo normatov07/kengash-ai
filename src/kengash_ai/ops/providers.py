@@ -134,7 +134,15 @@ def trust_notice(paths: StorePaths, slug: str, repo: Path) -> str | None:
 
 def _uses(scope: Settings) -> list[_Use]:
     uses = [
-        _Use(role, tuple(split_cli(cli)[0] for cli in (agent.cli, *agent.fallback)))
+        _Use(
+            role,
+            tuple(
+                split_cli(cli)[0]
+                for cli in dict.fromkeys(
+                    (agent.cli, *agent.by_importance.values(), *agent.fallback)
+                )
+            ),
+        )
         for role, agent in scope.agents.items()
         if agent.on and split_cli(agent.cli)[0] != "shell"
     ]

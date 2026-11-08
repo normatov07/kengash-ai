@@ -16,6 +16,7 @@ from kengash_ai.adapters.base import (
     tail,
 )
 from kengash_ai.adapters.process import ProcessResult
+from kengash_ai.adapters.watchdog import Signal
 from kengash_ai.model import OutputKind, StepRequest, StepResult, Usage
 
 SANDBOX = {"read_only": "read-only", "edit_worktree": "workspace-write"}
@@ -109,6 +110,22 @@ class Codex(CliProvider):
                 session_id=session, text=message, usage=usage, error="schema", detail=problem
             )
         return StepResult(session_id=session, output=output, text=message, usage=usage)
+
+    def signal(self, event: dict[str, Any]) -> Signal | None:
+        item = event.get("item") or {}
+        kind = event.get("type")
+        if kind == "item.completed" and item.get("type") == "file_change":
+            return Signal("edit")
+        if kind == "item.started" and item.get("type") == "command_execution":
+            return Signal("run", str(item.get("command") or ""))
+        return None
+
+    def usage_so_far(self, stdout: str) -> Usage:
+        usage = Usage()
+        for event in _events(stdout):
+            if event.get("type") == "turn.completed":
+                usage = _add(usage, event.get("usage") or {})
+        return usage
 
     def signed_in(self) -> tuple[bool, str | None]:
         result = probe([self.binary, "login", "status"])

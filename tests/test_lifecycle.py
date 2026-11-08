@@ -18,7 +18,7 @@ REVIEW_FAIL = {
         {
             "severity": "medium",
             "file": "retry.py",
-            "line": 3,
+            "line": 1,
             "issue": "no jitter",
             "fix": "add jitter",
         }

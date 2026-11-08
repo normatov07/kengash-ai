@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from kengash_ai import journal
 from kengash_ai.model import Doc, Event, ProviderStatus, Ticket
-from kengash_ai.ops import agents, jobs, views
+from kengash_ai.ops import agents, jobs, merging, relay, views
 from kengash_ai.store import StorePaths, documents
 from kengash_ai.ui import app as ui_app
 
@@ -409,3 +409,25 @@ def test_live_streams_history_then_done(client: TestClient, busy_ticket: Engine)
     assert chunks[0].startswith("event: activity\ndata: ")
     assert '"text": "read /work/pubspec.yaml"' in body
     assert chunks[-1] == "event: done\ndata: {}"
+
+
+def test_a_merge_from_the_ui_starts_what_it_freed(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    order: list[str] = []
+
+    def merged(*_: object, **__: object) -> dict[str, str]:
+        order.append("merged")
+        return {"status": "done/merged"}
+
+    def advanced() -> list[str]:
+        order.append("relayed")
+        return []
+
+    monkeypatch.setattr(merging, "merge_ticket", merged)
+    monkeypatch.setattr(relay, "advance_quietly", advanced)
+    answer = signed_in(client).post(
+        "/api/tickets/aaaa1111/merge", headers={"X-Kengash": "1"}, json={}
+    )
+    assert answer.status_code == 200
+    assert order == ["merged", "relayed"]

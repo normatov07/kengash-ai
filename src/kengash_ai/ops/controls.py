@@ -277,7 +277,9 @@ def _clash(
     for other in records.project_tickets(paths, slug).values():
         meta = other.meta
         holder = meta.id != ticket.id and lifecycle.holds_paths(resolved, meta)
-        if holder and scheduler.overlaps(meta.touches, ticket.touches):
+        if holder and scheduler.clash(
+            meta.touches, ticket.touches, lifecycle.path_policy(resolved)
+        ):
             return meta.id
     return None
 
@@ -327,7 +329,9 @@ def _claim(
         provider = "user"
         if role is not None:
             try:
-                provider = agents.pick(resolved, role, detect).provider
+                provider = agents.pick(
+                    resolved, role, detect, importance=ticket.importance.value
+                ).provider
             except NeedsSetup as exc:
                 return _Skip(str(exc), setup=True)
         if provider not in NO_SLOT:

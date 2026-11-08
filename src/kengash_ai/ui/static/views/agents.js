@@ -18,7 +18,8 @@ const KINDS = {
   read: ["Advisor", "Reads the code and hands notes to the next step", "plan"],
 };
 const KIND_OPTIONS = Object.entries(KINDS).map(([kind, [label, hint]]) => [kind, label, hint]);
-const FIELDS = { cli: "model", fallback: "fallbacks", on: "on/off", blocking: "blocking", bypass_permissions: "permissions", kind: "role", does: "description", skill: "skill", instructions: "instructions" };
+const IMPORTANCES = ["simple", "standard", "critical"];
+const FIELDS = { cli: "model", by_importance: "model by importance", fallback: "fallbacks", on: "on/off", blocking: "blocking", bypass_permissions: "permissions", kind: "role", does: "description", skill: "skill", instructions: "instructions" };
 const ROLE = /^(?=.{2,31}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const state = { scope: null, selected: "", view: "list", drafts: {}, flows: {}, fresh: null, adding: "", query: "", texts: {} };
 
@@ -138,6 +139,19 @@ function section(title, body, { note = "", locked = false } = {}) {
   return html`<section class="ag-sec" ${locked ? "data-locked" : ""}><div class="ag-sec-head"><h3>${title}</h3>${locked ? html`<span class="ag-lock">${icon("lock", { size: 12 })}fixed</span>` : ""}${note ? html`<span class="set-note inline">${note}</span>` : ""}</div>${body}</section>`;
 }
 
+// The options of one model select: every CLI and model the providers report, and the value
+// in use when no provider reports it, so a hand-typed model is never lost.
+function modelOptions(data, current, first) {
+  const options = [...first, ...fallbackOptions(data)];
+  if (current && !options.some(([value]) => value === current)) options.push([current, current.replace("/", " · ")]);
+  return options;
+}
+
+function importanceRows(data, agent) {
+  const chosen = val(agent, "by_importance") ?? {};
+  return html`<div class="ag-field-label">By importance, tried before the model above</div><div class="ag-importance">${IMPORTANCES.map((name) => html`<div class="ag-importance-row"><label for="ag-imp-${name}">${name}</label>${c.select({ id: `ag-imp-${name}`, value: chosen[name] ?? "", options: modelOptions(data, chosen[name], [["", "same as above"]]), label: `Model for ${name} tickets`, data: { importance: name } })}</div>`)}</div>`;
+}
+
 function fallbackOptions(data) {
   return data.providers.flatMap((card) => [[card.name, card.name], ...(card.models ?? []).map((model) => [`${card.name}/${model}`, `${card.name} · ${model}`])]);
 }
@@ -194,7 +208,7 @@ function editor(data, agent) {
       </div></details>
     </header>
     ${section("Role", html`${c.segmented({ name: "ag-kind", value: kind, label: "Role", disabled: agent.builtin, options: agent.builtin && !KINDS[kind] ? [[kind, "Check", "Runs project.test_cmd; passes when it exits 0"]] : KIND_OPTIONS })}${agent.builtin ? "" : html`<div class="field ag-does"><label for="ag-does">Description</label><input id="ag-does" class="text-input" maxlength="200" value="${val(agent, "does")}" data-field="does" placeholder="One line: what it checks or does"></div>`}${!agent.builtin && kind !== "review" && agent.kind === "review" ? html`<p class="ag-note warn-text">Only reviewers send tickets back: saving drops this step's send-back edges.</p>` : ""}`, { locked: agent.builtin })}
-    ${section("Model", html`${c.modelPicker({ id: "ag-model", cards: data.providers, value: cli, allowShell: shell })}${shell ? html`<p class="ag-note">Runs project.test_cmd with no model.</p>` : html`<div class="ag-field-label">Fallbacks, tried in order when the CLI is out or rate limited</div>${c.chipList({ id: "ag-fallback", items: val(agent, "fallback"), options: fallbackOptions(data), label: "Fallbacks", empty: "no fallback" })}`}`, { note: setHere(data, agent.role, "cli") ? "set here" : "" })}
+    ${section("Model", html`${c.modelPicker({ id: "ag-model", cards: data.providers, value: cli, allowShell: shell })}${shell ? html`<p class="ag-note">Runs project.test_cmd with no model.</p>` : html`<div class="ag-field-label">Fallbacks, tried in order when the CLI is out or rate limited</div>${c.chipList({ id: "ag-fallback", items: val(agent, "fallback"), options: fallbackOptions(data), label: "Fallbacks", empty: "no fallback" })}${importanceRows(data, agent)}`}`, { note: setHere(data, agent.role, "cli") ? "set here" : "" })}
     ${instructionsSection(data, agent)}
     ${section("Behaviour", html`<div class="ag-toggles">${c.toggle({ id: "ag-blocking", checked: val(agent, "blocking"), label: "Blocking gate", hint: "A ticket stops here until this agent passes, and fails if it is switched off.", data: { field: "blocking" } })}${shell ? "" : c.toggle({ id: "ag-bypass", checked: val(agent, "bypass_permissions"), label: "Skip permission prompts", hint: "Adds the CLI's bypass flag: it edits and runs commands without asking.", data: { field: "bypass_permissions" } })}</div>`)}
     ${section("Used in", usedIn(data, agent))}
@@ -239,12 +253,19 @@ function newEditor(data) {
   </form>`;
 }
 
+function otherModels(data) {
+  const row = (key, label, value, first) => html`<div class="field ${data.set_here.includes(key) ? "set" : ""}"><label for="lim-${key}">${label}</label>${c.select({ id: `lim-${key}`, value, options: modelOptions(data, value, first), label, data: { key, kind: "text", initial: value } })}</div>`;
+  return html`<h2 class="section-title">Other models</h2><p class="section-note">Models that belong to no ticket step.</p>
+    <div class="lim-fields">${row("plan.reviewer", "Plan reviewer", data.plan_reviewer, [["different-provider", "a different provider than the planner"]])}${row("memory.compactor", "Memory compactor", data.compactor, [])}</div>`;
+}
+
 function limits(data) {
   const field = (key, label, value, extra = "") => html`<div class="field ${data.set_here.includes(key) ? "set" : ""}"><label for="lim-${key}">${label}</label><input id="lim-${key}" class="mono lim" type="number" min="${key === "tokens.per_ticket_max" ? 1000 : 0}" ${extra} data-key="${key}" data-kind="number" data-initial="${value}" value="${value}"></div>`;
   return html`<section class="panel ag-limits" data-limits><div class="panel-body">
     <h2 class="section-title">Parallelism and limits</h2><p class="section-note">How many CLI sessions run at once, and how many tokens a ticket may spend before it asks you.</p>
     <div class="lim-fields">${field("sessions.max", "Concurrent CLI sessions", data.sessions_max)}${field("tokens.per_ticket_max", "Token ceiling per ticket", data.tokens_per_ticket, 'step="1000"')}${Object.entries(data.per_provider).map(([name, total]) => field(`sessions.per_provider.${name}`, `${name} sessions`, total))}</div>
     <div class="checks"><label class="check"><input type="checkbox" data-key="fallback_on_error" data-kind="bool" data-initial="${data.fallback_on_error ? "1" : ""}" ${data.fallback_on_error ? "checked" : ""}>Fall back to the next CLI when one is rate limited or its connection fails</label></div>
+    ${otherModels(data)}
   </div></section>`;
 }
 
@@ -418,6 +439,14 @@ export function bind(root, app, data, bar) {
     if (t.dataset.agentOn) {
       setDraft(agentOf(t.dataset.agentOn), "on", t.checked);
       return redraw();
+    }
+    if (t.dataset.importance) {
+      const agent = agentOf(state.selected);
+      const next = { ...(val(agent, "by_importance") ?? {}) };
+      if (t.value) next[t.dataset.importance] = t.value;
+      else delete next[t.dataset.importance];
+      setDraft(agent, "by_importance", next);
+      return sync();
     }
     if (t.id === "ag-add-flow") {
       state.addTo = t.value;

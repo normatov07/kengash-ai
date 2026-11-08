@@ -4,6 +4,23 @@ All notable changes to this project are written here. The format follows [Keep a
 
 ## [Unreleased]
 
+### Added
+
+- Steering: a CLI call that polls a background command, reruns the whole test suite or passes its soft deadline is stopped and resumed with a correction, up to `steering.turns` times, then goes to the fallback chain. The work stays in the worktree.
+- The relay: while a loop is on, a finishing worker or a merge starts what is now runnable, so no conductor has to be awake. No process stays behind. `loop_relay: false` turns it off for a project.
+- A plan over `plan.max_files` (default 12) can split its ticket into parts. A split that loses an acceptance line is refused and the ticket continues whole.
+- New editing sessions get the plan's files inline, read at that moment (`context.max_kib`); a resumed session is told which files changed since it last spoke; a memory line naming a file that is gone is tagged, not hidden.
+- A model per ticket importance on every agent (Agents page, or `kengash agent edit --model-for critical=claude/opus`), and "Other models" for the plan reviewer and the memory compactor.
+- `checks.parallel` limits kengash's own test runs on this machine (default: half the CPU cores).
+
+### Changed
+
+- Two editing tickets may share up to `paths.max_overlap` exact files (default 2), and generated files (`paths.shared`) never count. A real conflict surfaces at the rebase; `paths.max_overlap: 0` restores the old behaviour.
+- A review fails only on `review.block_on` (default high and medium). A finding naming no real file or line is demoted to low.
+- New stores run the code reviewer on Sonnet, with Opus for `critical` tickets. Existing settings are never overwritten.
+- A hard timeout resumes the session with a correction instead of repeating the prompt; a crash retries once after 20 seconds, then uses the fallback chain.
+- A timed-out or stopped call reports its session and the tokens its stream shows, so the token cap sees that spend. Claude's stream holds only each message's opening output count, so a stopped Claude call's output tokens are a floor; its input and cache tokens are exact.
+
 ## [0.6.0] - 2026-11-07
 
 ### Added

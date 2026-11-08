@@ -5,7 +5,7 @@ import contextlib
 import os
 from dataclasses import replace
 
-from kengash_ai import workflow
+from kengash_ai import scheduler, workflow
 from kengash_ai.model import Doc, Event, Folder, Gate, Settings, Ticket, TicketState
 
 DEAD_AFTER_S = 120  # a worker heartbeats every 15 s
@@ -22,6 +22,11 @@ EVENT_TYPES = {
 
 # in_process sub-statuses whose ticket lets its paths go: no worker writes its branch now
 RELEASED = ("needs_approval", "stalled", "failed", "paused", "waiting_paths")
+
+
+def path_policy(resolved: Settings) -> scheduler.PathPolicy:
+    """What this scope lets two editing tickets share (SP17 spec §3.5)."""
+    return scheduler.PathPolicy(tuple(resolved.paths.shared), resolved.paths.max_overlap)
 
 
 def holds_paths(resolved: Settings, ticket: Ticket) -> bool:

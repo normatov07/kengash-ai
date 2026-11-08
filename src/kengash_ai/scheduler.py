@@ -6,6 +6,7 @@ Pure: callers pass tickets, running work and limits in, and get a selection back
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from fnmatch import fnmatch
 from itertools import zip_longest
 from typing import NamedTuple
 
@@ -48,11 +49,21 @@ class Held(NamedTuple):
 
 
 @dataclass(frozen=True)
+class PathPolicy:
+    """What two editing tickets may share (SP17 spec §3.5): files matching `shared` are never
+    claimed, and up to `max_overlap` exact files may overlap. The default is strict."""
+
+    shared: tuple[str, ...] = ()
+    max_overlap: int = 0
+
+
+@dataclass(frozen=True)
 class Limits:
-    """`sessions.max` and `sessions.per_provider` of one settings scope."""
+    """`sessions.max` and `sessions.per_provider` of one settings scope, and its path policy."""
 
     total: int
     per_provider: Mapping[str, int]
+    paths: PathPolicy = PathPolicy()
 
 
 @dataclass
@@ -67,6 +78,24 @@ def overlaps(a: Sequence[str], b: Sequence[str]) -> bool:
     if not a or not b:
         return True
     return any(_within(x, y) or _within(y, x) for x in a for y in b)
+
+
+def clash(a: Sequence[str], b: Sequence[str], policy: PathPolicy) -> bool:
+    """True when tickets touching `a` and `b` may not edit at once: an empty list is the whole
+    repo, a directory clashes with whatever it holds, and exact files may overlap up to
+    `policy.max_overlap`; generated files (`policy.shared`) do not count."""
+    if not a or not b:
+        return True
+    shared_files = 0
+    for x, y in ((x, y) for x in a for y in b):
+        if not (_within(x, y) or _within(y, x)):
+            continue
+        if _shared(x, policy) or _shared(y, policy):
+            continue
+        if _is_directory(x) or _is_directory(y):
+            return True
+        shared_files += 1
+    return shared_files > policy.max_overlap
 
 
 def select(
@@ -84,21 +113,25 @@ def select(
     taken = list(busy)
     used = list(held)
     for candidate in _in_turns(candidates, last_claims):
-        clash = (
+        holder = (
             next(
                 (
                     other.id
                     for other in taken
                     if other.project == candidate.project
-                    and overlaps(other.touches, candidate.touches)
+                    and clash(
+                        other.touches,
+                        candidate.touches,
+                        projects.get(candidate.project, machine).paths,
+                    )
                 ),
                 None,
             )
             if candidate.editing
             else None
         )
-        if clash is not None:
-            selection.held_back[candidate.id] = f"touches overlap {clash}"
+        if holder is not None:
+            selection.held_back[candidate.id] = f"touches overlap {holder}"
             continue
         provider = candidate.provider
         if provider is not None:
@@ -168,6 +201,16 @@ def _in_turns(
     order = sorted(queues, key=lambda slug: (last_claims.get(slug, NEVER), slug))
     turns = zip_longest(*(queues[slug] for slug in order))
     return [candidate for turn in turns for candidate in turn if candidate is not None]
+
+
+def _shared(path: str, policy: PathPolicy) -> bool:
+    return any(fnmatch(path.strip(), pattern) for pattern in policy.shared)
+
+
+def _is_directory(path: str) -> bool:
+    """A trailing slash, or a last segment with no extension."""
+    parts = _segments(path)
+    return path.strip().endswith("/") or not parts or "." not in parts[-1]
 
 
 def _segments(path: str) -> list[str]:

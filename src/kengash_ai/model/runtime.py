@@ -97,6 +97,14 @@ class TicketState(_Runtime):
     sent_back: SentBack | None = None
     checked: Checked | None = None
     waiting_on: str = ""  # the ticket whose paths this one waits for (SP16 spec §3.8)
+    seen: dict[str, str] = Field(default_factory=dict)  # role → commit it last saw (SP17)
+
+
+class RelayIntent(_Runtime):
+    """runtime/relay.json: what a loop was asked to cover (`all` or project slugs), so a
+    finishing worker starts the next ticket with no conductor awake (SP17 spec §3.4)."""
+
+    scopes: list[str] = Field(default_factory=list)
 
 
 class ConductorPing(_Runtime):

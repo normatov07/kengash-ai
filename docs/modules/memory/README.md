@@ -21,6 +21,7 @@ The agents' long-term memory: MEMORY.md (who the user is, how they work, what th
 
 ## Changes
 
+- 2026-11-08: `digest(paths, project, root=None)`: with the code's root, a process or decision line naming a file that is gone is tagged `[stale? path gone: …]`, not hidden; age plays no part (SP17).
 - 2026-11-07: `RECORD_HINT` separates a design decision for this project from how the user works in every project (haiku dry runs: 5/5 filed each kind right) (SP16).
 - 2026-11-07: `decision_text(decision, why, rejected)` renders a decision line (SP16).
 - 2026-11-07: `parse_decision(line)` → (decision, why, rejected) from `<decision>. why: … rejected: ….` (SP16).

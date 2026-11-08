@@ -16,9 +16,11 @@ from kengash_ai.model import (
     Event,
     Folder,
     NeedsUser,
+    Part,
     Plan,
     PlanMode,
     PlanStatus,
+    Settings,
     Ticket,
     TicketInput,
     UserError,
@@ -147,6 +149,120 @@ def add_tickets(plan_id: str, text: str, *, project: str | None, by: str) -> Bat
     ]
     records.record(paths, f"kengash: ticket add {' '.join(new.id for new in made)}", *created)
     return Batch(plan.id, slug, made)
+
+
+MAX_PARTS = 6
+
+
+def split_problem(
+    ticket: Ticket, sections: Mapping[str, str], parts: Sequence[Part], resolved: Settings
+) -> str:
+    """Why a plan's `parts` may not replace the ticket; "" when they may (SP17 spec §3.6). A
+    split that loses an acceptance line is refused, so a model cannot drop scope by splitting."""
+    limit = resolved.plan.max_files
+    if limit == 0:
+        return "splitting is off (plan.max_files: 0)"
+    if ticket.loop != 1:
+        return "a ticket splits only on its first loop"
+    if not 2 <= len(parts) <= MAX_PARTS:
+        return f"a split needs at least 2 parts and at most {MAX_PARTS}"
+    for index, part in enumerate(parts):
+        if not part.files:
+            return f"part {index + 1} names no files"
+        if any(not 0 <= earlier < index for earlier in part.after):
+            return f"part {index + 1}: `after` must name earlier parts"
+    if len({name for part in parts for name in part.files}) <= limit:
+        return f"the parts name at most {limit} files: no split needed"
+    covered = {_line(line) for part in parts for line in part.acceptance}
+    for line in sections.get("Acceptance", "").splitlines():
+        if line.strip() and _line(line) not in covered:
+            return f"no part keeps the acceptance line: {line.strip()[:80]}"
+    return ""
+
+
+def split(
+    paths: StorePaths, slug: str, doc: Doc[Ticket], parts: Sequence[Part], *, by: str
+) -> list[Event]:
+    """Narrow the ticket to `parts[0]` and queue the rest (the caller holds the project lock
+    and saves `doc`); returns the `ticket.created` events. A part waits for its `after` parts,
+    else for what the ticket itself waited for, and dependents wait for every part."""
+    ticket = doc.meta
+    project = paths.project(slug)
+    existing = records.project_tickets(paths, slug) | {ticket.id: doc}
+    taken = records.taken_ids(paths)
+    ids = [ticket.id]
+    fresh: list[UUID] = []
+    for _ in parts[1:]:
+        new, uuid = new_id(taken)
+        taken.add(new)
+        ids.append(new)
+        fresh.append(uuid)
+    now = utc_now()
+    created: list[Event] = []
+    for index, part in enumerate(parts[1:], 1):
+        needs = [ids[earlier] for earlier in part.after] or list(ticket.depends_on)
+        made = ticket.model_copy(
+            update={
+                "id": ids[index],
+                "uuid": fresh[index - 1],
+                "title": part.title,
+                "status": "in_queue/ready" if _met(needs, existing) else "in_queue/blocked",
+                "step": None,
+                "loop": 1,
+                "tokens": 0,
+                "tokens_max": None,
+                "depends_on": needs,
+                "touches": list(part.files),
+                "branch": None,
+                "sessions": {},
+                "created": now,
+                "updated": now,
+            }
+        )
+        documents.save_ticket(project, Doc(made, _part_sections(part)))
+        created.append(
+            Event(
+                type="ticket.created",
+                project=slug,
+                ticket=made.id,
+                plan=made.plan,
+                title=made.title,
+                status=made.status,
+                by=by,
+            )
+        )
+    first = parts[0]
+    ticket.title = first.title
+    ticket.touches = list(first.files)
+    doc.sections.update(_part_sections(first))
+    for other in existing.values():
+        if ticket.id in other.meta.depends_on and other.meta.id != ticket.id:
+            other.meta.depends_on = list(dict.fromkeys([*other.meta.depends_on, *ids[1:]]))
+            documents.save_ticket(project, other)
+    _add_to_plan(paths, slug, ticket.plan, ids[1:])
+    return created
+
+
+def _part_sections(part: Part) -> dict[str, str]:
+    return {
+        "Scope": part.scope.strip(),
+        "Acceptance": "\n".join(f"- [ ] {line}" for line in part.acceptance),
+    }
+
+
+def _line(text: str) -> str:
+    """An acceptance line for comparing: its checkbox gone, spaces and case folded."""
+    return " ".join(text.strip().removeprefix("- [ ]").removeprefix("- [x]").split()).casefold()
+
+
+def _add_to_plan(paths: StorePaths, slug: str, plan_id: str, ids: Sequence[str]) -> None:
+    try:
+        _, path = records.locate_plan(paths, plan_id, slug)
+    except UserError:  # a missing plan only costs its ticket list
+        return
+    plan_doc = records.load_plan(path)
+    plan_doc.meta.tickets = [*plan_doc.meta.tickets, *ids]
+    documents.save_plan(paths.project(slug), plan_doc)
 
 
 def show_ticket(ticket_id: str, *, project: str | None) -> records.Document:

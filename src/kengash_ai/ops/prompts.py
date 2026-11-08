@@ -3,6 +3,7 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
 from kengash_ai import memory
 from kengash_ai.model import (
@@ -72,9 +73,20 @@ NO_FEEDBACK = Feedback()
 
 
 MEMORY_LEAD = (
-    "The user's preferences and this project's settled decisions and process. Follow them; "
-    "newer lines override older ones. When the Scope conflicts with one, follow the Scope and "
-    "say so in your handoff."
+    "The user's preferences and this project's settled decisions and process, from earlier "
+    "sessions. Follow the choices; newer lines override older ones. A line that describes what "
+    "the code does now may be out of date: check the code, and the code wins. A line tagged "
+    "`[stale? …]` names a file that is gone. When the Scope conflicts with a line, follow the "
+    "Scope and say so in your handoff."
+)
+# how to hand work to a sub-agent, when the CLI offers them (SP17 spec §3.8)
+DELEGATION = (
+    "A sub-agent knows only what you tell it. Give it the goal, the exact paths, what you have "
+    "verified (with `path:line` or the command that showed it), what is unknown, and the form "
+    "of the answer. Mark anything from memory, the Handoff or before your last edit as "
+    "unverified. Paste excerpts you read in this session and have not changed since, so it "
+    "need not read them again. Delegate reading and searching only; you make every edit. Check "
+    "what comes back against the code before you act on it."
 )
 
 
@@ -213,8 +225,8 @@ def fix_prompt(check_output: str, *, turn: int, turns: int) -> str:
     return (
         f"kengash ran the checks after your reply (fix turn {turn} of {turns}): {headline}\n\n"
         f"## Check output\n{check_output}\n\n"
-        "Fix the cause, then rerun that command if your tools allow. Reply again with JSON that "
-        "matches the schema."
+        "Fix the cause, then rerun only the test file that failed if your tools allow; kengash "
+        "reruns everything after your reply. Reply again with JSON that matches the schema."
     )
 
 
@@ -245,7 +257,11 @@ def instruction(settings: Settings, step: str) -> str:
     followed by its kind's rule."""
     custom = settings.steps.get(step)
     if custom is None:
-        return INSTRUCTIONS.get(step, "")
+        told = INSTRUCTIONS.get(step, "")
+        limit = settings.plan.max_files
+        return (
+            f"{told} A plan may name at most {limit} files." if step == "plan" and limit else told
+        )
     return f"{custom.does} {KIND_RULES[custom.kind]}"
 
 
@@ -261,9 +277,10 @@ def new_prompt(
     feedback: Feedback = NO_FEEDBACK,
     memory: str = "",
     review: bool | None = None,
+    files: str = "",
 ) -> str:
     """A new session's prompt: who it is, the step, the memory digest, and the ticket inline;
-    `instruction` defaults to the built-in step's."""
+    `instruction` defaults to the built-in step's; `files` is the file pack (SP17 spec §3.8)."""
     head = (
         f'You are the {role} for ticket {ticket.id} "{ticket.title}", '
         f"loop {ticket.loop} of {ticket.loop_max}, step {step}."
@@ -278,6 +295,8 @@ def new_prompt(
         ("Findings", sections.get("Findings", "")),
         *_check_blocks(sections, feedback),
         ("Diff stat", diff_stat),
+        ("If you delegate", DELEGATION),
+        ("Files", files),
     ]
     told = INSTRUCTIONS.get(step, "") if instruction is None else instruction
     lines = [head, told, *([feedback.sent_back] if feedback.sent_back else [])]
@@ -293,10 +312,12 @@ def resumed_prompt(
     instruction: str | None = None,
     review: bool | None = None,
     feedback: Feedback = NO_FEEDBACK,
+    changed: Sequence[str] = (),
 ) -> str:
     """A resumed session's prompt: the step, plus Findings to fix or a Handoff to review;
     `instruction` and `review` default to the built-in step's. A step sent back says why in
-    place of its instruction; the user's answer follows the instruction."""
+    place of its instruction; the user's answer follows the instruction. `changed` names the
+    files that moved since this session last spoke (SP17 spec §3.8)."""
     told = INSTRUCTIONS.get(step, "") if instruction is None else instruction
     if feedback.sent_back and not feedback.user:
         head = f"Loop {ticket.loop}, step {step}: {feedback.sent_back}"
@@ -313,7 +334,48 @@ def resumed_prompt(
         blocks += _check_blocks(sections, feedback)
     else:
         blocks = [("Findings", sections.get("Findings", "")), *_check_blocks(sections, feedback)]
-    return _join(head, blocks, None)
+    return _join(head, [("Changed since your last turn", changed_block(changed)), *blocks], None)
+
+
+CHANGED_SHOWN = 40
+
+
+def changed_block(files: Sequence[str]) -> str:
+    """What a resumed session must not trust its memory of; "" when nothing moved."""
+    if not files:
+        return ""
+    shown = [f"- {name}" for name in files[:CHANGED_SHOWN]]
+    if len(files) > CHANGED_SHOWN:
+        shown.append(f"- and {len(files) - CHANGED_SHOWN} more")
+    lead = "These files changed since you last saw them; what you remember of them is out of date."
+    return "\n".join([lead, *shown])
+
+
+def checked_findings(findings: Sequence[Finding], worktree: Path) -> list[Finding]:
+    """Findings with what can be checked checked (SP17 spec §3.8): one naming a file that is
+    not there, or a line past its end, is demoted to low and says so. Findings with no file or
+    line (the plan's sections, line 0) cannot be checked and stand."""
+    root = worktree.resolve()
+    return [_checked(finding, root) for finding in findings]
+
+
+def _checked(finding: Finding, root: Path) -> Finding:
+    if not finding.file.strip() or finding.line == 0:
+        return finding
+    path = (root / finding.file).resolve()
+    if not path.is_relative_to(root) or not path.exists():
+        return _unverified(finding, f"no such file {finding.file}")
+    if path.is_file():
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if finding.line > len(text.splitlines()):
+            return _unverified(finding, f"line {finding.line} is past the end of {finding.file}")
+    return finding
+
+
+def _unverified(finding: Finding, why: str) -> Finding:
+    return finding.model_copy(
+        update={"severity": "low", "issue": f"unverified ({why}): {finding.issue}"}
+    )
 
 
 def _check_blocks(sections: Mapping[str, str], feedback: Feedback) -> list[tuple[str, str]]:
@@ -370,6 +432,31 @@ def compact_prompt(text: str, *, cap: int) -> str:
 NETWORK_PROMPT = (
     "Your last turn was cut off by a network error. Your edits are kept; finish the step and reply."
 )
+
+
+STEER = (
+    "kengash stopped your turn: {reason}. Your edits are kept in the worktree ({changed} files "
+    "changed). Do not poll or wait for anything, and do not run the whole test suite: kengash "
+    "runs it right after your reply and sends back what fails. Finish what is left with your "
+    "file tools, running at most the one test file you just changed, then reply with JSON that "
+    "matches the schema. What you cannot finish goes in the handoff."
+)
+TIMEOUT = (
+    "Your last turn hit the time limit and was stopped. Your edits are kept in the worktree "
+    "({changed} files changed). Do not start over or rerun what already passed, and do not run "
+    "the whole test suite: kengash runs it after your reply. Finish what is left and reply with "
+    "JSON that matches the schema."
+)
+
+
+def steer_prompt(reason: str, changed: int) -> str:
+    """Why a stuck turn was stopped and what to do instead (SP17 spec §3.1)."""
+    return STEER.format(reason=reason.rstrip("."), changed=changed)
+
+
+def timeout_prompt(changed: int) -> str:
+    """What a turn stopped at the hard time limit is told (SP17 spec §3.1)."""
+    return TIMEOUT.format(changed=changed)
 
 
 RETRY_NOTE = (

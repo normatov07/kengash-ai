@@ -13,7 +13,7 @@ import traceback
 from collections.abc import Callable
 from types import FrameType
 
-from kengash_ai.ops import compaction, jobs, reviews, steps
+from kengash_ai.ops import compaction, jobs, relay, reviews, steps
 
 HEARTBEAT_S = 15
 STOPPED = 143
@@ -66,7 +66,10 @@ def _job(args: argparse.Namespace) -> Job:
         )
 
     def ticket() -> str:
-        end = steps.run_job(args.id, project=args.project, steps=args.steps)
+        end = steps.run_job(
+            args.id, project=args.project, steps=args.steps, on_new_tickets=relay.advance_quietly
+        )
+        relay.advance_quietly()  # the next tickets start (SP17 spec §3.4)
         return f"{args.id}: {end.status}: {end.reason}"
 
     def fail(reason: str) -> None:

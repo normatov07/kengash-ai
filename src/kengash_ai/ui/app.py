@@ -32,6 +32,7 @@ from kengash_ai.ops import (
     merging,
     plans,
     projects,
+    relay,
     tickets,
     views,
     workflows,
@@ -113,6 +114,7 @@ class AgentPatchBody(BaseModel):
     does: str | None = None
     skill: str | None = None
     instructions: str | None = None
+    by_importance: dict[str, str] | None = None
 
 
 class AgentEdit(BaseModel):
@@ -262,7 +264,9 @@ def create_app(*, token: str, port: int) -> FastAPI:
         if action == "stop":
             return {"status": controls.stop_ticket(ticket_id, project=None, by=BY)}
         if action == "merge":
-            return merging.merge_ticket(ticket_id, project=None, by=BY)
+            merged = merging.merge_ticket(ticket_id, project=None, by=BY)
+            relay.advance_quietly()  # a merge can free the next tickets (SP17)
+            return merged
         if action == "move":
             return tickets.move_ticket(ticket_id, body.to, body.why, project=None, by=BY)
         raise HTTPException(status_code=404, detail=f"unknown action {action}")

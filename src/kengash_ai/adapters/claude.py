@@ -19,6 +19,7 @@ from kengash_ai.adapters.base import (
     unfinished,
 )
 from kengash_ai.adapters.process import ProcessResult
+from kengash_ai.adapters.watchdog import Signal
 from kengash_ai.model import ErrorKind, StepRequest, StepResult, Usage
 
 READ_TOOLS = (
@@ -32,6 +33,8 @@ READ_TOOLS = (
 )
 ISOLATION = ("--setting-sources", "project,local", "--strict-mcp-config")
 _RESET = re.compile(r"\|(\d{10})\b")
+EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
+POLL_TOOLS = ("BashOutput", "TaskOutput", "Monitor")
 
 
 class Claude(CliProvider):
@@ -107,6 +110,36 @@ class Claude(CliProvider):
                 session_id=session, text=text, usage=usage, error="schema", detail=problem
             )
         return StepResult(session_id=session, output=output, text=text, usage=usage)
+
+    def signal(self, event: dict[str, Any]) -> Signal | None:
+        if event.get("type") != "assistant":
+            return None
+        for block in (event.get("message") or {}).get("content") or []:
+            if not isinstance(block, dict) or block.get("type") != "tool_use":
+                continue
+            name = block.get("name")
+            if name in EDIT_TOOLS:
+                return Signal("edit")
+            if name in POLL_TOOLS:
+                return Signal("poll")
+            if name == "Bash":
+                return Signal("run", str((block.get("input") or {}).get("command") or ""))
+        return None
+
+    def usage_so_far(self, stdout: str) -> Usage:
+        """Each assistant message's last usage; one message spans several stream events. Input
+        and cache are exact; output is a floor, since the stream holds only the opening count."""
+        seen: dict[str, dict[str, Any]] = {}
+        for event in stream.lines(stdout):
+            message = event.get("message") or {}
+            if event.get("type") == "assistant" and message.get("usage"):
+                seen[str(message.get("id"))] = message["usage"]
+        return Usage(
+            input=sum(int(u.get("input_tokens") or 0) for u in seen.values()),
+            output=sum(int(u.get("output_tokens") or 0) for u in seen.values()),
+            cache_read=sum(int(u.get("cache_read_input_tokens") or 0) for u in seen.values()),
+            cache_write=sum(int(u.get("cache_creation_input_tokens") or 0) for u in seen.values()),
+        )
 
     def signed_in(self) -> tuple[bool, str | None]:
         result = probe([self.binary, "auth", "status", "--json"])

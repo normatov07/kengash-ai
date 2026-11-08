@@ -24,7 +24,7 @@ REVIEW_FAIL = {
         {
             "severity": "medium",
             "file": "retry.py",
-            "line": 3,
+            "line": 1,
             "issue": "no jitter",
             "fix": "add jitter",
         }
@@ -98,7 +98,7 @@ def test_a_failing_review_writes_findings_and_recirculates(
     steps.run_job("7b55e0c1", steps=3)
     doc = engine.ticket()
     assert (doc.meta.loop, doc.meta.step) == (2, "implement")
-    assert doc.sections["Findings"] == "- medium · retry.py:3 · no jitter · add jitter"
+    assert doc.sections["Findings"] == "- medium · retry.py:1 · no jitter · add jitter"
     assert engine.state().streaks == {"review_code": {fingerprint("retry.py", "no jitter"): 1}}
 
 
@@ -350,7 +350,7 @@ def test_a_custom_review_step_sends_the_ticket_back(
     steps.run_job("7b55e0c1", steps=3)
     doc = engine.ticket()
     assert (doc.meta.loop, doc.meta.step) == (2, "implement")
-    assert doc.sections["Findings"] == "- medium · retry.py:3 · no jitter · add jitter"
+    assert doc.sections["Findings"] == "- medium · retry.py:1 · no jitter · add jitter"
     assert doc.meta.sessions["helper"].id
 
 
@@ -441,7 +441,9 @@ def test_a_failed_call_keeps_its_session(engine: Engine, fake_clis: FakeClis) ->
         {"type": "turn.failed", "error": {"message": "the model gave up"}},
     ]
     fake_clis.queue("claude", fixture="claude/work_resume.json")
-    fake_clis.queue("codex", stdout="".join(json.dumps(e) + "\n" for e in failed), exit=1)
+    write_settings(engine.paths, "fallback_on_error: false\n")
+    for _ in range(2):  # a crash gets one retry (SP17)
+        fake_clis.queue("codex", stdout="".join(json.dumps(e) + "\n" for e in failed), exit=1)
     end = steps.run_job("7b55e0c1", steps=2)
     assert end.status == "in_process/failed"
     session = engine.ticket().meta.sessions["implementer"]
@@ -505,14 +507,16 @@ def test_a_failure_on_an_editing_step_names_the_worktree(
 def test_a_retry_over_changes_gets_the_note(engine: Engine, fake_clis: FakeClis) -> None:
     fake_clis.queue("claude", fixture="claude/work_resume.json")
     failed = {"type": "turn.failed", "error": {"message": "gave up"}}
+    write_settings(engine.paths, "fallback_on_error: false\n")
     fake_clis.queue("codex", stdout=json.dumps(failed) + "\n", exit=1, edits={"x.py": "x = 1\n"})
+    fake_clis.queue("codex", stdout=json.dumps(failed) + "\n", exit=1)  # the crash's one retry
     steps.run_job("7b55e0c1", steps=2)
     doc = engine.ticket()
     doc.meta.status = "in_process/under_implementation"  # what `kengash run` does on a retry
     documents.save_ticket(engine.paths.project(engine.slug), doc)
     fake_clis.queue("codex", fixture="codex/work_resume.jsonl")
     steps.run_job("7b55e0c1", steps=1)
-    assert prompts.RETRY_NOTE in fake_clis.calls("codex")[1]["argv"][-1]
+    assert prompts.RETRY_NOTE in fake_clis.calls("codex")[2]["argv"][-1]
 
 
 def test_a_new_claude_session_cut_before_it_began_retries_fresh(

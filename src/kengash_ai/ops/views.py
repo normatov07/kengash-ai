@@ -284,6 +284,8 @@ class AgentsView:
     per_provider: dict[str, int] = field(default_factory=dict)
     set_here: list[str] = field(default_factory=list)
     problem: str = ""
+    compactor: str = ""  # the models that are no ticket agent's (SP17 spec §3.10)
+    plan_reviewer: str = ""
 
 
 @dataclass
@@ -790,6 +792,8 @@ def agents_view(
     found.tokens_per_ticket = resolved.tokens.per_ticket_max
     found.fallback_on_error = resolved.fallback_on_error
     found.per_provider = dict(resolved.sessions.per_provider)
+    found.compactor = resolved.memory.compactor
+    found.plan_reviewer = resolved.plan.reviewer
     return found
 
 
@@ -1127,7 +1131,7 @@ def _agent(paths: StorePaths, slug: str, ticket: Ticket) -> tuple[str, str]:
         role = resolved.role_of(ticket.step or "")
         if role is None:
             return "", ""
-        provider, model = split_cli(resolved.agents[role].cli)
+        provider, model = split_cli(resolved.agents[role].cli_for(ticket.importance.value))
     except (KengashError, KeyError):
         return "", ""
     return provider, model or "default"

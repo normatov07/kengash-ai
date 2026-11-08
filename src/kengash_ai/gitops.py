@@ -197,6 +197,12 @@ def changed_files(cwd: Path) -> list[str]:
     return sorted(found)
 
 
+def changed_between(cwd: Path, old: str, new: str) -> list[str]:
+    """Paths that differ between two commits; [] when either is gone (SP17 spec §3.8)."""
+    result = _run(cwd, "diff", "--name-only", old, new)
+    return result.stdout.split("\n")[:-1] if result.returncode == 0 else []
+
+
 def ticket_commits(repo: Path, ticket_uuid: str, ref: str) -> list[Commit]:
     """Commits on `ref` that carry `Kengash-Ticket: <uuid>` (or 0.1.0's `Harness-Ticket`),
     oldest first; their trailers come back under the `Kengash-` names."""

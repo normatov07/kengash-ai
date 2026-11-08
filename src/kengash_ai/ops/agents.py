@@ -23,17 +23,20 @@ def pick(
     status: Callable[[str], ProviderStatus],
     *,
     skip: Collection[str] = (),
+    importance: str | None = None,
 ) -> Pick:
-    """The first usable CLI of the role's chain that is not in `skip`; NeedsSetup if none."""
+    """The first usable CLI of the role's chain that is not in `skip`; NeedsSetup if none. The
+    chain is the CLI for the ticket's `importance`, the agent's CLI, then its fallbacks."""
     agent = resolved.agents[role]
     first_problem: str | None = None
-    for index, cli in enumerate([agent.cli, *agent.fallback]):
+    chain = list(dict.fromkeys([agent.cli_for(importance), agent.cli, *agent.fallback]))
+    for index, cli in enumerate(chain):
         provider, model = split_cli(cli)
         if provider == "shell":
             return Pick(role, provider, None, False)
         if provider in skip:
             continue
-        found = problem(provider, status)
+        found = problem(provider, status) or _no_model(provider, model, status)
         if found is None:
             return Pick(role, provider, model, index > 0)
         first_problem = first_problem or found
@@ -48,6 +51,16 @@ def detector(paths: StorePaths) -> Callable[[str], ProviderStatus]:
         return adapters.get(name, runtime=paths.runtime).detect()
 
     return detect
+
+
+def _no_model(
+    provider: str, model: str | None, status: Callable[[str], ProviderStatus]
+) -> str | None:
+    """Why `model` cannot run, by the CLI's own list; aliases and an empty list say nothing."""
+    found = status(provider)
+    if model and found.live_models and found.models and model not in found.models:
+        return f"{provider} has no model {model}; pick one on the Agents page"
+    return None
 
 
 def problem(provider: str, status: Callable[[str], ProviderStatus]) -> str | None:

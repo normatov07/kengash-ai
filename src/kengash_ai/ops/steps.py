@@ -8,12 +8,14 @@ import contextlib
 import os
 import time
 from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from kengash_ai import adapters, gitops, journal, memory, scheduler, settings, workflow
+from kengash_ai.adapters.base import MAX_PROMPT_BYTES
 from kengash_ai.model import (
     Checked,
     Doc,
@@ -40,7 +42,18 @@ from kengash_ai.model import (
     WorkOutput,
     utc_now,
 )
-from kengash_ai.ops import agents, calls, checks, lifecycle, merging, prompts, records, slots
+from kengash_ai.ops import (
+    agents,
+    calls,
+    checks,
+    context,
+    lifecycle,
+    merging,
+    prompts,
+    records,
+    slots,
+    tickets,
+)
 from kengash_ai.ops.workspace import GATES
 from kengash_ai.store import documents, runtime
 from kengash_ai.store.locks import locked
@@ -54,6 +67,9 @@ WAITING_PATHS = "in_process/waiting_paths"
 MERGING = merging.MERGING
 MERGING_EVENT = merging.MERGING_EVENT
 QUOTA_WAIT_S = 900
+PROMPT_MARGIN = 2048  # room the CLI's own additions to the prompt may take
+CRASH_WAIT_S = 20  # a passing CLI fault gets this long before its one retry (SP17)
+FALLBACK_ON = ("rate_limit", "network", "crash", "stuck", "timeout")
 sleep = time.sleep
 
 
@@ -72,6 +88,8 @@ class _Job:
     base: str
     detect: Callable[[str], ProviderStatus]
     merge_pending: bool = False  # every step passed under merge.mode: auto
+    split: bool = False  # the last step added tickets that may start now (SP17 spec §3.6)
+    on_new_tickets: Callable[[], object] | None = None
 
     @property
     def worktree(self) -> Path:
@@ -101,14 +119,23 @@ class _Ran:
     files: list[gitops.FileChange] | None = None
     checked: str | None = None  # the summary of in-step checks whose last run passed (SP15)
     hook_repaired: bool = False  # a commit-hook repair turn changed files after the checks
+    steered: int = 0  # corrections this step needed (SP17 spec §3.1)
 
 
-def run_job(ticket_id: str, *, project: str | None = None, steps: int | None = None) -> JobEnd:
-    """Run the ticket's steps until a gate, the end, a flag, or `steps` steps."""
+def run_job(
+    ticket_id: str,
+    *,
+    project: str | None = None,
+    steps: int | None = None,
+    on_new_tickets: Callable[[], object] | None = None,
+) -> JobEnd:
+    """Run the ticket's steps until a gate, the end, a flag, or `steps` steps; a split calls
+    `on_new_tickets`, so a part that can start need not wait for this job's end."""
     paths = StorePaths.default()
     slug, _ = records.locate_ticket(paths, ticket_id, project)
     entry = load_registry(paths).projects[slug]
     job = _Job(paths, slug, ticket_id, entry.path, entry.base, agents.detector(paths))
+    job.on_new_tickets = on_new_tickets
     _recover(job)
     done = 0
     while True:
@@ -121,6 +148,10 @@ def run_job(ticket_id: str, *, project: str | None = None, steps: int | None = N
             return _merge_now(job, began)
         ended = _step(job, began)
         done += 1
+        if job.split:
+            job.split = False
+            if job.on_new_tickets is not None:
+                job.on_new_tickets()
         if ended is not None:
             return _merge_now(job, ended)
 
@@ -221,6 +252,21 @@ def _begin(job: _Job, *, budget_left: bool) -> _Ready | JobEnd | _WaitPaths:
         return _Ready(doc, state, resolved, decision.step)
 
 
+def _split(
+    job: _Job, resolved: Settings, doc: Doc[Ticket], output: PlanOutput
+) -> tuple[str, list[Event]]:
+    """A planner's `parts` applied (SP17 spec §3.6): the Log note and the new tickets' events.
+    A refused split leaves the ticket whole, and says why."""
+    if not output.parts:
+        return "", []
+    problem = tickets.split_problem(doc.meta, doc.sections, output.parts, resolved)
+    if problem:
+        return f"split refused: {problem}", []
+    created = tickets.split(job.paths, job.slug, doc, output.parts, by="kengash")
+    job.split = True
+    return f"split into {len(output.parts)} parts", created
+
+
 def _narrow(resolved: Settings, ticket: Ticket, step: str, files: list[str]) -> int:
     """Narrow the ticket's touches to a planning step's files; the new count, or 0 when the
     touches stay (SP16 spec §3.12)."""
@@ -245,7 +291,7 @@ def _holder(paths: StorePaths, slug: str, resolved: Settings, ticket: Ticket) ->
         meta = other.meta
         if meta.id == ticket.id or not lifecycle.holds_paths(resolved, meta):
             continue
-        if scheduler.overlaps(meta.touches, ticket.touches):
+        if scheduler.clash(meta.touches, ticket.touches, lifecycle.path_policy(resolved)):
             return meta.id
     return None
 
@@ -256,7 +302,9 @@ def _step(job: _Job, ready: _Ready) -> JobEnd | None:
     if role is None:  # the approve step halts in _begin, so only a broken workflow lands here
         return _fail(job, f"step {ready.step} has no role")
     try:
-        pick = agents.pick(ready.resolved, role, job.detect)
+        pick = agents.pick(
+            ready.resolved, role, job.detect, importance=ready.doc.meta.importance.value
+        )
     except NeedsSetup as exc:
         return _fail(job, str(exc))
     if pick.provider != "shell":
@@ -294,26 +342,34 @@ def _take_slot(job: _Job, ready: _Ready, pick: agents.Pick) -> None:
 
 
 def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
-    """Run the step's CLI: timeouts retry once, schema errors and denied actions get one
-    repair turn, a network error one resumed turn, rate limits and network errors fall back
-    (or a rate limit waits for the quota), other errors fail the ticket, keeping the
-    session the CLI opened (SP3 spec §5 item 5; SP12 spec §3.4, §3.5)."""
+    """Run the step's CLI: a stuck call is corrected (SP17), a timeout resumed with a
+    correction once, schema errors and denied actions get one repair turn, a network error
+    one resumed turn, a crash one retry; what stays broken falls back (or a rate limit waits
+    for the quota), other errors fail the ticket, keeping the session the CLI opened (SP3
+    spec §5 item 5; SP12 spec §3.4, §3.5; SP17 spec §3.1, §3.3)."""
     request = _prepare(job, ready, pick)
     reused = _reused(job, ready, pick)
     if reused is not None:
         return _Ran(pick, request, reused, Usage(), ready.doc.meta.loop)
     usage = Usage()
     tried = {pick.provider}
-    timed_out = repaired = unblocked = reconnected = False
+    timed_out = repaired = unblocked = reconnected = crashed = False
+    steered = corrected = 0
     while True:
-        result = adapters.get(pick.provider, runtime=job.paths.runtime).run(request)
+        with checks.turn(job.paths, ready.resolved) if pick.provider == "shell" else nullcontext():
+            result = adapters.get(pick.provider, runtime=job.paths.runtime).run(request)
         usage = calls.plus(usage, result.usage)
         error = result.error
         if error is None:
-            return _Ran(pick, request, result, usage, ready.doc.meta.loop)
+            return _Ran(pick, request, result, usage, ready.doc.meta.loop, steered=corrected)
+        if error == "stuck" and steered < ready.resolved.steering.turns and result.session_id:
+            steered += 1
+            corrected += 1
+            request = _steer(job, ready, request, result)
+            continue
         if error == "timeout" and not timed_out:
             timed_out = True
-            request = _again(job, request, result)
+            request = _after_timeout(job, ready, request, result)
             continue
         if error == "schema" and not repaired:
             repaired = True
@@ -328,7 +384,12 @@ def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
             reconnected = True
             request = _resume(job, request, result, prompts.NETWORK_PROMPT)
             continue
-        if error in ("rate_limit", "network"):
+        if error == "crash" and not crashed:
+            crashed = True
+            sleep(CRASH_WAIT_S)
+            request = _resume(job, request, result, prompts.NETWORK_PROMPT)
+            continue
+        if error in FALLBACK_ON:
             fallback = _fallback(job, ready, pick, tried)
             if fallback is not None:
                 pick = fallback
@@ -336,7 +397,8 @@ def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
                 slots.release(job.paths, job.ticket_id)
                 _take_slot(job, ready, pick)
                 request = _prepare(job, ready, pick)
-                reconnected = False
+                reconnected = timed_out = crashed = False
+                steered = 0
                 continue
         if error == "rate_limit":
             _wait_quota(job, ready, result)
@@ -357,8 +419,8 @@ def _call_failed(
     that never started) and name the work left in the worktree (SP12 §3.5)."""
     if _never_started(request, result):
         _forget_session(job, ready.step, pick.role, str(request.session_id))
-    elif result.session_id:
-        _keep_session(job, ready.step, pick, result.session_id)
+    elif result.session_id or request.resume:  # a retry that died early keeps the first's
+        _keep_session(job, ready.step, pick, result.session_id or str(request.session_id))
     reason = calls.failure(
         pick.provider, request, result, worktree=job.worktree, changed=_changed(job, ready)
     )
@@ -413,7 +475,7 @@ def _prepare(job: _Job, ready: _Ready, pick: agents.Pick) -> StepRequest:
 def _memory(job: _Job) -> str:
     """The memory digest for a new session; "" when the store cannot give one."""
     try:
-        return memory.digest(job.paths, job.slug)
+        return memory.digest(job.paths, job.slug, root=job.worktree)
     except KengashError:
         return ""
 
@@ -452,6 +514,27 @@ def _resume(job: _Job, request: StepRequest, result: StepResult, prompt: str) ->
     return calls.resume(request, result, prompt, _next_log(job))
 
 
+def _wrap_s(ready: _Ready) -> int:
+    return ready.resolved.steering.wrap_min * 60
+
+
+def _steer(job: _Job, ready: _Ready, request: StepRequest, result: StepResult) -> StepRequest:
+    """Resume a stuck call with why it was stopped; what follows has a shorter limit."""
+    _journal(job, "step.steered", step=ready.step, reason=result.detail, role=request.role)
+    prompt = prompts.steer_prompt(result.detail, _changed(job, ready))
+    return _resume(job, request, result, prompt).model_copy(update={"soft_s": _wrap_s(ready)})
+
+
+def _after_timeout(
+    job: _Job, ready: _Ready, request: StepRequest, result: StepResult
+) -> StepRequest:
+    """A session that reached the hard limit is told so; with none, the request runs again."""
+    if not result.session_id:
+        return _again(job, request, result)
+    prompt = prompts.timeout_prompt(_changed(job, ready))
+    return _resume(job, request, result, prompt).model_copy(update={"soft_s": _wrap_s(ready)})
+
+
 def _again(job: _Job, request: StepRequest, result: StepResult | None = None) -> StepRequest:
     return calls.again(request, result, _next_log(job))
 
@@ -464,7 +547,8 @@ def _fallback(job: _Job, ready: _Ready, pick: agents.Pick, tried: set[str]) -> a
     if not ready.resolved.fallback_on_error:
         return None
     try:
-        return agents.pick(ready.resolved, pick.role, job.detect, skip=tried)
+        importance = ready.doc.meta.importance.value
+        return agents.pick(ready.resolved, pick.role, job.detect, skip=tried, importance=importance)
     except NeedsSetup:
         return None
 
@@ -517,6 +601,7 @@ def _request(
     diff_stat = gitops.diff(job.worktree, job.base, stat=True) if review else ""
     feedback = _feedback(resolved, step, ready.state.sent_back)
     if resume:
+        changed = _changed_since(job, ready.state.seen.get(pick.role))
         prompt = prompts.resumed_prompt(
             ticket,
             sections,
@@ -525,6 +610,7 @@ def _request(
             instruction=told,
             review=review,
             feedback=feedback,
+            changed=changed,
         )
         skill = None
     else:
@@ -541,9 +627,12 @@ def _request(
             review=review,
         )
         skill = prompts.role_skill(job.paths, job.slug, resolved.agents[pick.role].skill)
+        if resolved.kind_of(step) == "edit":
+            prompt = _with_files(job, ready, ticket, prompt, skill or "")
     if resolved.kind_of(step) == "edit" and gitops.changed_files(job.worktree):
         prompt = f"{prompts.RETRY_NOTE}\n\n{prompt}"  # a failed attempt left its changes
     options = ProviderOptions() if pick.provider == "shell" else resolved.provider(pick.provider)
+    steering = resolved.steering
     return StepRequest(
         role=pick.role,
         cwd=job.worktree,
@@ -562,7 +651,33 @@ def _request(
         user_config=options.user_config,
         bypass=resolved.agents[pick.role].bypass_permissions,
         prior_usage=ready.state.totals.get(pick.role) if resume else None,
+        soft_s=None if pick.provider == "shell" else steering.soft_min * 60,
+        poll_max=steering.poll_max,
+        full_runs_max=steering.full_runs_max,
     )
+
+
+def _changed_since(job: _Job, seen: str | None) -> list[str]:
+    """Files that moved since this role's session last spoke (SP17 spec §3.8)."""
+    head = gitops.head(job.worktree)
+    return gitops.changed_between(job.worktree, seen, head) if seen and seen != head else []
+
+
+def _with_files(job: _Job, ready: _Ready, ticket: Ticket, prompt: str, skill: str) -> str:
+    """The prompt with the plan's files inline, within the budget and the prompt limit."""
+    resolved = ready.resolved
+    limit = MAX_PROMPT_BYTES - PROMPT_MARGIN - len(prompt.encode()) - len(skill.encode())
+    budget = min(resolved.context.max_kib * 1024, limit)
+    if budget <= 0 or not ticket.touches:
+        return prompt
+    pack = context.file_pack(
+        job.worktree,
+        ticket.touches,
+        commit=gitops.head(job.worktree)[:10],
+        shared=resolved.paths.shared,
+        budget=budget,
+    )
+    return f"{prompt}\n\n## Files\n{pack}" if pack else prompt
 
 
 def _verify(job: _Job, ready: _Ready, ran: _Ran) -> None:
@@ -596,7 +711,8 @@ def _check_and_fix(job: _Job, ready: _Ready, ran: _Ran) -> None:
         log = _next_log(job)
         _set_running(job, step, Running(role="test-runner", provider="shell", log=log))
         before = set(gitops.untracked_files(job.worktree))
-        result = shell.run(checks.request(resolved, job.worktree, log))
+        with checks.turn(job.paths, resolved):
+            result = shell.run(checks.request(resolved, job.worktree, log))
         gitops.drop_untracked(job.worktree, keep=before)  # what the checks wrote is no work
         verdict, summary = checks.outcome(result)
         if not _record_check(job, step, turn, result, (verdict, summary), log):
@@ -661,6 +777,7 @@ def _fix_turn(job: _Job, ready: _Ready, ran: _Ran, prompt: str) -> bool:
     _set_running(job, ready.step, working)
     provider = adapters.get(pick.provider, runtime=job.paths.runtime)
     request = _resume(job, ran.request, ran.result, prompt)
+    request = request.model_copy(update={"soft_s": _wrap_s(ready)})
     result = provider.run(request)
     ran.usage = calls.plus(ran.usage, result.usage)
     if result.error == "network":
@@ -784,15 +901,23 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
         fingerprints: tuple[str, ...] = ()
         blocked = ""
         narrowed = 0
+        split_note = ""
+        events_after: list[Event] = []
         if isinstance(output, ReviewOutput):
             findings, struck = prompts.decision_findings(output.findings)
             if struck:  # the reviewer's veto on proposed decisions (SP16 spec §3.3)
                 doc.sections["Decisions"] = prompts.strike(
                     doc.sections.get("Decisions", ""), struck
                 )
-            # a fail that only struck decisions leaves implement nothing to fix
-            verdict = output.verdict if findings or output.verdict == "pass" else "pass"
-            failing = findings if verdict == "fail" else []
+            reviewing = resolved.kind_of(step) == "review"
+            if reviewing and step != "review_plan":  # a plan's findings name its sections
+                findings = prompts.checked_findings(findings, job.worktree)
+            blocking = [f for f in findings if f.severity in resolved.review.block_on]
+            # a fail that only struck decisions, or found nothing that blocks, leaves
+            # implement nothing to fix (SP17 spec §3.9)
+            kept = blocking if reviewing else findings
+            verdict = output.verdict if kept or output.verdict == "pass" else "pass"
+            failing = kept if verdict == "fail" else []
             doc.sections["Findings"] = prompts.findings_text(failing)
             fingerprints = tuple(workflow.fingerprint(f.file, f.issue) for f in failing)
             if resolved.kind_of(step) == "check":
@@ -806,7 +931,10 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
                 doc.sections["Handoff"] = prompts.handoff_text(output.handoff)
                 blocked = prompts.blocked_line(output.handoff)
                 if isinstance(output, PlanOutput):
-                    narrowed = _narrow(resolved, ticket, step, output.files)
+                    split_note, created = _split(job, resolved, doc, output)
+                    events_after += created
+                    planned = output.parts[0].files if created else output.files
+                    narrowed = _narrow(resolved, ticket, step, planned)
                 if output.decisions:  # recorded only when the ticket merges (SP16 §3.3)
                     existing = doc.sections.get("Decisions", "")
                     doc.sections["Decisions"] = prompts.decision_lines(existing, output.decisions)
@@ -817,6 +945,10 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
         )
         if narrowed:
             line += f" · touches narrowed to {narrowed} files"
+        if split_note:
+            line += f" · {split_note}"
+        if ran.steered:
+            line += f" · steered {ran.steered}x"
         if result.warning:  # the CLI's error after a valid output (SP12 spec §3.1)
             line += f" · warning: {result.warning.strip().splitlines()[0][:160]}"
         doc.sections["Log"] = "\n".join(filter(None, [doc.sections.get("Log", "").strip(), line]))
@@ -824,10 +956,12 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
             ticket.sessions[pick.role] = SessionRef(
                 provider=pick.provider, model=pick.model or "default", id=result.session_id
             )
+        if pick.provider != "shell":  # what a resumed session is told changed (SP17 spec §3.8)
+            state.seen[pick.role] = gitops.head(job.worktree)
         if result.total_usage is not None:
             state.totals[pick.role] = result.total_usage
         state.running = None
-        events = [_step_end(job, step, ran, verdict, fingerprints)]
+        events = [_step_end(job, step, ran, verdict, fingerprints), *events_after]
         routed = workflow.after(
             resolved,
             lifecycle.progress_for(resolved, ticket, state),

@@ -19,6 +19,7 @@ from kengash_ai.adapters.base import (
     unfinished,
 )
 from kengash_ai.adapters.process import ProcessResult
+from kengash_ai.adapters.watchdog import Signal
 from kengash_ai.model import StepRequest, StepResult, Usage
 
 # agy's plan mode denies terminal commands and then returns nothing; this line avoids them.
@@ -41,6 +42,7 @@ MODE = {"read_only": "plan", "edit_worktree": "accept-edits"}
 # Headless agy auto-denies a read it cannot prompt for and ends the turn (chess-samurai run of
 # 2026-11-06, call 3); its own message names this allow-rule. Reads only (SP12 spec §5.3).
 READ_RULE = "read_file(*)"
+EDIT_TOOLS = ("edit_file", "write_file")
 
 _MODEL = re.compile(r"[A-Za-z0-9][\w.:-]*")
 
@@ -52,6 +54,7 @@ class Antigravity(CliProvider):
     binary = "agy"
     install_hint = "install the Antigravity CLI (agy), then run `agy` once to sign in"
     signin_hint = "run `agy` and sign in"
+    LIVE_MODELS = True  # `agy models` asks the service
 
     def __init__(self) -> None:
         self._models: list[str] = []
@@ -128,6 +131,32 @@ class Antigravity(CliProvider):
             return result(error="empty", detail=detail)
         return result(error="schema", detail="agy repeated the previous turn's output")
 
+    def signal(self, event: dict[str, Any]) -> Signal | None:
+        """`manage_task status` is how agy polls a background command (2026-11-08 run)."""
+        update = event.get("step_update")
+        if not isinstance(update, dict) or update.get("step_type") != "tool":
+            return None
+        name, state = update.get("tool_name"), update.get("state")
+        info = update.get("tool_info") or {}
+        parameters = info.get("parameters") or {}
+        if name == "run_command" and state == "ACTIVE":  # counted as it starts
+            return Signal("run", str(parameters.get("CommandLine") or ""))
+        if state != "DONE":
+            return None
+        if name in EDIT_TOOLS:
+            return Signal("edit")
+        if name == "manage_task" and parameters.get("Action") == "status":
+            return Signal("poll")
+        return None
+
+    def usage_so_far(self, stdout: str) -> Usage:
+        totals = Usage()
+        for event in stream.lines(stdout):
+            update = event.get("step_update")
+            if isinstance(update, dict) and update.get("usage"):
+                totals = _plus(totals, _totals(update["usage"]))
+        return totals
+
     def signed_in(self) -> tuple[bool, str | None]:
         result = probe([self.binary, "models"])
         ok = result is not None and result.returncode == 0
@@ -183,6 +212,14 @@ def _totals(usage: dict[str, Any]) -> Usage:
         input=int(usage.get("input_tokens") or 0),
         output=int(usage.get("output_tokens") or 0),
         cache_read=int(usage.get("cache_read_tokens") or 0),
+    )
+
+
+def _plus(a: Usage, b: Usage) -> Usage:
+    return Usage(
+        input=a.input + b.input,
+        output=a.output + b.output,
+        cache_read=a.cache_read + b.cache_read,
     )
 
 
