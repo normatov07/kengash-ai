@@ -58,7 +58,8 @@ def test_posts_need_the_harness_header(client: TestClient) -> None:
     assert client.post("/api/pause").status_code == 403
     paused = client.post("/api/pause", headers={"X-Kengash": "1"})
     assert paused.status_code == 200 and paused.json()["project"] is None
-    assert client.post("/api/resume", headers={"X-Kengash": "1"}).json() == {"started": []}
+    resumed = client.post("/api/resume", headers={"X-Kengash": "1"}).json()
+    assert resumed == {"started": [], "skipped": {}}
 
 
 def test_a_foreign_origin_is_refused(client: TestClient) -> None:
