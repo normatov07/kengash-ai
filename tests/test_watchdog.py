@@ -6,6 +6,8 @@ import stat
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from kengash_ai.adapters.antigravity import Antigravity
 from kengash_ai.adapters.claude import Claude
 from kengash_ai.adapters.codex import Codex
@@ -286,3 +288,19 @@ def test_a_stopped_call_carries_the_running_total(tmp_path: Path, monkeypatch: A
     assert result.error == "stuck"
     assert result.usage == Usage(input=100, output=20, cache_read=5)
     assert result.total_usage == Usage(input=1100, output=220, cache_read=55)
+
+
+@pytest.mark.parametrize(
+    "command",
+    ['bash -lc "pytest -q"', "pytest -q; echo $?", "pytest -q && ruff check ."],
+)
+def test_a_suite_run_inside_a_longer_line_counts(command: str) -> None:
+    dog = Watchdog(lambda event: None, soft_s=99, poll_max=0, full_runs_max=1, test_cmd="pytest -q")
+    assert dog._count(Signal("run", command)) == ""
+    assert "2 times" in dog._count(Signal("run", command))
+
+
+def test_one_test_file_in_a_longer_line_does_not_count() -> None:
+    dog = Watchdog(lambda event: None, soft_s=99, poll_max=0, full_runs_max=1, test_cmd="pytest -q")
+    for _ in range(3):
+        assert dog._count(Signal("run", "cd app && pytest -q tests/a.py; echo $?")) == ""

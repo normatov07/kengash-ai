@@ -28,6 +28,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Changes
 
+- 2026-11-08: `Agent` refuses `by_importance` on a shell agent (SP17 minors).
 - 2026-11-08: `Usage.plus`; `RelayIntent.touched`; `TicketState.split`; `Agent` given a `cli` at a narrower scope loses the inherited `by_importance` (SP17 review).
 - 2026-11-08: `Settings.steering|paths|context|loop_relay`, `Checks.parallel`, `PlanReview.max_files`, `ReviewPolicy.block_on`, `Agent.by_importance` and `cli_for(importance)`; `ErrorKind` gains `stuck`; `StepRequest.soft_s|poll_max|full_runs_max`; `Part`, `PlanOutput.parts`; `TicketState.seen`; `RelayIntent`; `ProviderStatus.live_models` (SP17).
 - 2026-11-08: runtime files ignore fields they do not know (`extra="ignore"`), so a UI server or worker started before an upgrade still reads what the new version writes; `UiRecord.version` names the kengash-ai that started the server.

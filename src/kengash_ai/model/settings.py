@@ -205,6 +205,12 @@ class Agent(_Section):
     bypass_permissions: bool = False
     by_importance: dict[str, str] = Field(default_factory=dict)  # tried before `cli` (SP17)
 
+    @model_validator(mode="after")
+    def _shell_has_no_models(self) -> Self:
+        if self.by_importance and split_cli(self.cli)[0] == SHELL:
+            raise ValueError(f"by_importance: a {SHELL} agent runs no model")
+        return self
+
     def cli_for(self, importance: str | None) -> str:
         """What runs a ticket of `importance` first: its own CLI, else the agent's."""
         return self.by_importance.get(importance or "", self.cli)

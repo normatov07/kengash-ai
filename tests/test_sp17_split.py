@@ -212,3 +212,13 @@ def test_a_part_keeps_one_checkbox_on_each_acceptance_line(
     parts[0] = parts[0].model_copy(update={"acceptance": ["- [ ] one works"]})
     tickets.split(store_paths, "payments-api", doc, parts, by="planner")
     assert doc.sections["Acceptance"] == "- [ ] one works"
+
+
+@pytest.mark.parametrize("bad", ["../outside.py", "/etc/passwd"])
+def test_a_part_naming_a_path_outside_the_repo_is_refused(
+    make_ticket: Callable[..., Doc[Ticket]], bad: str
+) -> None:
+    doc = _ticket(make_ticket)
+    parts = _parts()
+    parts[1] = parts[1].model_copy(update={"files": [*parts[1].files, bad]})
+    assert "files" in tickets.split_problem(doc.meta, doc.sections, parts, Settings())

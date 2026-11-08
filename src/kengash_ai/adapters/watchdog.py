@@ -12,7 +12,8 @@ from typing import Any, Literal, Protocol
 
 from kengash_ai.adapters import stream
 
-_OUTPUT = re.compile(r"\s+(?:\||\d?>)")  # where a command's pipe or redirect begins
+_SEPARATOR = re.compile(r"\s*(?:;|&&|\|\||\|)\s*")  # between the commands of one line
+_REDIRECT = re.compile(r"\s+\d?>.*$")
 
 
 @dataclass(frozen=True)
@@ -78,13 +79,14 @@ class Watchdog:
         return ""
 
     def _whole_suite(self, command: str) -> bool:
-        """The project's test command, on its own or at the end of a wrapped line, with or
-        without a pipe or redirect after it."""
+        """The project's test command anywhere in the line: alone, wrapped in a shell, or
+        beside other commands, pipes and redirects."""
         if not self._test_cmd:
             return False
-        said = command.strip().strip("'\"")
-        wanted = (f" {self._test_cmd}", f"'{self._test_cmd}")
+        said = command.strip()
+        wanted = (f" {self._test_cmd}", f"'{self._test_cmd}", f'"{self._test_cmd}')
+        pieces = (_REDIRECT.sub("", piece) for piece in _SEPARATOR.split(said))
         return any(
-            form == self._test_cmd or form.endswith(wanted)
-            for form in (said, _OUTPUT.split(said, maxsplit=1)[0])
+            form.strip("'\"") == self._test_cmd or form.rstrip("'\"").endswith(wanted)
+            for form in (said, *pieces)
         )

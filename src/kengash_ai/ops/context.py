@@ -6,6 +6,7 @@ so it spends no turns reading them and a path the plan invented shows up at once
 """
 
 import hashlib
+import os
 from collections.abc import Sequence
 from fnmatch import fnmatch
 from pathlib import Path
@@ -31,7 +32,7 @@ def file_pack(
         path = (root / name).resolve()
         if not path.is_relative_to(root):
             left_out.append(f"{name} (outside the worktree)")
-        elif not path.exists():
+        elif not os.path.exists(path):
             absent.append(name)
         elif path.is_dir():
             continue
@@ -50,11 +51,11 @@ def file_pack(
 def _entry(name: str, path: Path) -> tuple[str, str]:
     """A file's heading and fenced contents, or "" and why it stays out."""
     try:
+        if path.stat().st_size > MAX_FILE_BYTES:
+            return "", "too large"
         data = path.read_bytes()
     except OSError:
         return "", "unreadable"
-    if len(data) > MAX_FILE_BYTES:
-        return "", "too large"
     if b"\0" in data[:_SNIFF]:
         return "", "binary"
     try:

@@ -87,3 +87,17 @@ def test_block_on_can_widen(engine: Engine, fake_clis: FakeClis) -> None:
     _review(fake_clis, "fail", "low", "a.py")
     steps.run_job("7b55e0c1", steps=1)
     assert " · fail · " in engine.ticket().sections["Log"].splitlines()[-1]
+
+
+def test_a_path_too_long_for_the_filesystem_is_demoted(tmp_path: Path) -> None:
+    assert prompts.checked_findings([_finding("a" * 300 + ".py")], tmp_path)[0].severity == "low"
+
+
+def test_a_finding_that_does_not_block_still_shows_in_the_log(
+    engine: Engine, fake_clis: FakeClis
+) -> None:
+    (engine.worktree / "a.py").write_text("x\n")
+    _at_review(engine)
+    _review(fake_clis, "fail", "low", "a.py")
+    steps.run_job("7b55e0c1", steps=1)
+    assert "1 non-blocking finding" in engine.ticket().sections["Log"].splitlines()[-1]

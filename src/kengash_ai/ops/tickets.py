@@ -26,7 +26,7 @@ from kengash_ai.model import (
     UserError,
     utc_now,
 )
-from kengash_ai.ops import jobs, records, slots
+from kengash_ai.ops import jobs, prompts, records, slots
 from kengash_ai.ops.workspace import resolve_slug
 from kengash_ai.store import documents
 from kengash_ai.store.ids import new_id
@@ -169,6 +169,8 @@ def split_problem(
     for index, part in enumerate(parts):
         if not part.files:
             return f"part {index + 1} names no files"
+        if prompts.narrowed(part.files) is None:
+            return f"part {index + 1}: its files must be 1 to {prompts.MAX_FILES} repo paths"
         if any(not 0 <= earlier < index for earlier in part.after):
             return f"part {index + 1}: `after` must name earlier parts"
     if len({name for part in parts for name in part.files}) <= limit:

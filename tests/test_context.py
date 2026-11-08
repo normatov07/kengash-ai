@@ -168,3 +168,24 @@ def test_an_unreadable_file_is_named_and_the_step_goes_on(tmp_path: Path) -> Non
     text = _pack(tmp_path, ["locked.py", "ok.py"])
     assert "locked.py (unreadable)" in text
     assert "y = 2" in text
+
+
+def test_a_huge_file_is_never_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "big.txt").write_bytes(b"x" * (context.MAX_FILE_BYTES + 1))
+
+    def read_bytes(self: Path) -> bytes:
+        raise AssertionError("read a file the size check should have stopped")
+
+    monkeypatch.setattr(Path, "read_bytes", read_bytes)
+    assert "big.txt (too large)" in _pack(tmp_path, ["big.txt"])
+
+
+def test_a_path_too_long_for_the_filesystem_is_named_as_absent(tmp_path: Path) -> None:
+    name = "a" * 300 + ".py"
+    assert name in _pack(tmp_path, [name])
+
+
+def test_memory_tags_a_path_too_long_for_the_filesystem(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    name = "src/" + "a" * 300 + ".py"
+    assert "stale?" in memory._tag_stale([f"- see {name}"], tmp_path)[0]

@@ -1,5 +1,6 @@
 """What a step's CLI reads and what kengash writes back (SP3 spec §8.2, decision 25)."""
 
+import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -277,10 +278,9 @@ def new_prompt(
     feedback: Feedback = NO_FEEDBACK,
     memory: str = "",
     review: bool | None = None,
-    files: str = "",
 ) -> str:
     """A new session's prompt: who it is, the step, the memory digest, and the ticket inline;
-    `instruction` defaults to the built-in step's; `files` is the file pack (SP17 spec §3.8)."""
+    `instruction` defaults to the built-in step's."""
     head = (
         f'You are the {role} for ticket {ticket.id} "{ticket.title}", '
         f"loop {ticket.loop} of {ticket.loop_max}, step {step}."
@@ -296,7 +296,6 @@ def new_prompt(
         *_check_blocks(sections, feedback),
         ("Diff stat", diff_stat),
         ("If you delegate", DELEGATION),
-        ("Files", files),
     ]
     told = INSTRUCTIONS.get(step, "") if instruction is None else instruction
     lines = [head, told, *([feedback.sent_back] if feedback.sent_back else [])]
@@ -363,7 +362,7 @@ def _checked(finding: Finding, root: Path) -> Finding:
     if not finding.file.strip() or finding.line == 0:
         return finding
     path = (root / finding.file).resolve()
-    if not path.is_relative_to(root) or not path.exists():
+    if not path.is_relative_to(root) or not os.path.exists(path):
         return _unverified(finding, f"no such file {finding.file}")
     if path.is_file():
         text = path.read_text(encoding="utf-8", errors="replace")

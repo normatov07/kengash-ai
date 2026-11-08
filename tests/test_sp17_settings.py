@@ -52,3 +52,9 @@ def test_a_plan_may_carry_parts() -> None:
 def test_runtime_shapes() -> None:
     assert TicketState().seen == {}
     assert RelayIntent().scopes == []
+
+
+def test_a_shell_agent_has_no_models_by_importance() -> None:
+    agent = _agent(cli="shell", by_importance={"critical": "claude/opus"})
+    with pytest.raises(ValidationError, match="shell"):
+        Settings(agents={"test-runner": agent})

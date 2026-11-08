@@ -908,6 +908,7 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
         blocked = ""
         narrowed = 0
         split_note = ""
+        quiet = 0  # findings a review made that do not block (SP17 spec §3.9)
         events_after: list[Event] = []
         if isinstance(output, ReviewOutput):
             findings, struck = prompts.decision_findings(output.findings)
@@ -919,6 +920,7 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
             if reviewing and step != "review_plan":  # a plan's findings name its sections
                 findings = prompts.checked_findings(findings, job.worktree)
             blocking = [f for f in findings if f.severity in resolved.review.block_on]
+            quiet = len(findings) - len(blocking) if reviewing else 0
             # a fail that only struck decisions, or found nothing that blocks, leaves
             # implement nothing to fix (SP17 spec §3.9)
             kept = blocking if reviewing else findings
@@ -957,6 +959,8 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
             line += f" · touches narrowed to {narrowed} files"
         if split_note:
             line += f" · {split_note}"
+        if quiet:
+            line += f" · {quiet} non-blocking finding{'s' if quiet > 1 else ''}"
         if ran.steered:
             line += f" · steered {ran.steered}x"
         if result.warning:  # the CLI's error after a valid output (SP12 spec §3.1)

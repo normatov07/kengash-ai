@@ -1,6 +1,7 @@
 """MEMORY.md and DECISIONS.md: one-line facts, capped, redacted and journaled (spec §4.5);
 compaction results are checked and applied here (SP3 spec decision 31)."""
 
+import os
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -290,7 +291,7 @@ def _tag_stale(lines: list[str], root: Path) -> list[str]:
     plays no part: an old line whose file is still there has lost nothing."""
     tagged: list[str] = []
     for line in lines:
-        gone = [name for name in _PATH.findall(line) if not (root / name).exists()]
+        gone = [name for name in _PATH.findall(line) if not os.path.exists(root / name)]
         tagged.append(f"{line} [stale? path gone: {', '.join(gone)}]" if gone else line)
     return tagged
 
