@@ -28,6 +28,10 @@ All notable changes to this project are written here. The format follows [Keep a
 - `merge.mode` defaults to `auto`: a green ticket merges into your local main by itself (kengash never pushes), after a recheck unless its checks passed on that exact commit. It asks you only when the merge cannot finish (for example, uncommitted changes in the main working tree), and says why. Stores seeded before 0.6.0 keep the `merge.mode: ask` they were written with.
 - Read steps reply with the new `plan` output (`files`, `decisions`), and work replies carry `decisions`; both may be empty lists.
 
+### Fixed
+
+- An agy step cut by a dropped connection (`cannot rewind body after connection loss`) failed the ticket as a crash; it now counts as a network error, so the step resumes once and then uses the fallback.
+
 ## [0.5.0] - 2026-11-07
 
 ### Added
