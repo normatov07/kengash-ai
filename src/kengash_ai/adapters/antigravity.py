@@ -154,7 +154,7 @@ class Antigravity(CliProvider):
         for event in stream.lines(stdout):
             update = event.get("step_update")
             if isinstance(update, dict) and update.get("usage"):
-                totals = _plus(totals, _totals(update["usage"]))
+                totals = totals.plus(_totals(update["usage"]))
         return totals
 
     def signed_in(self) -> tuple[bool, str | None]:
@@ -212,14 +212,6 @@ def _totals(usage: dict[str, Any]) -> Usage:
         input=int(usage.get("input_tokens") or 0),
         output=int(usage.get("output_tokens") or 0),
         cache_read=int(usage.get("cache_read_tokens") or 0),
-    )
-
-
-def _plus(a: Usage, b: Usage) -> Usage:
-    return Usage(
-        input=a.input + b.input,
-        output=a.output + b.output,
-        cache_read=a.cache_read + b.cache_read,
     )
 
 

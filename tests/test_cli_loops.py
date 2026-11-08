@@ -89,7 +89,9 @@ def test_status_lines(as_conductor: As, store_paths: StorePaths) -> None:
     assert runner.invoke(app, ["loop", "status"]).stdout == "no loop running\nloop_start: ask\n"
     runner.invoke(app, ["loop", "claim", "-p", "payments-api"])
     mine = runner.invoke(app, ["loop", "status", "-p", "payments-api"]).stdout
-    assert mine == "this session holds the loop on payments-api\nloop_start: ask\n"
+    assert mine == (
+        "this session holds the loop on payments-api\nloop_start: ask\nrelay on: payments-api\n"
+    )
     settings = store_paths.project("payments-api").settings
     text = settings.read_text().replace("loop_start: ask", "loop_start: auto")
     settings.write_text(text, encoding="utf-8")
@@ -97,6 +99,7 @@ def test_status_lines(as_conductor: As, store_paths: StorePaths) -> None:
     seen = runner.invoke(app, ["loop", "status", "-p", "payments-api"]).stdout
     assert seen == (
         f"loop running: claude pid {ME.pid} on payments-api, seen just now\nloop_start: auto\n"
+        "relay on: payments-api\n"
     )
 
 

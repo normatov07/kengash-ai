@@ -29,6 +29,17 @@ class Usage(_Step):
         """What a step adds to the ticket's `tokens` (decision 10)."""
         return self.input + self.output
 
+    def plus(self, other: "Usage") -> "Usage":
+        """Both counts added; a cost only when either side has one."""
+        unknown = self.cost_usd is None and other.cost_usd is None
+        return Usage(
+            input=self.input + other.input,
+            output=self.output + other.output,
+            cache_read=self.cache_read + other.cache_read,
+            cache_write=self.cache_write + other.cache_write,
+            cost_usd=None if unknown else (self.cost_usd or 0) + (other.cost_usd or 0),
+        )
+
     def minus(self, prior: "Usage | None") -> "Usage":
         """These running totals less an earlier turn's, floored at 0; cost is dropped."""
         prior = prior or Usage()

@@ -30,6 +30,7 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 
 
 ## Changes
 
+- 2026-11-08: `approve` and `resume` run the relay; `loop status` adds `relay on: <scopes>` (SP17 review).
 - 2026-11-08: `kengash agent edit --model-for IMPORTANCE=PROVIDER[/MODEL]` (`IMPORTANCE=` clears it), `agent show` lists them; `kengash merge` then runs the relay; `loop claim` and `loop release` record the relay intent (SP17).
 - 2026-11-07: `kengash resume` prints `skipped <id>: <reason>` for each ticket it could not restart (SP16 review).
 - 2026-11-07: `kengash merge` adds `DECISIONS.md +N lines` when the ticket's decisions were recorded (SP16).

@@ -1120,3 +1120,23 @@ def test_a_fail_that_only_strikes_decisions_passes(engine: Engine, fake_clis: Fa
     doc = engine.ticket()
     assert doc.meta.status == "in_process/awaiting_merge" and doc.sections.get("Findings", "") == ""
     assert doc.sections["Decisions"] == "- keep A. why: x."
+
+
+def test_a_shell_step_that_keeps_failing_fails_the_ticket(
+    engine: Engine,
+    fake_clis: FakeClis,
+    store_paths: StorePaths,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_settings(store_paths, checks_settings(""))  # no command: the shell step crashes
+    real = steps._take_slot
+
+    def take(job: Any, ready: Any, pick: Any) -> None:
+        assert pick.provider != "shell", "no slot exists for shell: this waits forever"
+        real(job, ready, pick)
+
+    monkeypatch.setattr(steps, "_take_slot", take)
+    fake_clis.queue("claude", fixture="claude/work_resume.json")
+    fake_clis.queue("codex", fixture="codex/work_resume.jsonl", edits={"retry.py": "retries = 3\n"})
+    end = steps.run_job("7b55e0c1", steps=3)
+    assert end.status == "in_process/failed"

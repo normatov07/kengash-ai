@@ -22,6 +22,7 @@ Run one detached job (SP3 spec §3, decision 1): `kengash run` starts `python -m
 
 ## Changes
 
+- 2026-11-08: a ticket job that ends on an error also runs the relay (SP17 review).
 - 2026-11-08: a ticket job runs `relay.advance_quietly` when it ends, and when a split adds tickets (SP17).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-23: `plan-review` and `compact` jobs (SP3 M4).

@@ -737,6 +737,7 @@ def approve_ticket(
         approved = controls.approve_ticket(
             ticket_id, loops=loops, tokens=tokens, project=project, by=by, note=note
         )
+        relay.advance_quietly()  # an approval can merge, which can free the next tickets
     if as_json:
         _emit_json(approved)
         return
@@ -792,6 +793,7 @@ def resume(project: Every = None, by: By = "unknown", as_json: AsJson = False) -
     """Clear the pause and restart paused tickets."""
     with _errors():
         resumed = controls.resume(project, by=by)
+        relay.advance_quietly()  # the pause held back more than the paused tickets
     if as_json:
         _emit_json(resumed)
         return
@@ -863,6 +865,8 @@ def loop_status(project: Every = None, as_json: AsJson = False) -> None:
     for line in _capped(lines, "kengash loop status --json", MAX_LINES - 1):
         typer.echo(line)
     typer.echo(f"loop_start: {result.loop_start}")
+    if result.relay:
+        typer.echo(f"relay on: {', '.join(result.relay)}")
 
 
 @app.command("wait")

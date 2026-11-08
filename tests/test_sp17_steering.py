@@ -126,3 +126,23 @@ def test_a_second_crash_fails_without_a_fallback(engine: Engine, script: Any) ->
 )
 def test_a_hung_stream_is_a_network_error(text: str) -> None:
     assert classify(text) == "network"
+
+
+def test_a_stuck_model_falls_back_to_the_agents_own_cli_in_a_fresh_session(
+    engine: Engine, script: Any
+) -> None:
+    models = "{simple: claude/opus, standard: claude/opus, critical: claude/opus}"
+    write_settings(
+        engine.paths,
+        "steering: {turns: 0}\n"
+        f"agents:\n  planner: {{cli: claude/sonnet, skill: plan, by_importance: {models}}}\n",
+    )
+    seen = script(
+        [
+            StepResult(session_id="s-1", error="stuck", detail="polls"),
+            StepResult(session_id="s-2", output=PLAN),
+        ]
+    )
+    steps.run_job("7b55e0c1", steps=1)
+    assert [request.model for request in seen] == ["opus", "sonnet"]
+    assert seen[1].resume is False

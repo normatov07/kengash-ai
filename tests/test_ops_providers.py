@@ -33,7 +33,6 @@ def test_a_fallback_only_use_warns(
     write_settings(
         store_paths,
         "agents.planner.cli: codex\nagents.code-reviewer.cli: codex\n"
-        "agents.code-reviewer.by_importance: {}\n"
         "agents.security-reviewer.cli: codex\nmemory.compactor: codex\n",
     )
     [check] = check_providers(store_paths)

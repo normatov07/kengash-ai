@@ -246,13 +246,18 @@ def split(
 def _part_sections(part: Part) -> dict[str, str]:
     return {
         "Scope": part.scope.strip(),
-        "Acceptance": "\n".join(f"- [ ] {line}" for line in part.acceptance),
+        "Acceptance": "\n".join(f"- [ ] {_plain(line)}" for line in part.acceptance),
     }
+
+
+def _plain(text: str) -> str:
+    """An acceptance line without its checkbox."""
+    return text.strip().removeprefix("- [ ]").removeprefix("- [x]").strip()
 
 
 def _line(text: str) -> str:
     """An acceptance line for comparing: its checkbox gone, spaces and case folded."""
-    return " ".join(text.strip().removeprefix("- [ ]").removeprefix("- [x]").split()).casefold()
+    return " ".join(_plain(text).split()).casefold()
 
 
 def _add_to_plan(paths: StorePaths, slug: str, plan_id: str, ids: Sequence[str]) -> None:

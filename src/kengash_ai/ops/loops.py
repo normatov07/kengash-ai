@@ -1,6 +1,6 @@
 """The loop lease commands: claim, release and status (SP11 spec §4.4 to 4.8)."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from kengash_ai import settings
@@ -40,6 +40,7 @@ class Released:
 class LoopStatus:
     leases: list[LeaseView]
     loop_start: str
+    relay: list[str] = field(default_factory=list)
 
 
 def views(paths: StorePaths, me: Conductor | None) -> list[LeaseView]:
@@ -80,6 +81,7 @@ def release(*, force: bool = False) -> Released:
     with leases.guarded(paths):
         own = leases.own_lease(paths, me)
         if own is None:
+            relay.forget_unleased(paths)
             return Released(None)
         if not force:
             runnable = queue.compute(paths, own.project).runnable
@@ -103,4 +105,4 @@ def status(project: str | None) -> LoopStatus:
         for view in views(paths, conductors.conductor())
         if leases.overlaps(view.project, project)
     ]
-    return LoopStatus(found, settings.load(paths, project).loop_start)
+    return LoopStatus(found, settings.load(paths, project).loop_start, relay.covered(paths))

@@ -235,7 +235,9 @@ def create_app(*, token: str, port: int) -> FastAPI:
 
     @app.post("/api/resume")
     def resume(project: str | None = None) -> controls.Resumed:
-        return controls.resume(project, by=BY)
+        resumed = controls.resume(project, by=BY)
+        relay.advance_quietly()  # the pause held back more than the paused tickets
+        return resumed
 
     @app.get("/api/tickets/{ticket_id}")
     def ticket_view(ticket_id: str) -> views.TicketView:
@@ -254,9 +256,11 @@ def create_app(*, token: str, port: int) -> FastAPI:
     def ticket_action(ticket_id: str, action: str, body: Action | None = None) -> object:
         body = body or Action()
         if action == "approve":
-            return controls.approve_ticket(
+            approved = controls.approve_ticket(
                 ticket_id, loops=body.loops, tokens=body.tokens, project=None, by=BY
             )
+            relay.advance_quietly()  # an approval can merge, which can free the next tickets
+            return approved
         if action == "park":
             return controls.park_ticket(ticket_id, body.why, project=None, by=BY)
         if action == "run":

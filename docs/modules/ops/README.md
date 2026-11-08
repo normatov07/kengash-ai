@@ -64,6 +64,9 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-08: `agents.pick` honours `skip` for the shell and takes a provider or one provider/model, `Pick.cli`; a shell step has no fallback, where it once waited forever for a slot; a fallback opens a fresh session (SP17 review).
+- 2026-11-08: `relay`: an intent idle for `MAX_IDLE` (24 h) is forgotten, paused and blocked tickets keep it, a settings error no longer drops it, `covered` and `forget_unleased` (SP17 review).
+- 2026-11-08: a refused split says so in the Handoff (`prompts.split_refused`), a ticket splits once, and part acceptance lines keep one checkbox (SP17 review).
 - 2026-11-08: `steps._call`: a `stuck` call resumes with `prompts.steer_prompt` up to `steering.turns` times, a timeout with `prompts.timeout_prompt` once, a crash once after 20 s; then the fallback chain, with a fresh session (SP17 spec §3.1, §3.3).
 - 2026-11-08: `relay`: a finishing worker, `kengash merge` and the UI's merge start what is runnable, only after a loop was asked for and never in a paused project (SP17 spec §3.4).
 - 2026-11-08: path claims go through `scheduler.clash` with `lifecycle.path_policy`; `checks.turn(paths, resolved)` limits kengash's own test runs machine-wide (`checks.parallel`) (SP17 spec §3.5, §3.7).

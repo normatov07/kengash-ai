@@ -214,7 +214,7 @@ class CliProvider(ABC):
             update={
                 "session_id": parsed.session_id or req.session_id,
                 "usage": usage,
-                "total_usage": parsed.total_usage,
+                "total_usage": parsed.total_usage or (req.prior_usage or Usage()).plus(usage),
             }
         )
 

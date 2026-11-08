@@ -74,6 +74,7 @@ def _job(args: argparse.Namespace) -> Job:
 
     def fail(reason: str) -> None:
         steps.fail_job(args.id, project=args.project, reason=reason)
+        relay.advance_quietly()  # a failed ticket must not stall the rest of the loop
 
     return args.id, ticket, fail
 

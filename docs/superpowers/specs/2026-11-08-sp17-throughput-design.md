@@ -52,12 +52,12 @@ The `implement` skill: run only the test files you added or changed, in the fore
 ### 3.3 Transient errors and honest usage (A3)
 - `stream idle timeout` and `context deadline exceeded` are `network`.
 - `crash` retries once after 20 s, resuming when a session exists, then goes to the fallback chain. A bad model name or a passing CLI fault no longer ends a ticket.
-- A timed-out or stopped call still reports its session and tokens: the adapter's `parse` runs on the partial output, and failing that it sums the usage events. The token cap sees that spend. In 123 completed recorded calls, agy's events matched its final totals in the median call (a few fell far short); Claude's matched on input and cache, but its events hold only each message's opening output count (median 1.3% of the final), and thinking text is hidden, so a stopped Claude call's output is a floor.
+- A timed-out or stopped call still reports its session and tokens: the adapter's `parse` runs on the partial output, and failing that it sums the usage events. The token cap sees that spend. In 123 completed recorded calls, agy's events matched its final totals in the median call (a few fell far short); Claude's matched on input and cache, but its events hold only each message's opening output count (median 1.3% of the final), and thinking text is hidden, so a stopped Claude call's output is a floor. Codex reports usage only when a turn ends, so a stopped Codex call counts none.
 
 ### 3.4 Relay (B4)
 When a ticket's worker ends, it starts what is now runnable: `relay.advance` calls the same `queue.compute` and `run_tickets` a conductor would. No LLM and no process stays behind, so rule 7 holds.
 
-It runs only after a loop was asked for: `kengash loop claim` writes `runtime/relay.json`; `loop release` clears it, as does the relay when nothing is runnable, running or at a gate. `loop_relay: false` turns it off for a project. A plain `kengash run` starts nothing else. `kengash merge`, run by hand, and a merge from the UI advance too. Failures in the relay are logged and never fail the ticket. Decisions (gates, failed tickets) stay with the conductor and the user.
+It runs only after a loop was asked for: `kengash loop claim` writes `runtime/relay.json`; `loop release` clears it, as does the relay when nothing is runnable, running or at a gate. `loop_relay: false` turns it off for a project. A plain `kengash run` starts nothing else. `kengash merge`, `approve` and `resume`, by hand or from the UI, advance too, and so does a worker that ends on an error. An intent that has started nothing for 24 hours is forgotten, a `loop release` with no lease clears what no live loop holds, and `kengash loop status` shows what it covers *(call)*. Failures in the relay are logged and never fail the ticket. Decisions (gates, failed tickets) stay with the conductor and the user.
 
 ### 3.5 Path claims (B5)
 `scheduler.clash` replaces `overlaps` where a claim is decided:
@@ -71,7 +71,7 @@ A real conflict surfaces at the rebase and sends the ticket back to implement, a
 ### 3.6 Ticket size (B6)
 When a plan names more than `plan.max_files` (default 12; 0 is off) files, the planner fills `parts`: `title`, `scope`, `acceptance`, `files`, `after` (indexes of earlier parts it needs). The handoff plans the first part. kengash narrows the ticket to part 1 and adds the rest as new tickets, each depending on its `after` parts (else on the ticket's own dependencies, so disjoint parts run in parallel); dependents wait for every part.
 
-A split that loses an acceptance line is refused and the ticket continues whole: a deterministic guard against a model dropping scope.
+A split that loses an acceptance line is refused and the ticket continues whole: a deterministic guard against a model dropping scope. The Handoff then says so, since the plan may cover only part 1. A ticket splits once.
 
 ### 3.7 Check concurrency (B6)
 `checks.parallel` (0: half the CPU cores, at least 1) limits kengash's own test runs machine-wide, using lock files.
@@ -90,7 +90,7 @@ Rule: **what kengash can read itself it reads itself, at the moment of use.** Mo
 `review.block_on` (default `[high, medium]`): a review fails only on those severities. The default code reviewer moves to Sonnet with Opus for `critical`, through 3.10, so it stays editable; the default plan reviewer stays on Codex, a different provider *(call)*. Existing projects keep their settings: kengash never overwrites a project's SETTINGS.md.
 
 ### 3.10 Per-agent models, dynamic (user's request)
-- `agents.<role>.by_importance`: importance to CLI; chain is that CLI, then `cli`, then `fallback`. A narrower scope replaces the whole mapping, so a project can clear what the defaults set.
+- `agents.<role>.by_importance`: importance to CLI; chain is that CLI, then `cli`, then `fallback`. A narrower scope replaces the whole mapping, so a project can clear what the defaults set, and a scope that sets `cli` without it drops the inherited mapping, so an upgrade never moves a chosen reviewer *(call)*. The fallback chain skips by provider and model, so the agent's own CLI is tried after its importance model on the same provider, in a fresh session.
 - A model the CLI's live list lacks is skipped for the next in the chain (agy's list; Claude's aliases are not a live list, so full ids stay allowed).
 - The Agents page gets a "Model by importance" row per importance, and "Other models" for the plan reviewer and the memory compactor. CLI: `kengash agent edit <role> --model-for critical=claude/opus`.
 

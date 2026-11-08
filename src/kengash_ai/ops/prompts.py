@@ -449,6 +449,14 @@ TIMEOUT = (
 )
 
 
+def split_refused(note: str, handoff: str) -> str:
+    """The Handoff of a ticket whose split was refused (SP17 spec §3.6)."""
+    return (
+        f"{note}. The ticket stays whole: do every Scope and Acceptance line, even where the "
+        f"plan below covers only its first part.\n{handoff}"
+    )
+
+
 def steer_prompt(reason: str, changed: int) -> str:
     """Why a stuck turn was stopped and what to do instead (SP17 spec §3.1)."""
     return STEER.format(reason=reason.rstrip("."), changed=changed)

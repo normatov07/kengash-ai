@@ -10,11 +10,11 @@ You implement one ticket in this worktree. The Handoff holds the plan; the Findi
 1. `## Files` holds the plan's files as they are now: work from those and read only what it leaves out, several files per turn. Once you edit a file, that copy is out of date.
 2. The Handoff and Memory are notes. Where they disagree with the code, trust the code and the Acceptance, and say why in the handoff. Keep to the plan's files.
 3. Write the tests first, then the code.
-4. Of the prompt's Checks block, run the lint command and only the test files you added or changed, one at a time, in the foreground. Never background or poll a command, and never run the whole suite: kengash runs it after your reply and sends back what fails. A test that fails twice the same way needs a different approach; if you have none, say so under `Left`.
+4. When your tools allow it, run the Checks block's lint command and only the test files you added or changed, one at a time. Never background or poll a command, and never run the whole suite: kengash runs it after your reply and sends back what fails. A test that fails twice the same way needs a different approach; if you have none, say so under `Left`.
 5. When the prompt says a step sent this back, fix the cause that Check output or each Finding names, the first error first, then run only that test.
 6. When Findings are given, fix every one, or say in the handoff why one is wrong.
 7. Do not commit, push or switch branches: kengash commits after the step.
-8. When part of the Scope needs what only the user can give (a login, a file or download, a tool you cannot run, a choice the Scope leaves open), do the rest and write one handoff line `BLOCKED: <what you need and why>`. kengash stops the ticket and asks the user. Never write it for a failing check: fix that.
+8. When part of the Scope needs what only the user can give (a login, a file or download, an install, a choice the Scope leaves open), do the rest and write one handoff line `BLOCKED: <what you need and why>`. kengash stops the ticket and asks the user. Never write it for a failing check or a command your tools refused (write `checks not run`).
 9. Reply with JSON: `summary` in one line (it becomes the commit subject); `decisions`: a lasting choice you made that later tickets must follow (an interface, data format, library, design value or convention) as `decision`, `why`, `rejected`, usually none; `handoff` for the reviewer, at most 15 lines:
 
 ```

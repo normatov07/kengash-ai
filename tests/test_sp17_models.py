@@ -3,8 +3,10 @@
 from typing import Any
 
 import pytest
+from conftest import write_settings
 from typer.testing import CliRunner
 
+from kengash_ai import settings
 from kengash_ai.cli import app
 from kengash_ai.model import NeedsSetup, ProviderStatus, Settings
 from kengash_ai.ops import agent_config, agents, queue
@@ -134,3 +136,33 @@ def test_a_project_can_clear_an_importance_the_defaults_set(
     assert CliRunner().invoke(app, [*args, "--model-for", "critical="]).exit_code == 0
     found = agent_config.show_agent("code-reviewer", project="payments-api")
     assert found.by_importance == {}
+
+
+def test_the_shell_honours_skip() -> None:
+    resolved = Settings(agents={"test-runner": {"cli": "shell", "skill": "run-tests"}})
+    with pytest.raises(NeedsSetup):
+        agents.pick(resolved, "test-runner", _status(), skip={"shell"})
+
+
+def test_the_chain_reaches_the_agents_cli_on_the_same_provider() -> None:
+    resolved = _settings(by_importance={"critical": "claude/opus"})
+    pick = agents.pick(
+        resolved, "implementer", _status(), importance="critical", skip={"claude/opus"}
+    )
+    assert (pick.provider, pick.model, pick.fallback) == ("claude", "sonnet", True)
+
+
+def test_a_scope_that_picks_a_cli_drops_the_inherited_models(
+    store_paths: StorePaths, registered_repo: Any
+) -> None:
+    write_settings(store_paths, "agents:\n  code-reviewer: {cli: codex}\n")
+    assert settings.load(store_paths, "payments-api").agents["code-reviewer"].by_importance == {}
+
+
+def test_a_scope_that_sets_only_the_models_keeps_the_inherited_cli(
+    store_paths: StorePaths, registered_repo: Any
+) -> None:
+    text = "agents:\n  code-reviewer: {by_importance: {simple: claude/haiku}}\n"
+    write_settings(store_paths, text)
+    agent = settings.load(store_paths, "payments-api").agents["code-reviewer"]
+    assert (agent.cli, agent.by_importance) == ("claude/sonnet", {"simple": "claude/haiku"})

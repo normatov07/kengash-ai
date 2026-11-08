@@ -21,6 +21,7 @@ Resolve SETTINGS.md into a validated `Settings` model so agents never parse the 
 
 ## Changes
 
+- 2026-11-08: `merge`: an agent given a `cli` without `by_importance` drops the inherited mapping (SP17 review).
 - 2026-11-08: `WHOLE`: `by_importance` is replaced whole by a narrower scope (SP17).
 - 2026-11-06 (SP12 minors): `set_values` setting a renamed key's new name renames the old key on its own line (`yamledit.rename_key`), keeping its place and comment.
 - 2026-11-06: `scope_layer(paths, slug)`: one scope's own file as written, renamed keys under their old names (SP12 M3).

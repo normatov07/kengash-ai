@@ -6,16 +6,19 @@ asked for, and decisions (gates, failed tickets) stay with the conductor and the
 """
 
 import traceback
+from datetime import timedelta
 from pathlib import Path
 
 from kengash_ai import settings
-from kengash_ai.model import UserError
-from kengash_ai.ops import controls, queue
+from kengash_ai.model import UserError, utc_now
+from kengash_ai.ops import controls, leases, queue
 from kengash_ai.store import runtime
 from kengash_ai.store.locks import locked
 from kengash_ai.store.paths import StorePaths
+from kengash_ai.store.registry import load_registry
 
 ALL = "all"
+MAX_IDLE = timedelta(hours=24)  # a loop that started nothing for this long is over
 
 
 def note_claim(paths: StorePaths, project: str | None) -> None:
@@ -25,7 +28,8 @@ def note_claim(paths: StorePaths, project: str | None) -> None:
         intent = runtime.load_relay(paths)
         if scope not in intent.scopes:
             intent.scopes.append(scope)
-            runtime.save_relay(paths, intent)
+        intent.touched = utc_now()
+        runtime.save_relay(paths, intent)
 
 
 def note_release(paths: StorePaths, project: str | None) -> None:
@@ -36,21 +40,48 @@ def note_release(paths: StorePaths, project: str | None) -> None:
 def advance(paths: StorePaths) -> list[str]:
     """Start every ticket a loop covers that can start now; the ids that started. A scope
     with nothing runnable, running, held back or at a gate is finished and forgotten."""
+    intent = runtime.load_relay(paths)
+    if intent.scopes and utc_now() - intent.touched > MAX_IDLE:
+        _keep(paths, [])
+        return []
     started: list[str] = []
-    for scope in list(runtime.load_relay(paths).scopes):
+    for scope in list(intent.scopes):
         project = None if scope == ALL else scope
         try:
             found = queue.compute(paths, project)
-        except UserError:  # the project was removed
-            _drop(paths, scope)
+        except (
+            UserError
+        ):  # a bad SETTINGS.md is fixed and the loop goes on; a removed project is not
+            if project is not None and project not in load_registry(paths).projects:
+                _drop(paths, scope)
             continue
         ids = [ticket.id for ticket in found.runnable if _relays(paths, ticket.project)]
         if ids:
             result = controls.run_tickets(ids, project=None, by="relay")
             started += [one.id for one in result.started]
-        elif not (found.runnable or found.running or found.gates or found.held_back):
+        elif not (
+            found.runnable
+            or found.running
+            or found.gates
+            or found.held_back
+            or found.paused
+            or found.blocked
+        ):
             _drop(paths, scope)
+    if started:
+        _touch(paths)
     return started
+
+
+def covered(paths: StorePaths) -> list[str]:
+    """What the relay would still act for."""
+    return list(runtime.load_relay(paths).scopes)
+
+
+def forget_unleased(paths: StorePaths) -> None:
+    """Drop the scopes no live loop holds: `loop release` by a conductor whose lease is gone."""
+    held = {lease.project or ALL for lease in leases.live(paths)}
+    _keep(paths, [scope for scope in runtime.load_relay(paths).scopes if scope in held])
 
 
 def advance_quietly(paths: StorePaths | None = None) -> list[str]:
@@ -75,6 +106,20 @@ def _drop(paths: StorePaths, scope: str) -> None:
         if scope in intent.scopes:
             intent.scopes.remove(scope)
             runtime.save_relay(paths, intent)
+
+
+def _keep(paths: StorePaths, scopes: list[str]) -> None:
+    with locked(_lock(paths)):
+        intent = runtime.load_relay(paths)
+        intent.scopes = [scope for scope in intent.scopes if scope in scopes]
+        runtime.save_relay(paths, intent)
+
+
+def _touch(paths: StorePaths) -> None:
+    with locked(_lock(paths)):
+        intent = runtime.load_relay(paths)
+        intent.touched = utc_now()
+        runtime.save_relay(paths, intent)
 
 
 def _lock(paths: StorePaths) -> Path:

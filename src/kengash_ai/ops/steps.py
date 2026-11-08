@@ -253,17 +253,21 @@ def _begin(job: _Job, *, budget_left: bool) -> _Ready | JobEnd | _WaitPaths:
 
 
 def _split(
-    job: _Job, resolved: Settings, doc: Doc[Ticket], output: PlanOutput
+    job: _Job, resolved: Settings, doc: Doc[Ticket], state: TicketState, output: PlanOutput
 ) -> tuple[str, list[Event]]:
     """A planner's `parts` applied (SP17 spec §3.6): the Log note and the new tickets' events.
     A refused split leaves the ticket whole, and says why."""
     if not output.parts:
         return "", []
-    problem = tickets.split_problem(doc.meta, doc.sections, output.parts, resolved)
+    problem = (
+        "this ticket has already split"
+        if state.split
+        else tickets.split_problem(doc.meta, doc.sections, output.parts, resolved)
+    )
     if problem:
         return f"split refused: {problem}", []
     created = tickets.split(job.paths, job.slug, doc, output.parts, by="kengash")
-    job.split = True
+    state.split = job.split = True
     return f"split into {len(output.parts)} parts", created
 
 
@@ -352,7 +356,7 @@ def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
     if reused is not None:
         return _Ran(pick, request, reused, Usage(), ready.doc.meta.loop)
     usage = Usage()
-    tried = {pick.provider}
+    tried = {pick.cli}
     timed_out = repaired = unblocked = reconnected = crashed = False
     steered = corrected = 0
     while True:
@@ -393,10 +397,10 @@ def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
             fallback = _fallback(job, ready, pick, tried)
             if fallback is not None:
                 pick = fallback
-                tried.add(pick.provider)
+                tried.add(pick.cli)
                 slots.release(job.paths, job.ticket_id)
                 _take_slot(job, ready, pick)
-                request = _prepare(job, ready, pick)
+                request = _prepare(job, ready, pick, fresh=True)
                 reconnected = timed_out = crashed = False
                 steered = 0
                 continue
@@ -433,12 +437,14 @@ def _changed(job: _Job, ready: _Ready) -> int:
     return len(gitops.changed_files(job.worktree)) if editing else 0
 
 
-def _prepare(job: _Job, ready: _Ready, pick: agents.Pick) -> StepRequest:
+def _prepare(job: _Job, ready: _Ready, pick: agents.Pick, *, fresh: bool = False) -> StepRequest:
     """Start or resume the role's session on `pick` and build the step's request."""
     ticket, step, resolved = ready.doc.meta, ready.step, ready.resolved
     role = pick.role
     ref = ticket.sessions.get(role)
-    resume = resolved.sessions.reuse and ref is not None and ref.provider == pick.provider
+    resume = (
+        not fresh and resolved.sessions.reuse and ref is not None and ref.provider == pick.provider
+    )
     session_id = ref.id if resume and ref is not None else None
     if pick.provider == "claude" and not resume:
         session_id = str(uuid4())  # known before the step ends, so a killed step can resume
@@ -544,8 +550,8 @@ def _repair(job: _Job, request: StepRequest, result: StepResult, problem: str) -
 
 
 def _fallback(job: _Job, ready: _Ready, pick: agents.Pick, tried: set[str]) -> agents.Pick | None:
-    if not ready.resolved.fallback_on_error:
-        return None
+    if pick.provider == "shell" or not ready.resolved.fallback_on_error:
+        return None  # a check has nothing to fall back to, and no slot to wait for
     try:
         importance = ready.doc.meta.importance.value
         return agents.pick(ready.resolved, pick.role, job.detect, skip=tried, importance=importance)
@@ -931,8 +937,12 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
                 doc.sections["Handoff"] = prompts.handoff_text(output.handoff)
                 blocked = prompts.blocked_line(output.handoff)
                 if isinstance(output, PlanOutput):
-                    split_note, created = _split(job, resolved, doc, output)
+                    split_note, created = _split(job, resolved, doc, state, output)
                     events_after += created
+                    if split_note and not created:  # the plan may cover only its first part
+                        doc.sections["Handoff"] = prompts.split_refused(
+                            split_note, doc.sections["Handoff"]
+                        )
                     planned = output.parts[0].files if created else output.files
                     narrowed = _narrow(resolved, ticket, step, planned)
                 if output.decisions:  # recorded only when the ticket merges (SP16 §3.3)

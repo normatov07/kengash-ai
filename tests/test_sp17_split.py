@@ -3,7 +3,7 @@
 from collections.abc import Callable
 
 import pytest
-from conftest import Engine, Events, FakeClis
+from conftest import Engine, Events, FakeClis, write_settings
 
 from kengash_ai.model import Doc, Part, Settings, Ticket
 from kengash_ai.ops import records, steps, tickets
@@ -147,3 +147,68 @@ def test_a_refused_split_keeps_the_ticket_whole(engine: Engine, fake_clis: FakeC
     steps.run_job("7b55e0c1", steps=1)
     after = engine.ticket()
     assert after.meta.title == title and "split refused" in after.sections["Log"]
+
+
+def _plan_output(parts: list[Part], handoff: str = "h") -> dict[str, object]:
+    return {
+        "summary": "split",
+        "handoff": handoff,
+        "files": _files("a", 8) + _files("b", 8),
+        "decisions": [],
+        "parts": [part.model_dump() for part in parts],
+    }
+
+
+def test_a_refused_split_tells_the_implementer_the_ticket_stays_whole(
+    engine: Engine, fake_clis: FakeClis
+) -> None:
+    doc = engine.ticket()
+    doc.sections.update(SECTIONS)
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    parts = _parts()
+    parts[1] = parts[1].model_copy(update={"acceptance": []})
+    fake_clis.queue("claude", stdout=fake_clis.claude_output(_plan_output(parts, "Files: a0.py")))
+    steps.run_job("7b55e0c1", steps=1)
+    handoff = engine.ticket().sections["Handoff"]
+    assert "no part keeps the acceptance line" in handoff
+    assert handoff.endswith("Files: a0.py")
+
+
+def test_a_ticket_splits_only_once(
+    engine: Engine, fake_clis: FakeClis, store_paths: StorePaths
+) -> None:
+    write_settings(
+        engine.paths,
+        "loop_count_rejected_review: false\n"
+        "agents:\n  plan-reviewer: {cli: claude, skill: review-plan}\n"
+        "workflows:\n  simple: {steps: [plan, review_plan, implement], "
+        "on_fail: {review_plan: plan}}\n",
+    )
+    doc = engine.ticket()
+    doc.sections.update(SECTIONS)
+    documents.save_ticket(engine.paths.project(engine.slug), doc)
+    rejected = {
+        "verdict": "fail",
+        "summary": "no",
+        "findings": [
+            {"severity": "high", "file": "Plan", "line": 0, "issue": "gap", "fix": "fill it"}
+        ],
+    }
+    fake_clis.queue("claude", stdout=fake_clis.claude_output(_plan_output(_parts())))
+    fake_clis.queue("claude", stdout=fake_clis.claude_output(rejected))
+    fake_clis.queue("claude", stdout=fake_clis.claude_output(_plan_output(_parts())))
+    steps.run_job("7b55e0c1", steps=3)
+    assert len(records.project_tickets(store_paths, "payments-api")) == 2
+
+
+def test_a_part_keeps_one_checkbox_on_each_acceptance_line(
+    store_paths: StorePaths,
+    registered_repo: object,
+    make_ticket: Callable[..., Doc[Ticket]],
+) -> None:
+    doc = _ticket(make_ticket, status="in_process/under_planning", step="plan")
+    documents.save_ticket(store_paths.project("payments-api"), doc)
+    parts = _parts()
+    parts[0] = parts[0].model_copy(update={"acceptance": ["- [ ] one works"]})
+    tickets.split(store_paths, "payments-api", doc, parts, by="planner")
+    assert doc.sections["Acceptance"] == "- [ ] one works"

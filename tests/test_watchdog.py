@@ -264,3 +264,25 @@ def test_one_test_file_piped_to_tail_does_not_count() -> None:
     dog = Watchdog(lambda event: None, soft_s=99, poll_max=0, full_runs_max=1, test_cmd="pytest -q")
     for _ in range(3):
         assert dog._count(Signal("run", "pytest -q tests/test_a.py 2>&1 | tail -20")) == ""
+
+
+def test_a_stopped_call_carries_the_running_total(tmp_path: Path, monkeypatch: Any) -> None:
+    init = json.dumps({"event": "init", "conversation_id": "conv-1"})
+    used = json.dumps(
+        {
+            "event": "step_update",
+            "step_update": {
+                "state": "DONE",
+                "step_type": "agent_response",
+                "usage": {"input_tokens": 100, "output_tokens": 20, "cache_read_tokens": 5},
+            },
+        }
+    )
+    _fake(tmp_path, "agy", f"echo '{init}'\necho '{used}'\necho '{POLL}'\nsleep 30\n")
+    _on_path(monkeypatch, tmp_path)
+    prior = Usage(input=1000, output=200, cache_read=50)
+    request = _request(tmp_path, resume=True, session_id="conv-1", prior_usage=prior)
+    result = Antigravity().run(request)
+    assert result.error == "stuck"
+    assert result.usage == Usage(input=100, output=20, cache_read=5)
+    assert result.total_usage == Usage(input=1100, output=220, cache_read=55)

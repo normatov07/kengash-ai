@@ -32,6 +32,7 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 
 ## Changes
 
+- 2026-11-08: a stopped call sets `total_usage` to the prior total plus what its stream showed, so the next resume does not count it twice; `Usage.plus` replaces the driver's own (SP17 review).
 - 2026-11-08: `watchdog` and the `stuck` error: a call polling a background command, rerunning the whole suite (also piped or redirected) or past its soft deadline is stopped so the step loop can steer it; an observer that raises is ignored, so the pump keeps draining the CLI (SP17).
 - 2026-11-08: a timed-out or stopped call parses its partial output: a valid output wins, otherwise it reports the session and tokens the stream shows; `stream idle timeout` and `context deadline exceeded` are `network`; `ProviderStatus.live_models` is true for agy (SP17).
 - 2026-11-08: `classify` reads agy's `cannot rewind body after connection loss` and `connection timed out` as `network`, so the step resumes once and then falls back instead of failing as a crash.

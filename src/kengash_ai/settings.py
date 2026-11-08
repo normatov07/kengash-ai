@@ -50,8 +50,12 @@ def unflatten(data: Mapping[str, Any]) -> dict[str, Any]:
 def merge(
     base: Mapping[str, Any], override: Mapping[str, Any], path: tuple[str, ...] = ()
 ) -> dict[str, Any]:
-    """Deep-merge `override` onto `base`; each workflow is replaced whole, never mixed."""
+    """Deep-merge `override` onto `base`; each workflow is replaced whole, never mixed, and an
+    agent given a `cli` without `by_importance` drops the inherited one: whoever picks a CLI
+    has not asked another to run their critical tickets."""
     out = dict(base)
+    if len(path) == 2 and path[0] == "agents" and "cli" in override and WHOLE.isdisjoint(override):
+        out.pop("by_importance", None)
     for key, value in override.items():
         current = out.get(key)
         if (

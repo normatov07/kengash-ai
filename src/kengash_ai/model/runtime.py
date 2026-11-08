@@ -97,6 +97,7 @@ class TicketState(_Runtime):
     sent_back: SentBack | None = None
     checked: Checked | None = None
     waiting_on: str = ""  # the ticket whose paths this one waits for (SP16 spec §3.8)
+    split: bool = False  # a ticket splits once (SP17 spec §3.6)
     seen: dict[str, str] = Field(default_factory=dict)  # role → commit it last saw (SP17)
 
 
@@ -105,6 +106,7 @@ class RelayIntent(_Runtime):
     finishing worker starts the next ticket with no conductor awake (SP17 spec §3.4)."""
 
     scopes: list[str] = Field(default_factory=list)
+    touched: datetime = Field(default_factory=utc_now)  # a claim, or the last ticket it started
 
 
 class ConductorPing(_Runtime):

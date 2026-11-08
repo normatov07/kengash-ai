@@ -16,6 +16,10 @@ class Pick:
     model: str | None
     fallback: bool
 
+    @property
+    def cli(self) -> str:
+        return f"{self.provider}/{self.model}" if self.model else self.provider
+
 
 def pick(
     resolved: Settings,
@@ -25,17 +29,18 @@ def pick(
     skip: Collection[str] = (),
     importance: str | None = None,
 ) -> Pick:
-    """The first usable CLI of the role's chain that is not in `skip`; NeedsSetup if none. The
-    chain is the CLI for the ticket's `importance`, the agent's CLI, then its fallbacks."""
+    """The first usable CLI of the role's chain that is not in `skip` (a provider, or one
+    provider/model); NeedsSetup if none. The chain is the CLI for the ticket's `importance`,
+    the agent's CLI, then its fallbacks."""
     agent = resolved.agents[role]
     first_problem: str | None = None
     chain = list(dict.fromkeys([agent.cli_for(importance), agent.cli, *agent.fallback]))
     for index, cli in enumerate(chain):
         provider, model = split_cli(cli)
+        if provider in skip or cli in skip:
+            continue
         if provider == "shell":
             return Pick(role, provider, None, False)
-        if provider in skip:
-            continue
         found = problem(provider, status) or _no_model(provider, model, status)
         if found is None:
             return Pick(role, provider, model, index > 0)
