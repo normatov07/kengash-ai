@@ -31,6 +31,7 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 
 ## Changes
 
+- 2026-11-08: `classify` reads agy's `cannot rewind body after connection loss` and `connection timed out` as `network`, so the step resumes once and then falls back instead of failing as a crash.
 - 2026-11-07: live probe, agy 1.5.3, `--mode accept-edits`: the rule `command(echo kengash-probe)` let `echo kengash-probe one` run (a prefix with more arguments), and `ls -la` was denied (`denied_actions: RunCommand`) (SP15 M2).
 - 2026-11-07: digest review fixes: a dart/flutter progress line is a marker only with `[E]` (test names hold marker words); the headline prefers a strong marker (`[E]`, FAILED, EXCEPTION, `Expected:`, `Error:`, analyzer rows); every pattern starts at a token boundary, so long lines cost linear time (100,000 long lines: 22.7 s → 0.7 s) (SP15).
 - 2026-11-07: agy editing steps may run the project's checks and read-only git (`command(...)` allow rules, `edit_line`); a check with a shell operator is left out (SP15).

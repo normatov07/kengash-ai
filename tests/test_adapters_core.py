@@ -208,6 +208,11 @@ def test_an_interrupted_wait_ends_the_cli_group(
         "upstream returned 503 Service Unavailable",
         "rpc error: code = UNAVAILABLE desc = overloaded",
         "write: broken pipe",
+        # agy 1.5.3, chess-samurai 2026-11-08: 18 minutes of implement work lost as a crash
+        "agent executor error: generating and executing: request failed: Post "
+        '"https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse": '
+        "net/http: cannot rewind body after connection loss",
+        "read: connection timed out",
     ],
 )
 def test_classify_network(message: str) -> None:
