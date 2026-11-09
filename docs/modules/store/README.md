@@ -6,6 +6,7 @@ Everything under `~/.kengash`: paths, atomic writes, frontmatter documents, ids,
 
 ## Interface
 
+- `StorePaths.harvest`, `harvest_cursors`; `runtime.harvest_entries`, `save_harvest`, `drop_harvest`, `load_harvest_cursors`, `save_harvest_cursors` (SP18).
 - `StorePaths.default()` and `ProjectPaths`: the layout of system spec §4.1, plus `StorePaths.slots`, `claims`, `trust`, `flags`, `workers`, `ticket_states`, `conductors`, `loops` and `logs` under `runtime/`, and `worktrees` with `worktree(slug, id)` (`worktrees/<slug>/kg-<id>`, or a ticket's existing 0.1.0 `hrn-<id>`); `KENGASH_HOME` (then 0.1.0's `HARNESS_HOME`) overrides `~/.kengash`.
 - `seed.ensure_store`, `seed.ensure_project`: create folders and copy default files only when missing; role skills are not seeded since SP10 (built-in ones always load from the package); `seed.link_memory(paths, project)` points a project's `memory` at `../../memory`, replacing a missing or stale link but never a real file or folder.
 - `documents`: `load_plan`, `load_ticket` (each parsed once per file content and returned as a copy, SP7), `load_any`, `save_plan`, `save_ticket` (a ticket lands in the folder its status names), `save_any`, `find_ticket`, `iter_documents`, `check_document`.
@@ -29,6 +30,7 @@ Everything under `~/.kengash`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
+- 2026-11-09: harvest spool and cursors under runtime/ (SP18).
 - 2026-11-08: the seeded SETTINGS.md names `steering`, `paths`, `context.max_kib`, `checks.parallel`, `plan.max_files`, `review.block_on`, `loop_relay`, and runs the code reviewer on Sonnet with Opus for `critical`; `StorePaths.relay`, `runtime.load_relay` and `save_relay` (`runtime/relay.json`) (SP17).
 - 2026-11-07: the seeded SETTINGS.md sets `merge.mode: auto` (SP16).
 - 2026-11-07: the seeded SETTINGS.md names `checks.turns: 2` (SP15).

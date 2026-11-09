@@ -6,12 +6,22 @@ All notable changes to this project are written here. The format follows [Keep a
 
 ### Added
 
+- Automatic memory: a one-shot job on the cheap model records what you settle, at `plan approve`, `plan reject --why`, `approve --note`, and when a Claude Code session compacts or ends (`kengash skills install --global` adds those two hooks to `~/.claude/settings.json`). A fact must quote your own words or it is dropped, and only registered projects are read. `memory.harvest` is `all`, `plans` or `off`; `kengash memory forget "<words>"` removes a line; `kengash memory harvest --plan <id>` reads a plan approved earlier.
+- `kengash ticket add --check` reports a ticket list's levels, chokepoints, files that force tickets to run one at a time, top-level folders claimed, and files many past tickets changed. It creates nothing.
+- `kengash next` and `kengash watch` say when a ticket at a gate or parked holds three or more others back.
 - Steering: a CLI call that polls a background command, reruns the whole test suite or passes its soft deadline is stopped and resumed with a correction, up to `steering.turns` times, then goes to the fallback chain. The work stays in the worktree.
 - The relay: while a loop is on, a finishing worker, a merge, an approval or a resume starts what is now runnable, so no conductor has to be awake. No process stays behind. It stops after 24 hours without starting anything, `kengash loop status` shows what it covers, and `loop_relay: false` turns it off for a project.
 - A plan over `plan.max_files` (default 12) can split its ticket into parts. A split that loses an acceptance line is refused and the ticket continues whole.
 - New editing sessions get the plan's files inline, read at that moment (`context.max_kib`); a resumed session is told which files changed since it last spoke; a memory line naming a file that is gone is tagged, not hidden.
 - A model per ticket importance on every agent (Agents page, or `kengash agent edit --model-for critical=claude/opus`), and "Other models" for the plan reviewer and the memory compactor.
 - `checks.parallel` limits kengash's own test runs on this machine (default: half the CPU cores).
+
+### Changed
+
+- Every `depends_on` in `ticket add` needs a `needs` line saying what it uses from that ticket.
+- `plan save` of a full plan needs a `## Lasting decisions` section; `none` is allowed.
+- Workers get your decisions first, then those naming the ticket's paths, and more of them fit.
+- A claim on a whole test folder no longer makes tickets wait; files an editing step changes outside its claim join the claim.
 
 ### Fixed
 

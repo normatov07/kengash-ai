@@ -21,7 +21,18 @@ from kengash_ai.model import (
     WorkerRecord,
     utc_now,
 )
-from kengash_ai.ops import agents, jobs, lifecycle, merging, prompts, records, slots, steps, watch
+from kengash_ai.ops import (
+    agents,
+    harvest,
+    jobs,
+    lifecycle,
+    merging,
+    prompts,
+    records,
+    slots,
+    steps,
+    watch,
+)
 from kengash_ai.store import documents, runtime, storegit
 from kengash_ai.store.locks import locked
 from kengash_ai.store.paths import StorePaths
@@ -195,6 +206,8 @@ def approve_ticket(
         if restart:
             _start_worker(paths, slug, ticket, steps=None)
         records.record(paths, f"kengash: approve {ticket_id}", approved, *events)
+    if note is not None and answer is not None:
+        harvest.submit(paths, f"ticket {ticket_id} answer", slug, f"USER: {answer}", answer)
     if isinstance(decision, workflow.Merge):
         return Approved(ticket_id, slug, merging.merge_if_clean(paths, slug, ticket_id, by=by))
     shown = watch.open_ticket(paths, slug, ticket_id) if restart else ""

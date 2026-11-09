@@ -15,7 +15,7 @@ from typing import Annotated, Any
 
 import typer
 
-from kengash_ai import __version__
+from kengash_ai import __version__, scheduler
 from kengash_ai.model import Folder, KengashError, NeedsUser, PlanMode, UserError
 from kengash_ai.ops import (
     activity,
@@ -25,6 +25,7 @@ from kengash_ai.ops import (
     conductors,
     controls,
     evals,
+    harvest,
     loops,
     merging,
     plans,
@@ -341,6 +342,37 @@ def memory_compact(
         raise typer.Exit(1)
 
 
+@memory_app.command("harvest")
+def memory_harvest(
+    hook: Annotated[
+        bool, typer.Option("--hook", help="Read a Claude Code hook's JSON on stdin.")
+    ] = False,
+    plan: Annotated[str | None, typer.Option("--plan", help="Harvest a plan by id.")] = None,
+    project: Only = None,
+) -> None:
+    """Record what the user settled, from a plan or a Claude Code session."""
+    if hook:
+        harvest.from_hook(sys.stdin.read())  # silent and always exit 0: it runs as a hook
+        return
+    with _errors():
+        if plan is None:
+            raise UserError("say what to harvest: --plan <id>")
+        queued = harvest.queue_plan(plan, project)
+    typer.echo("harvest queued" if queued else "nothing to harvest")
+
+
+@memory_app.command("forget")
+def memory_forget(
+    text: Annotated[str, typer.Argument(help="Words from the one line to remove.")],
+    by: By = "unknown",
+    project: Project = None,
+) -> None:
+    """Remove one line from MEMORY.md, DECISIONS.md or the project's PROCESS.md."""
+    with _errors():
+        line = workspace.forget(text, project, Path.cwd(), by)
+    typer.echo(f"forgot: {line}")
+
+
 @memory_app.command("show")
 def memory_show(
     decisions: Annotated[bool, typer.Option("--decisions", help="Show DECISIONS.md.")] = False,
@@ -372,6 +404,10 @@ def context(project: Project = None, as_json: AsJson = False) -> None:
         gates = [f"- {gate.id} {gate.sub_status}: {gate.title}" for gate in digest.gates]
         parts.append("# Open gates\n" + ("\n".join(gates) or "none"))
     parts.append(f"# Record\n{digest.record}")
+    if digest.recent:
+        lines = "\n".join(digest.recent)
+        undo = 'Tell the user what was recorded; kengash memory forget "<words>" removes a line.'
+        parts.append(f"# Recorded from what the user said\n{lines}\n{undo}")
     typer.echo("\n\n".join(parts))
 
 
@@ -547,11 +583,23 @@ def ticket_add(
             "--file", exists=True, dir_okay=False, help="YAML or JSON list; default: stdin."
         ),
     ] = None,
+    check: Annotated[
+        bool, typer.Option("--check", help="Report the graph's shape; create nothing.")
+    ] = False,
     project: Only = None,
     by: By = "unknown",
     as_json: AsJson = False,
 ) -> None:
     """Add tickets to an approved plan from a YAML or JSON list (SP2 spec §4)."""
+    if check:
+        with _errors():
+            text = file.read_text(encoding="utf-8") if file else _stdin("ticket list")
+            report = tickets.check_batch(plan, text, project=project)
+        if as_json:
+            _emit_json(report)
+        else:
+            typer.echo("\n".join(_batch_lines(report)))
+        return
     with _errors():
         text = file.read_text(encoding="utf-8") if file else _stdin("ticket list")
         batch = tickets.add_tickets(plan, text, project=project, by=by)
@@ -559,7 +607,31 @@ def ticket_add(
     ready = sum(new.status == "in_queue/ready" for new in batch.tickets)
     ids = ", ".join(new.id for new in batch.tickets)
     line = f"{_plural(count, 'ticket')}: {ids} ({ready} ready, {count - ready} blocked)"
+    if batch.shape is not None:
+        line += f"\n{_shape_line(batch.shape)}"
     _emit(batch, as_json, line)
+
+
+def _shape_line(shape: scheduler.Shape) -> str:
+    return (
+        f"graph: {_plural(shape.tickets, 'ticket')}, {_plural(shape.levels, 'level')}, "
+        f"up to {shape.widest} at once"
+    )
+
+
+def _batch_lines(report: tickets.BatchCheck) -> list[str]:
+    """`ticket add --check`, one finding per line (SP18 spec §3.6)."""
+    lines = [_shape_line(report.shape)]
+    lines += [
+        f"chokepoint: {name} has {n} tickets behind it" for name, n in report.shape.chokepoints
+    ]
+    lines += [f"one at a time: {a} and {b} share {path}" for a, b, path in report.serial]
+    lines += [f"too broad: {name} claims {path}" for name, path in report.broad]
+    lines += [
+        f"hot file: {name} changed by {n} tickets, claimed by {', '.join(who)}"
+        for name, n, who in report.hot
+    ]
+    return lines if len(lines) > 1 else [*lines, "no problems found"]
 
 
 @ticket_app.command("show")
@@ -673,8 +745,13 @@ def show_next(project: Every = None, as_json: AsJson = False) -> None:
         f"{item.id} {item.project} {item.importance} {item.step}→{item.provider} {item.title}"
         for item in found.runnable
     ] or [_nothing_runnable(found)]
+    lines += [_stuck_line(item) for item in found.stuck]
     for line in _capped(lines, "kengash next --json"):
         typer.echo(line)
+
+
+def _stuck_line(item: queue.Stuck) -> str:
+    return f"waiting on {item.id} ({item.status}): {item.behind} tickets behind it"
 
 
 def _nothing_runnable(found: queue.Queue) -> str:

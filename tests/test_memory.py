@@ -263,13 +263,13 @@ def test_digest_keeps_project_and_global_decisions_only(store: StorePaths) -> No
 
 
 def test_digest_drops_oldest_over_cap_with_note(store: StorePaths) -> None:
-    for number in range(80):
+    for number in range(160):
         memory.add(store, f"decision number {number} keeps a long tail", "x", decision=True)
     text = memory.digest(store, None)
-    assert "decision number 79 keeps" in text
+    assert "decision number 159 keeps" in text
     assert "decision number 0 keeps" not in text
-    assert "older lines in DECISIONS.md" in text
-    assert len(text) < 2_500 + 200
+    assert "less relevant lines in DECISIONS.md" in text
+    assert len(text) < 4_000 + 200
 
 
 def test_digest_keeps_process_head_over_cap(store: StorePaths) -> None:

@@ -162,7 +162,10 @@ def test_setup_saves_ids_for_later_steps(work: Path, source: Path, fake_clis: Fa
             "stdin": "Seed.",
             "save": "plan",
         },
-        {"args": ["plan", "save", "{plan}"], "stdin": "## Goal\nShip it.\n"},
+        {
+            "args": ["plan", "save", "{plan}"],
+            "stdin": "## Goal\nShip it.\n## Lasting decisions\nnone\n",
+        },
     ]
     fake_clis.queue("claude", stdout=claude_reply())
     case = scenario(

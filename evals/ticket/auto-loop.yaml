@@ -25,6 +25,8 @@ setup:
     stdin: |
       ## Goal
       calc.py gains add(a, b).
+      ## Lasting decisions
+      none
       ## Scope
       One function in calc.py.
       ## Design

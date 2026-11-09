@@ -203,6 +203,32 @@ def changed_between(cwd: Path, old: str, new: str) -> list[str]:
     return result.stdout.split("\n")[:-1] if result.returncode == 0 else []
 
 
+def branch_files(cwd: Path, base: str) -> list[str]:
+    """Every path the branch changed since it left `base`; a rename counts as both names."""
+    return _git(cwd, "diff", "--name-only", "--no-renames", f"{base}...HEAD").splitlines()
+
+
+def hot_files(
+    repo: Path, ref: str, *, commits: int = 400, at_least: int = 3
+) -> list[tuple[str, int]]:
+    """Files that at least `at_least` tickets changed in the last `commits` commits, most
+    changed first (SP18 spec §3.6). Tickets are counted, not commits: fix-up loops of one
+    ticket do not make a file hot."""
+    key = f"{TRAILER}Ticket"
+    format_ = f"--format=%x00%(trailers:key={key},valueonly)"
+    text = _git(repo, "log", f"-n{commits}", format_, "--name-only", ref)
+    changed: dict[str, set[str]] = {}
+    for chunk in text.split("\0")[1:]:
+        names = [line.strip() for line in chunk.splitlines() if line.strip()]
+        if len(names) > 1:  # a commit with no trailer has only file names, or nothing
+            ticket = names[0]
+            if len(ticket) == 36 and ticket.count("-") == 4:
+                for name in names[1:]:
+                    changed.setdefault(name, set()).add(ticket)
+    found = [(name, len(tickets)) for name, tickets in changed.items() if len(tickets) >= at_least]
+    return sorted(found, key=lambda item: (-item[1], item[0]))
+
+
 def ticket_commits(repo: Path, ticket_uuid: str, ref: str) -> list[Commit]:
     """Commits on `ref` that carry `Kengash-Ticket: <uuid>` (or 0.1.0's `Harness-Ticket`),
     oldest first; their trailers come back under the `Kengash-` names."""

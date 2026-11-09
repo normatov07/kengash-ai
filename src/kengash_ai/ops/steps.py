@@ -62,6 +62,7 @@ from kengash_ai.store.redact import redact
 from kengash_ai.store.registry import load_registry
 
 SLOT_POLL_S = 5
+OVERLAP_SHOWN = 20
 PATH_POLL_S = 5  # a job waiting for another ticket's paths looks again this often (SP16)
 WAITING_PATHS = "in_process/waiting_paths"
 MERGING = merging.MERGING
@@ -282,6 +283,27 @@ def _narrow(resolved: Settings, ticket: Ticket, step: str, files: list[str]) -> 
     return len(paths)
 
 
+def _claim_edits(job: _Job, resolved: Settings, ticket: Ticket) -> tuple[int, str | None]:
+    """Files the branch changed outside the ticket's claim join it, so later tickets wait for
+    them (SP18 spec §3.7): how many, and a ticket that now overlaps. A claim on the whole repo
+    holds them already."""
+    if not ticket.touches:
+        return 0, None
+    policy = lifecycle.path_policy(resolved)
+    try:
+        changed = gitops.branch_files(job.worktree, job.base)
+    except gitops.GitError:
+        return 0, None
+    extra = [name for name in changed if scheduler.needs_claim(name, ticket.touches, policy)]
+    if not extra:
+        return 0, None
+    ticket.touches = [*ticket.touches, *extra]
+    holder = _holder(job.paths, job.slug, resolved, ticket)
+    if holder is not None:
+        _journal(job, "ticket.overlap", holder=holder, files=extra[:OVERLAP_SHOWN])
+    return len(extra), holder
+
+
 def _catch_up(job: _Job) -> None:
     """Start an edit from the newest base when the branch has no work yet (SP16 spec §3.11);
     a git error leaves the worktree as it is."""
@@ -478,10 +500,10 @@ def _prepare(job: _Job, ready: _Ready, pick: agents.Pick, *, fresh: bool = False
     return _request(job, ready, pick, session_id=session_id, resume=resume, log=log)
 
 
-def _memory(job: _Job) -> str:
+def _memory(job: _Job, ticket: Ticket) -> str:
     """The memory digest for a new session; "" when the store cannot give one."""
     try:
-        return memory.digest(job.paths, job.slug, root=job.worktree)
+        return memory.digest(job.paths, job.slug, root=job.worktree, touches=ticket.touches)
     except KengashError:
         return ""
 
@@ -629,7 +651,7 @@ def _request(
             diff_stat=diff_stat,
             instruction=told,
             feedback=feedback,
-            memory=_memory(job),
+            memory=_memory(job, ticket),
             review=review,
         )
         skill = prompts.role_skill(job.paths, job.slug, resolved.agents[pick.role].skill)
@@ -950,6 +972,9 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
                 if output.decisions:  # recorded only when the ticket merges (SP16 §3.3)
                     existing = doc.sections.get("Decisions", "")
                     doc.sections["Decisions"] = prompts.decision_lines(existing, output.decisions)
+        claimed, overlaps = 0, None
+        if resolved.kind_of(step) == "edit":
+            claimed, overlaps = _claim_edits(job, resolved, ticket)
         tokens = ran.usage.tokens
         ticket.tokens += tokens
         line = prompts.log_line(
@@ -957,6 +982,10 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
         )
         if narrowed:
             line += f" · touches narrowed to {narrowed} files"
+        if claimed:
+            line += f" · claimed {claimed} more files"
+        if overlaps:
+            line += f" · overlaps {overlaps}"
         if split_note:
             line += f" · {split_note}"
         if quiet:

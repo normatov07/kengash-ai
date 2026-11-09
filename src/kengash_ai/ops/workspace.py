@@ -35,6 +35,7 @@ class Context:
     process: list[str] = field(default_factory=list)
     gates: list[OpenGate] = field(default_factory=list)
     record: str = RECORD  # when to record what (SP16 spec §3.5)
+    recent: list[str] = field(default_factory=list)  # lines the harvest wrote (SP18 spec §3.4)
 
 
 def resolve_slug(project: str | None, cwd: Path, paths: StorePaths | None = None) -> str | None:
@@ -124,6 +125,12 @@ def remember(
     return result
 
 
+def forget(text: str, project: str | None, cwd: Path, by: str) -> str:
+    """Remove one memory line (SP18 spec §3.4); the line removed."""
+    paths = StorePaths.default()
+    return memory.forget(paths, text, resolve_slug(project, cwd, paths), by=by)
+
+
 def recall(decisions: bool, project: str | None, cwd: Path) -> str:
     paths = StorePaths.default()
     return memory.show(paths, decisions=decisions, project=resolve_slug(project, cwd, paths))
@@ -148,6 +155,7 @@ def context(project: str | None, cwd: Path) -> Context:
     paths = StorePaths.default()
     digest = Context(memory.show(paths))
     slug = resolve_slug(project, cwd, paths)
+    digest.recent = memory.harvested(paths, slug)
     if slug is not None:
         process = paths.project(slug).process
         lines = process.read_text(encoding="utf-8").splitlines() if process.exists() else []

@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import ValidationError
 
-from kengash_ai import settings
+from kengash_ai import gitops, scheduler, settings
 from kengash_ai.model import (
     SUB_STATUSES,
     Doc,
@@ -26,12 +26,13 @@ from kengash_ai.model import (
     UserError,
     utc_now,
 )
-from kengash_ai.ops import jobs, prompts, records, slots
+from kengash_ai.ops import harvest, jobs, lifecycle, prompts, records, slots
 from kengash_ai.ops.workspace import resolve_slug
 from kengash_ai.store import documents
 from kengash_ai.store.ids import new_id
 from kengash_ai.store.locks import locked
 from kengash_ai.store.paths import ProjectPaths, StorePaths
+from kengash_ai.store.registry import load_registry
 from kengash_ai.store.yamlio import load_yaml
 
 SETTABLE = ("title", "importance", "workflow", "gate", "loop_max", "touches", "depends_on", "tags")
@@ -53,6 +54,18 @@ class Batch:
     plan: str
     project: str
     tickets: list[NewTicket]
+    shape: scheduler.Shape | None = None
+
+
+@dataclass
+class BatchCheck:
+    """What `ticket add --check` reports (SP18 spec §3.6), naming tickets by key."""
+
+    project: str
+    shape: scheduler.Shape
+    serial: list[tuple[str, str, str]] = field(default_factory=list)  # a, b, the path they share
+    broad: list[tuple[str, str]] = field(default_factory=list)  # ticket, top-level folder
+    hot: list[tuple[str, int, list[str]]] = field(default_factory=list)  # file, tickets, claims
 
 
 @dataclass
@@ -98,6 +111,7 @@ def add_tickets(plan_id: str, text: str, *, project: str | None, by: str) -> Bat
         plan_doc = records.load_plan(plan_path)
         plan = plan_doc.meta
         _check_plan(plan)
+        quick = plan.mode is PlanMode.quick and plan.status is PlanStatus.draft
         existing = records.project_tickets(paths, slug)
         _check_references(items, existing)
         taken = records.taken_ids(paths)
@@ -128,7 +142,7 @@ def add_tickets(plan_id: str, text: str, *, project: str | None, by: str) -> Bat
                 updated=now,
             )
             acceptance = "\n".join(f"- [ ] {line}" for line in item.acceptance)
-            sections = {"Scope": item.scope.strip(), "Acceptance": acceptance}
+            sections = {"Scope": _scope(item, ids), "Acceptance": acceptance}
             documents.save_ticket(project_paths, Doc(ticket, sections))
             made.append(NewTicket(ticket.id, item.key, ticket.title, ticket.status))
         plan.tickets = [*plan.tickets, *(new.id for new in made)]
@@ -148,10 +162,90 @@ def add_tickets(plan_id: str, text: str, *, project: str | None, by: str) -> Bat
         for new in made
     ]
     records.record(paths, f"kengash: ticket add {' '.join(new.id for new in made)}", *created)
-    return Batch(plan.id, slug, made)
+    if quick:  # a quick plan has no `plan approve`: the ticket list is its approval
+        harvest.submit(paths, f"plan {plan.id}", slug, harvest.plan_words(plan_doc.sections))
+    return Batch(plan.id, slug, made, scheduler.shape(_graph(items)))
+
+
+def check_batch(plan_id: str, text: str, *, project: str | None) -> BatchCheck:
+    """What a ticket list would do to the queue; nothing is created (SP18 spec §3.6)."""
+    items = _parse_batch(text)
+    paths = StorePaths.default()
+    slug, plan_path = records.locate_plan(paths, plan_id, project)
+    _check_plan(records.load_plan(plan_path).meta)
+    _check_references(items, records.project_tickets(paths, slug))
+    graph = _graph(items)
+    claims = {_name(item, n): item.touches for n, item in enumerate(items, 1)}
+    policy = lifecycle.path_policy(settings.load(paths, slug))
+    held = scheduler.behind(graph)
+    apart = [
+        (a, b)
+        for number, a in enumerate(claims)
+        for b in list(claims)[number + 1 :]
+        if b not in held[a] and a not in held[b]
+    ]
+    found = BatchCheck(slug, scheduler.shape(graph))
+    for a, b in apart:
+        if scheduler.clash(claims[a], claims[b], policy):
+            shared = scheduler.shared_paths(claims[a], claims[b], policy)
+            found.serial.append((a, b, shared[0] if shared else "the whole repo"))
+    found.broad = [
+        (name, path)
+        for name, touches in claims.items()
+        for path in touches
+        if scheduler.is_broad(path, policy)
+    ]
+    found.hot = _hot_claims(paths, slug, claims, apart)
+    return found
+
+
+def _hot_claims(
+    paths: StorePaths,
+    slug: str,
+    claims: Mapping[str, Sequence[str]],
+    apart: Sequence[tuple[str, str]],
+) -> list[tuple[str, int, list[str]]]:
+    """Files many earlier tickets changed that tickets of this list claim without an order."""
+    entry = load_registry(paths).projects[slug]
+    try:
+        hot = gitops.hot_files(entry.path, entry.base)
+    except gitops.GitError:
+        return []
+    found: list[tuple[str, int, list[str]]] = []
+    for name, count in hot:
+        claimers = [
+            who
+            for who, touches in claims.items()
+            if touches and not scheduler.needs_claim(name, touches, scheduler.PathPolicy())
+        ]
+        if any(a in claimers and b in claimers for a, b in apart):
+            found.append((name, count, claimers))
+    return found[:HOT_SHOWN]
+
+
+def _name(item: TicketInput, number: int) -> str:
+    return item.key or f"#{number}"
+
+
+def _graph(items: Sequence[TicketInput]) -> dict[str, list[str]]:
+    """The list's dependencies among its own tickets, by key."""
+    names = {_name(item, number) for number, item in enumerate(items, 1)}
+    return {
+        _name(item, number): [ref for ref in item.depends_on if ref in names]
+        for number, item in enumerate(items, 1)
+    }
+
+
+def _scope(item: TicketInput, ids: Mapping[str, str]) -> str:
+    """The ticket's Scope and, for its implementer, what each dependency provides."""
+    if not item.depends_on:
+        return item.scope.strip()
+    lines = [f"- {ids.get(ref, ref)}: {item.needs[ref].strip()}" for ref in item.depends_on]
+    return "\n\n".join(filter(None, [item.scope.strip(), "Needs:\n" + "\n".join(lines)]))
 
 
 MAX_PARTS = 6
+HOT_SHOWN = 10
 
 
 def split_problem(
@@ -426,6 +520,16 @@ def _check_references(items: Sequence[TicketInput], existing: Mapping[str, Doc[T
     cycle = _cycle({item.key: item.depends_on for item in items if item.key})
     if cycle:
         raise UserError(f"dependency cycle: {' -> '.join(cycle)}")
+    for number, item in enumerate(items, 1):
+        for ref in item.depends_on:
+            if not item.needs.get(ref, "").strip():
+                raise UserError(
+                    f"ticket {number}: say in `needs` what it uses from {ref}, or drop the "
+                    "dependency: tickets that only share an area run at once"
+                )
+        stray = sorted(set(item.needs) - set(item.depends_on))
+        if stray:
+            raise UserError(f"ticket {number}: `needs` names {', '.join(stray)}, not a dependency")
 
 
 def _cycle(graph: Mapping[str, Sequence[str]]) -> list[str] | None:

@@ -16,6 +16,29 @@ class _Runtime(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class HarvestEntry(_Runtime):
+    """runtime/harvest/<name>.json: text waiting for the harvest job (SP18 spec §3.1);
+    `quotable` is the part that is the user's own words."""
+
+    source: str
+    project: str
+    text: str
+    quotable: str
+    attempts: int = 0
+    created: datetime = Field(default_factory=utc_now)
+
+
+class HarvestCursor(_Runtime):
+    offset: int = 0
+    seen: datetime = Field(default_factory=utc_now)
+
+
+class HarvestCursors(_Runtime):
+    """runtime/harvest_cursors.json: how far each Claude Code session has been read."""
+
+    sessions: dict[str, HarvestCursor] = Field(default_factory=dict)
+
+
 class SlotEntry(_Runtime):
     """A provider session one step holds, or waits for."""
 
@@ -52,7 +75,7 @@ class WorkerRecord(_Runtime):
     id: str
     project: str
     pid: int
-    job: Literal["ticket", "plan-review", "compact"] = "ticket"
+    job: Literal["ticket", "plan-review", "compact", "harvest"] = "ticket"
     step: str | None = None
     started: datetime = Field(default_factory=utc_now)
     heartbeat: datetime = Field(default_factory=utc_now)

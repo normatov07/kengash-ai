@@ -6,6 +6,7 @@ Pick which ready tickets may start now (SP3 spec §7): no `touches` overlap insi
 
 ## Interface
 
+- `shape(depends)` → `Shape(tickets, levels, widest, chokepoints)`, `behind(depends)` (transitive dependents), `shared_paths`, `is_broad`, `needs_claim` (SP18 spec §3.6, §3.7).
 - `clash(a, b, policy)` with `PathPolicy(shared, max_overlap)` (SP17 spec §3.5), what `select` uses: an empty list and a directory overlap clash, `shared` patterns never do, and exact files may overlap up to `max_overlap`.
 - `fits(provider, project, used, machine, projects)`: one more session stays within the machine's and the project's limits.
 - `select(candidates, busy, held, machine, projects, last_claims)` → `Selection(chosen, held_back)`; `held_back` maps a ticket id to `touches overlap <id>` or `no free <provider> slot`.
@@ -19,6 +20,7 @@ Pick which ready tickets may start now (SP3 spec §7): no `touches` overlap insi
 
 ## Changes
 
+- 2026-11-09: graph shape and claim helpers (SP18).
 - 2026-11-08: `overlaps` removed: `clash` is what decides a claim, and nothing else used it (SP17 minors).
 - 2026-11-08: `clash`, `PathPolicy` and `Limits.paths`: `select` decides claims with them; `overlaps` is unchanged (SP17).
 - 2026-11-07: `Candidate.editing` (its start step is in the editing phase: only then do paths matter, and only then does a chosen candidate hold its paths) and `Candidate.weight`; `chain_weights(depends)`: each ticket's longest chain of waiting dependents (a cycle counts as none); inside a project the longest chain goes first, then importance, then age (SP16).

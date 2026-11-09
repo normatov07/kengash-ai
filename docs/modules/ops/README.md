@@ -6,6 +6,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Interface
 
+- `harvest` (SP18 spec §3): `submit` queues text and starts the job, never raising; `run_harvest` drains the spool; `from_hook` reads a Claude Code hook; `read_chat`; `queue_plan`. `tickets.check_batch`; `queue.stuck`; `skills.install_hooks`.
 - `projects.init_project(path)` → `InitResult`: registers the repo containing `path`, seeds its store folder, links `<repo>/.kengash`, adds the exclude entry. Idempotent.
 - `projects.relink(slug, new_path)` → `InitResult`: re-points a moved project.
 - `projects.doctor(fix, scan)` → `DoctorReport`: one `Problem` per repo, folder link, memory link (`projects/<slug>/memory -> ../../memory`; a real folder there is reported, never replaced), exclude or document issue, then repo trust, ignored store copies of built-in skills (one warning per roles folder), old kengash skill names in each repo and the home folder (a warning), and provider checks; `fix` repairs links and exclude entries only. `Problem.warning` marks findings that never fail `doctor`.
@@ -64,6 +65,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-09: memory harvest, ticket graph report, stuck tickets, claims that grow after an editing step (SP18).
 - 2026-11-08: `compaction`: a result the check would refuse gets one repair turn (`prompts.compact_repair`), and the check still decides; a merge's recheck takes no check place; an eval's `reply` line may list `a | b` (SP17 live run).
 - 2026-11-08: the file pack checks a file's size before reading it; a path too long for the filesystem is absent, not an error; a part's files pass the same check as a planner's; a review's Log line counts its non-blocking findings; `new_prompt` no longer takes `files` (SP17 minors).
 - 2026-11-08: `agents.pick` honours `skip` for the shell and takes a provider or one provider/model, `Pick.cli`; a shell step has no fallback, where it once waited forever for a slot; a fallback opens a fresh session (SP17 review).

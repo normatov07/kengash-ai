@@ -22,6 +22,7 @@ from kengash_ai.model import KengashError, SkillMeta, UserError
 from kengash_ai.model.settings import SkillCaps
 from kengash_ai.model.skills import DESCRIPTION_MAX, NAME_MAX, NAME_PATTERN
 from kengash_ai.ops import records
+from kengash_ai.store.files import atomic_write
 from kengash_ai.store.frontmatter import split_frontmatter
 from kengash_ai.store.paths import StorePaths
 
@@ -95,6 +96,8 @@ def role_text(paths: StorePaths, slug: str, skill: str) -> str | None:
         return path.read_text(encoding="utf-8")  # a hand-written file without frontmatter
 
 
+HOOK_ARGS = "memory harvest --hook"
+HOOK_EVENTS = ("PreCompact", "SessionEnd")
 AGENT_DIRS = {
     "claude": ".claude/skills",
     "codex": ".agents/skills",
@@ -346,6 +349,33 @@ def install_skills(
     return install(agents, root=root, home=global_, cli_name=cli_name, yes=yes)
 
 
+def install_hooks(settings_path: Path, cli_name: str = CLI) -> str:
+    """Merge the chat-capture hooks into a Claude Code settings file (SP18 spec §3.3); a note
+    for the user, or "" when they were there already. An unreadable file is left alone."""
+    try:
+        text = settings_path.read_text(encoding="utf-8") if settings_path.exists() else "{}"
+        data = json.loads(text)
+    except (OSError, ValueError):
+        data = None
+    if not isinstance(data, dict) or not isinstance(data.get("hooks", {}), dict):
+        return f"{settings_path} could not be read, so chat capture is not set up"
+    hooks = data.setdefault("hooks", {})
+    if not all(isinstance(hooks.get(event, []), list) for event in HOOK_EVENTS):
+        return f"{settings_path} could not be read, so chat capture is not set up"
+    added = False
+    for event in HOOK_EVENTS:
+        entries = hooks.setdefault(event, [])
+        if HOOK_ARGS not in json.dumps(entries):
+            command = f"{cli_name} {HOOK_ARGS}"
+            entries.append({"hooks": [{"type": "command", "command": command, "timeout": 15}]})
+            added = True
+    if not added:
+        return ""
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write(settings_path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    return f"chat capture: added {' and '.join(HOOK_EVENTS)} hooks to {settings_path}"
+
+
 def plugin_manifest() -> dict[str, object]:
     """The `kengash` plugin's manifest, for Claude Code and Antigravity alike."""
     return {
@@ -395,6 +425,8 @@ def install(
             _clean(result, agent, folder, ())  # our skills live in the plugin folder now
             if not home:
                 result.notes.append(TRUST_NOTE)
+            elif note := install_hooks(root / ".claude" / "settings.json", cli_name):
+                result.notes.append(note)  # chat capture is per user, never per repo
             plugin = folder / PLUGIN
             _write_manifest(plugin / ".claude-plugin" / "plugin.json")
             _clean(result, agent, plugin / "skills", names)

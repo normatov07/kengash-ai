@@ -1,6 +1,6 @@
 ---
 name: memory
-description: Use when the user states a lasting preference, working style or goal, turns an approach down for good, or a design decision is made that later sessions must respect, such as "from now on", "always", "never", "remember that" or "we decided".
+description: Use when the user states or confirms a design choice or key characteristic later sessions must respect, a lasting preference, working style or goal, or turns an approach down for good, in any wording and any language, such as "most important is", "it must", "use X", "from now on", "always", "never", "remember that" or "we decided".
 metadata: {source: kengash-ai}
 ---
 # Remember it through kengash

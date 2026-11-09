@@ -355,7 +355,9 @@ def test_agy_plugin_clears_its_old_home_copies(tmp_path: Path, source: Path) -> 
 
 def test_a_project_claude_install_notes_the_trust_dialog(tmp_path: Path, source: Path) -> None:
     assert install(["claude"], tmp_path, source).notes == [skills.TRUST_NOTE]
-    assert install(["claude"], tmp_path, source, home=True).notes == []
+    (home,) = install(["claude"], tmp_path, source, home=True).notes
+    assert home.startswith("chat capture: added PreCompact and SessionEnd hooks")
+    assert install(["claude"], tmp_path, source, home=True).notes == []  # once only
     assert install(["codex"], tmp_path / "other", source).notes == []
 
 

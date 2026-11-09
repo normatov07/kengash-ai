@@ -17,6 +17,7 @@ from kengash_ai.ops import (
     jobs,
     leases,
     progress,
+    queue,
     records,
     skills,
     terminals,
@@ -59,6 +60,7 @@ class Board:
     workers: list[progress.Progress] = field(default_factory=list)
     gates: list[GateRow] = field(default_factory=list)
     feed: list[tuple[str, activity.Activity]] = field(default_factory=list)  # (ticket, action)
+    stuck: list[queue.Stuck] = field(default_factory=list)  # SP18 spec §3.8
 
 
 def disabled(env: Mapping[str, str] | None = None) -> bool:
@@ -174,6 +176,7 @@ def board(paths: StorePaths, slugs: list[str], *, feed_max: int = FEED_MAX) -> B
             _gate_row(slug, gate.id, gate.sub_status, gate.title, events) for slug, gate in gated
         ],
         feed=feed[-feed_max:],
+        stuck=[item for slug in slugs for item in queue.stuck(docs[slug], slug)],
     )
 
 
@@ -190,6 +193,7 @@ def lines(found: Board) -> list[str]:
     out += ["  " + " · ".join(worker_parts(p)) for p in found.workers]
     out.append("needs you:" if found.gates else "needs you: nothing")
     out += [f"  {g.id} {g.status}: {g.reason} → {g.action}" for g in found.gates]
+    out += [f"waiting on {s.id} ({s.status}): {s.behind} tickets behind it" for s in found.stuck]
     if found.feed:
         out.append("latest:")
         out += [f"  {_clock(item)} {ticket} {item.text}" for ticket, item in found.feed]

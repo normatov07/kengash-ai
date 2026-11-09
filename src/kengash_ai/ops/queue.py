@@ -1,15 +1,17 @@
 """What can start now: ready tickets that pass the scheduler's rules (SP3 spec §7)."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from kengash_ai import scheduler, settings, workflow
-from kengash_ai.model import Folder, Gate, Settings, Ticket, split_cli
+from kengash_ai.model import Doc, Folder, Gate, Settings, Ticket, split_cli
 from kengash_ai.ops import lifecycle, records, waiting
 from kengash_ai.ops.workspace import GATES
 from kengash_ai.store import runtime
 from kengash_ai.store.paths import StorePaths
 
 NO_SLOT = ("shell", "user")  # run_tests steps and the user's approval need no session
+STUCK_MIN = 3
 
 
 @dataclass
@@ -22,6 +24,16 @@ class NextTicket:
     title: str
 
 
+@dataclass(frozen=True)
+class Stuck:
+    """A ticket at a gate or parked with many unfinished tickets behind it (SP18 spec §3.8)."""
+
+    id: str
+    project: str
+    status: str
+    behind: int
+
+
 @dataclass
 class Queue:
     runnable: list[NextTicket] = field(default_factory=list)
@@ -30,6 +42,26 @@ class Queue:
     running: int = 0
     gates: int = 0
     paused: int = 0
+    stuck: list[Stuck] = field(default_factory=list)
+
+
+def stuck(docs: Mapping[str, Doc[Ticket]], slug: str) -> list[Stuck]:
+    """Tickets that need someone and hold at least STUCK_MIN others back, most first."""
+    unfinished = {key: doc.meta for key, doc in docs.items() if doc.meta.folder is not Folder.done}
+    graph = {key: list(meta.depends_on) for key, meta in unfinished.items()}
+    waiting = scheduler.behind(graph)
+    found = [
+        Stuck(key, slug, meta.status, len(waiting[key]))
+        for key, meta in unfinished.items()
+        if len(waiting[key]) >= STUCK_MIN and _needs_someone(meta)
+    ]
+    return sorted(found, key=lambda item: (-item.behind, item.id))
+
+
+def _needs_someone(ticket: Ticket) -> bool:
+    if ticket.folder is Folder.in_process:
+        return ticket.sub_status in GATES
+    return ticket.status == "in_queue/parked"
 
 
 def next_tickets(project: str | None = None) -> Queue:
@@ -55,6 +87,7 @@ def compute(paths: StorePaths, project: str | None) -> Queue:
         resolved = settings.load(paths, slug)
         limits[slug] = _limits(resolved)
         docs = records.project_tickets(paths, slug)
+        found.stuck += stuck(docs, slug)
         weights = scheduler.chain_weights(
             {
                 doc.meta.id: doc.meta.depends_on

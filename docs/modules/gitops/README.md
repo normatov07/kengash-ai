@@ -6,6 +6,7 @@ The git commands kengash runs in the user's repo (SP3 spec §9): ticket worktree
 
 ## Interface
 
+- `hot_files(repo, ref, commits=, at_least=)` → `(file, tickets)`: files many tickets changed, counted by the Kengash-Ticket trailer (SP18 spec §3.6).
 - `ensure_worktree(repo, path, branch, base)` → `Worktree(path, branch, created)`: prunes stale worktree records, reuses `path` when it is already the worktree of `branch`, re-attaches an existing `branch`, else creates both from `base`. A foreign folder at `path` is a `GitError`.
 - `commit_all(cwd, subject, trailers)` → new sha, or None when nothing changed: `git add -A`, then one commit whose message is the subject's first line and the trailers as `Key: value` lines.
 - `head`, `current_branch` (None when detached), `is_clean` (tracked files only), `reset_soft(cwd, commit)`.
@@ -26,6 +27,7 @@ The git commands kengash runs in the user's repo (SP3 spec §9): ticket worktree
 
 ## Changes
 
+- 2026-11-09: `hot_files` (SP18).
 - 2026-11-08: `changed_between(cwd, old, new)`: paths that differ between two commits, [] when either is gone (SP17).
 - 2026-11-07: `contains(repo, ancestor, ref)`: `ancestor` is reachable from `ref` (SP16).
 - 2026-11-07: `catch_up(worktree, base)`: fast-forward a branch with no commits of its own to `base` when the worktree has no uncommitted path; True when HEAD moved (SP16).

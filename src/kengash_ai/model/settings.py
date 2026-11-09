@@ -154,7 +154,8 @@ class Steering(_Section):
 
 
 def _default_shared() -> list[str]:
-    return ["*.g.dart", "*.freezed.dart", "*.generated.*"]
+    # a claim on a whole test root says nothing about which test files change (SP18 spec §3.7)
+    return ["*.g.dart", "*.freezed.dart", "*.generated.*", "test/", "tests/", "test", "tests"]
 
 
 class PathClaims(_Section):
@@ -171,6 +172,7 @@ class ContextPolicy(_Section):
 class MemoryCaps(_Section):
     compact_at_lines: int = Field(200, ge=10)
     compactor: str = "claude/haiku"
+    harvest: Literal["all", "plans", "off"] = "all"  # what reaches the harvest job (SP18)
 
     @field_validator("compactor")
     @classmethod

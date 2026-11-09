@@ -36,7 +36,8 @@ fallback_on_error: true
 skill.max_lines: 80
 skill.max_words: 400
 memory.compact_at_lines: 200
-memory.compactor: claude/haiku   # provider/model that compacts MEMORY.md
+memory.compactor: claude/haiku   # provider/model that compacts MEMORY.md and harvests decisions
+memory.harvest: all              # all | plans (not chat) | off: record what the user settles
 logs.keep_days: 30               # worker logs untouched this long are removed; 0 keeps all
 watch.tabs: auto                 # a terminal tab per worker and a dashboard per loop; off: print the command
 watch.terminal: ""               # a command with {title} and {command}; empty: Orca, tmux or gnome-terminal

@@ -16,9 +16,11 @@ def test_plan_lifecycle(inside_registered_repo: Path) -> None:
     plan_id = created.stdout.split()[1]
     assert created.stdout == f"plan {plan_id} grilling\n"
     saved = runner.invoke(
-        app, ["plan", "save", plan_id], input="## Goal\nShip it.\n## Scope\nKeys.\n"
+        app,
+        ["plan", "save", plan_id],
+        input="## Goal\nShip it.\n## Lasting decisions\nnone\n## Scope\nKeys.\n",
     )
-    assert saved.stdout == f"plan {plan_id} draft, 2 sections\n"
+    assert saved.stdout == f"plan {plan_id} draft, 3 sections\n"
     shown = runner.invoke(app, ["plan", "show", plan_id]).stdout
     assert "\n## Prompt\nRotate keys.\n\n## Goal\nShip it.\n" in shown
     unreviewed = runner.invoke(app, ["plan", "approve", plan_id])
@@ -57,7 +59,11 @@ REVIEW = ["plan", "review", "--by", "codex", "--timeout", "60"]
 
 def reviewable() -> str:
     plan_id = runner.invoke(app, [*NEW, "direct"], input="Rotate keys.\n").stdout.split()[1]
-    runner.invoke(app, ["plan", "save", plan_id], input="## Goal\nShip it.\n## Scope\nKeys.\n")
+    runner.invoke(
+        app,
+        ["plan", "save", plan_id],
+        input="## Goal\nShip it.\n## Lasting decisions\nnone\n## Scope\nKeys.\n",
+    )
     return plan_id
 
 

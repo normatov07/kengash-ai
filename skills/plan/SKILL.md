@@ -22,7 +22,7 @@ You write the plan; another agent reviews it. Read with your file tools; use the
 
    It prints `plan <id> draft`; keep the id.
 3. Read the code, docs and memory the request touches. Decide what the request leaves open yourself; each call becomes one Assumptions line: the default you chose and why.
-4. Save the plan, one `##` heading per section; one Lasting decisions line `- <decision>. why: <reason>.` per choice later work must follow:
+4. Save the plan, one `##` heading per section; one Lasting decisions line `- <decision>. why: <reason>.` per choice later work must follow, or `none`:
 
    ```
    kengash plan save <id> <<'EOF'

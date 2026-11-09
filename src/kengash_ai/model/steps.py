@@ -7,7 +7,7 @@ from typing import Any, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, computed_field, model_validator
 
 Profile = Literal["read_only", "edit_worktree"]
-OutputKind = Literal["work", "plan", "review", "compact"]
+OutputKind = Literal["work", "plan", "review", "compact", "harvest"]
 ErrorKind = Literal["auth", "rate_limit", "network", "timeout", "empty", "schema", "crash", "stuck"]
 
 
@@ -109,13 +109,30 @@ class CompactOutput(_Step):
     text: str
 
 
-type StepOutput = WorkOutput | PlanOutput | ReviewOutput | CompactOutput
+class HarvestFact(_Step):
+    """One thing the user settled (SP18 spec §3.1); `quote` holds their own words for it,
+    `replaces` the number of a listed decision it overrules (0: none)."""
 
-_MODELS: dict[OutputKind, type[WorkOutput | ReviewOutput | CompactOutput]] = {
+    kind: Literal["decision", "preference", "working_style", "goal", "turned_down", "process"]
+    fact: str
+    why: str
+    rejected: str = ""
+    quote: str
+    replaces: int = Field(0, ge=0)
+
+
+class HarvestOutput(_Step):
+    facts: list[HarvestFact] = Field(default_factory=list)
+
+
+type StepOutput = WorkOutput | PlanOutput | ReviewOutput | CompactOutput | HarvestOutput
+
+_MODELS: dict[OutputKind, type[WorkOutput | ReviewOutput | CompactOutput | HarvestOutput]] = {
     "work": WorkOutput,
     "plan": PlanOutput,
     "review": ReviewOutput,
     "compact": CompactOutput,
+    "harvest": HarvestOutput,
 }
 
 
@@ -175,6 +192,33 @@ OUTPUT_SCHEMAS: dict[OutputKind, dict[str, Any]] = {
         }
     ),
     "compact": _strict({"text": _TEXT}),
+    "harvest": _strict(
+        {
+            "facts": {
+                "type": "array",
+                "items": _strict(
+                    {
+                        "kind": {
+                            "type": "string",
+                            "enum": [
+                                "decision",
+                                "preference",
+                                "working_style",
+                                "goal",
+                                "turned_down",
+                                "process",
+                            ],
+                        },
+                        "fact": _TEXT,
+                        "why": _TEXT,
+                        "rejected": _TEXT,
+                        "quote": _TEXT,
+                        "replaces": {"type": "integer"},
+                    }
+                ),
+            }
+        }
+    ),
 }
 
 
@@ -218,7 +262,7 @@ class StepResult(_Step):
     """What one CLI call returned; `error` is None on success."""
 
     session_id: str | None = None
-    output: WorkOutput | ReviewOutput | CompactOutput | None = None
+    output: WorkOutput | ReviewOutput | CompactOutput | HarvestOutput | None = None
     text: str = ""
     usage: Usage = Field(default_factory=Usage)
     total_usage: Usage | None = None

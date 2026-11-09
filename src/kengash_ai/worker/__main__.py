@@ -1,5 +1,5 @@
 """`python -m kengash_ai.worker ticket <id> [--steps N] [--project SLUG]`,
-`plan-review <id> [--project SLUG]`, or `compact`.
+`plan-review <id> [--project SLUG]`, `compact`, or `harvest`.
 
 A frontend for one detached job, as `cli` is for commands: it heartbeats, turns SIGTERM
 into an orderly exit (the running CLI goes down with it), and calls `ops`.
@@ -13,7 +13,7 @@ import traceback
 from collections.abc import Callable
 from types import FrameType
 
-from kengash_ai.ops import compaction, jobs, relay, reviews, steps
+from kengash_ai.ops import compaction, harvest, jobs, relay, reviews, steps
 
 HEARTBEAT_S = 15
 STOPPED = 143
@@ -51,6 +51,7 @@ def _parser() -> argparse.ArgumentParser:
     review.add_argument("id")
     review.add_argument("--project", default=None)
     kinds.add_parser("compact", help="compact MEMORY.md")
+    kinds.add_parser("harvest", help="record what the user settled")
     return parser
 
 
@@ -58,6 +59,8 @@ def _job(args: argparse.Namespace) -> Job:
     """The job's worker id, its body, and what to do when the body fails."""
     if args.job == "compact":
         return jobs.COMPACT, compaction.run_compaction, compaction.fail_compaction
+    if args.job == "harvest":
+        return jobs.HARVEST, harvest.run_harvest, harvest.fail_harvest
     if args.job == "plan-review":
         return (
             args.id,

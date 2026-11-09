@@ -18,6 +18,7 @@ Role skills, data only (system spec §8.2; SP4 spec decision 3): the instruction
 
 ## Changes
 
+- 2026-11-09: the plan reviewer checks Lasting decisions; worker decisions stay under 20 words (SP18).
 - 2026-11-08: `implement` runs checks when its tools allow and never writes `BLOCKED` for a refused command (eval `loop/parallel`); `review-security`, like `review-code`, uses `line` 0 for something missing (SP17 review).
 - 2026-11-08: `implement`: works from `## Files`, runs only its own test files in the foreground, never polls; `plan`: names only paths it has seen, fills `parts` over the file limit; `review-code` and `review-plan`: the handoff or plan is the author's claim, findings name what was read; low findings never fail a review (SP17).
 - 2026-11-07: review-code strikes a proposed decision with a low finding whose `file` is `DECISIONS` and `line` its number (SP16 review).

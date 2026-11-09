@@ -6,6 +6,7 @@ The agents' long-term memory: MEMORY.md (who the user is, how they work, what th
 
 ## Interface
 
+- `digest(paths, project, root, touches)` ranks decisions (SP18 spec §3.4); `forget(paths, text, project, by=)` removes one line; `supersede(paths, line, by=)` archives an overruled decision; `harvested(paths, project)` lists what the harvest wrote; `decision_lines`, `memory_lines`.
 - `add(paths, text, why, *, section, decision, rejected, project, by)` → `AddResult(file, line, lines, cap, added, compacting)`; `.over_cap` when the file passed its cap; `ops` sets `compacting` when the add started a compaction.
 - `show(paths, *, decisions, project)` → MEMORY.md, or DECISIONS.md narrowed to one project's entries plus the `[global]` ones.
 - Compaction (SP3 spec decision 31): `compaction_problem(current, result, cap)` (empty, a dropped pinned entry, a dropped `##` heading, or not under the cap), `merge_added(snapshot, current, result)` (entries written meanwhile go into their sections), `apply_compaction(paths, snapshot, text, cap=, detail=)` → `Compaction(before, after, accepted, reason)`: under `memory.lock`, redacted, `memory.compacted` journaled either way, committed when accepted.
@@ -21,6 +22,7 @@ The agents' long-term memory: MEMORY.md (who the user is, how they work, what th
 
 ## Changes
 
+- 2026-11-09: `add(..., user=)` marks a decision `(user)`; `why` and `rejected` are tightened; digest cap for decisions is 4,000 characters (SP18).
 - 2026-11-08: `is_pinned` is public, for the compactor's repair turn (SP17 live run).
 - 2026-11-08: a path too long for the filesystem counts as gone instead of raising on 3.12 and 3.13 (SP17 minors).
 - 2026-11-08: `digest(paths, project, root=None)`: with the code's root, a process or decision line naming a file that is gone is tagged `[stale? path gone: …]`, not hidden; age plays no part (SP17).

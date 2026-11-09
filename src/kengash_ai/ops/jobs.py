@@ -30,6 +30,7 @@ from kengash_ai.store import runtime
 from kengash_ai.store.paths import StorePaths
 
 COMPACT = "compact"  # the compaction job's worker id; plan reviews use the plan id
+HARVEST = "harvest"  # the memory harvest job's worker id (SP18 spec §3.1)
 SLOT_POLL_S = 5
 STOP_GRACE_S = 10
 sleep = time.sleep

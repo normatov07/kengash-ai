@@ -74,9 +74,9 @@ def test_new_plan_needs_a_project(registered_repo: Path) -> None:
 
 def test_save_replaces_sections_and_makes_a_draft(registered_repo: Path) -> None:
     plan_id = new(registered_repo, PlanMode.grill)
-    markdown = "## Goal\nShip it.\n\n## Scope\nKeys only.\n"
+    markdown = "## Goal\nShip it.\n\n## Lasting decisions\nnone\n\n## Scope\nKeys only.\n"
     result = plans.save_plan(plan_id, markdown, project=None, by="x")
-    assert (result.status, result.sections) == ("draft", ["Goal", "Scope"])
+    assert (result.status, result.sections) == ("draft", ["Goal", "Lasting decisions", "Scope"])
     sections = plans.show_plan(plan_id, project=None).sections
     assert (sections["Goal"], sections["Scope"]) == ("Ship it.", "Keys only.")
     assert sections["Prompt"] == PROMPT.rstrip("\n")
@@ -132,7 +132,12 @@ def test_rejection_is_logged_and_saving_revives_the_plan(registered_repo: Path) 
     assert plans.reject_plan(plan_id, "too broad", project=None, by="x").status == "rejected"
     log = plans.show_plan(plan_id, project=None).sections["Review log"]
     assert log.endswith("rejected by the user: too broad")
-    assert plans.save_plan(plan_id, "## Goal\nNarrower.", project=None, by="x").status == "draft"
+    assert (
+        plans.save_plan(
+            plan_id, "## Goal\nNarrower.\n## Lasting decisions\nnone\n", project=None, by="x"
+        ).status
+        == "draft"
+    )
 
 
 def test_unknown_plans_and_projects(registered_repo: Path) -> None:
@@ -183,9 +188,11 @@ def test_approve_records_lasting_decisions(store_paths: StorePaths, registered_r
     result = plans.approve_plan(plan_id, skip_review=False, project=None, by="x")
     assert result.decisions == 2
     text = (store_paths.memory / "DECISIONS.md").read_text(encoding="utf-8")
-    assert "[payments-api] 2D board falls back when no GPU. why: low-end phones." in text
+    assert "[payments-api] (user) 2D board falls back when no GPU. why: low-end phones." in text
     assert "rejected: 3D only." in text
-    assert f"[payments-api] design values come only from design/. why: plan {plan_id}." in text
+    assert (
+        f"[payments-api] (user) design values come only from design/. why: plan {plan_id}." in text
+    )
 
 
 def test_approve_without_section_records_nothing(

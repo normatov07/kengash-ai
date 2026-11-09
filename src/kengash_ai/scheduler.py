@@ -3,11 +3,13 @@
 Pure: callers pass tickets, running work and limits in, and get a selection back.
 """
 
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from fnmatch import fnmatch
 from itertools import zip_longest
+from math import ceil
 from typing import NamedTuple
 
 from kengash_ai.model import Importance
@@ -135,6 +137,95 @@ def select(
         if candidate.editing:
             taken.append(Busy(candidate.id, candidate.project, candidate.touches))
     return selection
+
+
+@dataclass(frozen=True)
+class Shape:
+    """A ticket graph (SP18 spec §3.6): how many, in how many levels, how many at once at the
+    widest; `chokepoints` holds (ticket, tickets behind it), most first."""
+
+    tickets: int
+    levels: int
+    widest: int
+    chokepoints: tuple[tuple[str, int], ...] = ()
+
+
+def behind(depends: Mapping[str, Sequence[str]]) -> dict[str, set[str]]:
+    """Each ticket's transitive dependents; an edge to a ticket not listed is ignored."""
+    dependents: dict[str, list[str]] = {ticket: [] for ticket in depends}
+    for ticket, needs in depends.items():
+        for need in needs:
+            if need in dependents:
+                dependents[need].append(ticket)
+    found: dict[str, set[str]] = {}
+    for ticket in depends:
+        seen: set[str] = set()
+        stack = list(dependents[ticket])
+        while stack:
+            current = stack.pop()
+            if current not in seen and current != ticket:
+                seen.add(current)
+                stack.extend(dependents[current])
+        found[ticket] = seen
+    return found
+
+
+def shape(depends: Mapping[str, Sequence[str]]) -> Shape:
+    """The graph's levels and chokepoints: a ticket past the first level holding at least
+    max(3, a quarter of the graph) behind it. A first-level ticket is the shared foundation
+    the width guidance asks for, so it never counts."""
+    level = _levels(depends)
+    if not level:
+        return Shape(0, 0, 0)
+    per_level = Counter(level.values())
+    bar = max(3, ceil(len(depends) / 4))
+    held = behind(depends)
+    points = sorted(
+        ((t, len(held[t])) for t in depends if level[t] > 0 and len(held[t]) >= bar),
+        key=lambda point: (-point[1], point[0]),
+    )
+    return Shape(len(depends), len(per_level), max(per_level.values()), tuple(points))
+
+
+def _levels(depends: Mapping[str, Sequence[str]]) -> dict[str, int]:
+    """Each ticket's longest chain of tickets before it; a cycle counts as no chain."""
+    found: dict[str, int] = {}
+    visiting: set[str] = set()
+
+    def level(ticket: str) -> int:
+        if ticket in found:
+            return found[ticket]
+        if ticket in visiting:
+            return 0
+        visiting.add(ticket)
+        needs = [need for need in depends[ticket] if need in depends]
+        value = max((1 + level(need) for need in needs), default=0)
+        visiting.discard(ticket)
+        found[ticket] = value
+        return value
+
+    return {ticket: level(ticket) for ticket in depends}
+
+
+def shared_paths(a: Sequence[str], b: Sequence[str], policy: PathPolicy) -> list[str]:
+    """The claimed paths that make `a` and `b` overlap, generated files left out."""
+    found = [
+        x
+        for x in a
+        for y in b
+        if (_within(x, y) or _within(y, x)) and not (_shared(x, policy) or _shared(y, policy))
+    ]
+    return list(dict.fromkeys(found))
+
+
+def is_broad(path: str, policy: PathPolicy) -> bool:
+    """A whole top-level folder, which keeps most other tickets waiting."""
+    return len(_segments(path)) <= 1 and _is_directory(path) and not _shared(path, policy)
+
+
+def needs_claim(path: str, touches: Sequence[str], policy: PathPolicy) -> bool:
+    """`path` is outside every claim in `touches` and is not a generated file."""
+    return not _shared(path, policy) and not any(_within(path, claim) for claim in touches)
 
 
 def chain_weights(depends: Mapping[str, Sequence[str]]) -> dict[str, int]:
