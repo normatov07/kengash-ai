@@ -6,6 +6,7 @@ Decide what a ticket does next (SP3 spec §6): which steps its workflow runs, wh
 
 ## Interface
 
+- In Auto mode (`loop_start: auto`) `before` grants another token budget at the cap, and `_out_of_tries` turns a stall into the loop-limit gate, routed to the failing step's `on_fail` target (SP21 spec §3).
 - `steps_for(settings, workflow, hitl=)`: the effective steps; roles that are off are skipped, `review_plan` is dropped at `plan.review_max: 0`, hitl tickets get `approve` after `plan`. `first_step(...)` is the first of them.
 - `blocking_off(settings, workflow)`: a blocking role that is switched off.
 - `before(settings, progress)` → `Routed`: run the step, or halt at the token cap or the approval step; a step whose role was switched off is skipped.
@@ -25,6 +26,7 @@ Decide what a ticket does next (SP3 spec §6): which steps its workflow runs, wh
 
 ## Changes
 
+- 2026-11-09: Auto mode asks only about the loop limit (SP21).
 - 2026-11-07: `edit_phase(settings, workflow, step, hitl=)`: the step is the workflow's first `edit`-kind step or after it (SP16).
 - 2026-11-07: `Outcome.blocked` halts a passing step for the user; `approve(…, "blocked")` (SP15).
 - 2026-11-07: `Approval` gains `blocked` (SP15).

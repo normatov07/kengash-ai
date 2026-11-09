@@ -31,6 +31,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Changes
 
+- 2026-11-09: `TicketState.auto_retries` (SP21).
 - 2026-11-09: `escalate`, `provides` (SP20).
 - 2026-11-09: `Tokens.per_ticket_max` defaults to 3,000,000; landing settings (SP19).
 - 2026-11-09: harvest models, `needs`, test roots in `paths.shared` (SP18).

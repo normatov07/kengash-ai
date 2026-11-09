@@ -134,6 +134,9 @@ def before(settings: Settings, progress: Progress) -> Routed:
             return _end(settings, progress)
         step = following
     now = replace(progress, step=step)
+    if now.tokens >= now.tokens_max and settings.loop_start == "auto":
+        # Auto mode asks only about the loop limit (SP21 spec §3); loops still bound the spend
+        now = replace(now, tokens_max=now.tokens + settings.tokens.per_ticket_max)
     if now.tokens >= now.tokens_max:
         reason = f"token cap: {now.tokens:,} of {now.tokens_max:,} used; approve with --tokens N"
         return Routed(Halt(NEEDS_APPROVAL, reason, "token_cap"), now)
@@ -230,16 +233,27 @@ def _count(settings: Settings, progress: Progress, step: str, outcome: Outcome) 
     return replace(progress, streaks={**progress.streaks, step: streak}, plan_rounds=rounds)
 
 
+def _out_of_tries(settings: Settings, progress: Progress, step: str, reason: str) -> Routed:
+    """A ticket going nowhere: `stalled`, or in Auto mode the one question it may ask, whether to
+    raise its loop limit. A raised limit goes back to the failing step's `on_fail` target with
+    its counters cleared, so it tries something new (SP21 spec §3)."""
+    if settings.loop_start != "auto" or not settings.loop_ask_at_cap:
+        return Routed(Halt(STALLED, reason), progress)
+    target = settings.workflows[progress.workflow].on_fail.get(step, step)
+    back = replace(progress, step=target, plan_rounds=0, streaks={**progress.streaks, step: {}})
+    return Routed(Halt(NEEDS_APPROVAL, f"loop cap: {reason}", "loop_cap"), back)
+
+
 def _failed(settings: Settings, progress: Progress, step: str) -> Routed:
     limit = settings.plan.review_max
     if step == "review_plan" and progress.plan_rounds >= limit:
         reason = f"plan review failed {progress.plan_rounds} rounds (plan.review_max: {limit})"
-        return Routed(Halt(STALLED, reason), progress)
+        return _out_of_tries(settings, progress, step, reason)
     streak = progress.streaks.get(step, {})
     repeated = sorted(fp for fp, runs in streak.items() if runs >= settings.stall_repeat)
     if repeated:
         reason = f"same finding failed {settings.stall_repeat} loops in a row: "
-        return Routed(Halt(STALLED, reason + ", ".join(repeated)), progress)
+        return _out_of_tries(settings, progress, step, reason + ", ".join(repeated))
     target = settings.workflows[progress.workflow].on_fail.get(step)
     if target is None:
         return Routed(Halt(FAILED, f"{step} failed and has no on_fail step"), progress)

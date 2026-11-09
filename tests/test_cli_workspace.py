@@ -132,6 +132,7 @@ def test_every_command_speaks_json(store_paths: StorePaths, inside_repo: Path) -
         "gates": [],
         "record": memory.RECORD_HINT,
         "recent": [],
+        "auto": False,
     }
 
 

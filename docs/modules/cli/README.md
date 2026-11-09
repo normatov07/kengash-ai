@@ -32,6 +32,7 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 
 
 ## Changes
 
+- 2026-11-09: `context` prints `loop_start: auto` when the project is in Auto mode (SP21).
 - 2026-11-09: `stats` prints the minutes spent waiting for subscription limits (SP20).
 - 2026-11-09: `stats`; `ticket add`, `move` and `set` advance the relay (SP20).
 - 2026-11-09: harvest and forget commands; `next` prints what is stuck; `ticket add` prints the graph (SP18).

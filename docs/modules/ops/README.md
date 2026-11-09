@@ -6,6 +6,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Interface
 
+- `relay._recover`: in Auto mode, restarts a failed ticket up to `AUTO_RETRIES` times and retries an unfinished merge once it has been quiet for `RETRY_AFTER` (SP21 spec §3).
 - `stats.compute(paths, project, days)` → `Stats(minutes, merged, first_pass, tokens, models, gates)`, from the journal (SP20 spec §3.4); `agents.pick(..., loop=)` puts `escalate` first from loop 2.
 - `merging`: a rebase conflict is replayed and settled (`_settle`): generated files regenerate, anything else goes back to implement at no loop cost; `checks.generate_request`; `hygiene` treats 250,000 and 1,000,000 as old token caps; `steps._freshen` rebases a moved base before review (SP19).
 - `harvest` (SP18 spec §3): `submit` queues text and starts the job, never raising; `run_harvest` drains the spool; `from_hook` reads a Claude Code hook; `read_chat`; `queue_plan`. `tickets.check_batch`; `queue.stuck`; `skills.install_hooks`.
@@ -67,6 +68,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-09: quiet Auto mode: `Context.auto`, relay recovery (SP21).
 - 2026-11-09: `stats` counts a step waiting for a subscription limit as waiting, not working; `step.quota_wait` and `step.quota_resume` events (SP20).
 - 2026-11-09: the relay acts for live loop leases too; `ticket add` needs `provides` on a ticket others depend on; `stats`; escalation (SP20).
 - 2026-11-09: conflicts a worker can resolve; generator before checks; rebase before review (SP19).

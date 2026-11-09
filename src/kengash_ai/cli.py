@@ -404,6 +404,8 @@ def context(project: Project = None, as_json: AsJson = False) -> None:
         parts.append(f"# PROCESS.md ({digest.project})\n{headings}")
         gates = [f"- {gate.id} {gate.sub_status}: {gate.title}" for gate in digest.gates]
         parts.append("# Open gates\n" + ("\n".join(gates) or "none"))
+        if digest.auto:
+            parts.append("# Mode\nloop_start: auto")
     parts.append(f"# Record\n{digest.record}")
     if digest.recent:
         lines = "\n".join(digest.recent)
