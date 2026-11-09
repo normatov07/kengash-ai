@@ -46,7 +46,7 @@ A conflict does not cost a loop, which measures rework: up to `merge.conflict_tu
 - A merge recheck that regenerates a file commits it before landing.
 
 ### 3.3 Commands a project allows
-`project.commands`: a list of exact command prefixes workers may run, added to the test and lint commands. `generate_cmd` is always in it. The checks block of the prompt names them. Claude gets `Bash(<cmd>:*)`, Antigravity `command(<cmd>)` (those without shell operators), Codex already runs inside its workspace sandbox.
+`project.commands`: a list of exact command prefixes workers may run, added to the test and lint commands. `generate_cmd` is always in it. The checks block of the prompt names them as optional, apart from the commands that must pass. Claude gets `Bash(<cmd>:*)`, Antigravity `command(<cmd>)` (those without shell operators), Codex already runs inside its workspace sandbox.
 
 ### 3.4 Review sees current code
 Before a review step, a branch whose base moved is rebased when that applies cleanly. A conflict there changes nothing; the merge handles it.

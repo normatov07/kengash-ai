@@ -68,6 +68,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-09: `prompts.checks_block` lists `project.commands` as optional, not among the checks that must exit 0.
 - 2026-11-09: quiet Auto mode: `Context.auto`, relay recovery (SP21).
 - 2026-11-09: `stats` counts a step waiting for a subscription limit as waiting, not working; `step.quota_wait` and `step.quota_resume` events (SP20).
 - 2026-11-09: the relay acts for live loop leases too; `ticket add` needs `provides` on a ticket others depend on; `stats`; escalation (SP20).

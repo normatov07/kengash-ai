@@ -228,7 +228,13 @@ def test_project_allows_generator_and_commands(engine: Engine) -> None:
     resolved = settings.load(engine.paths, engine.slug)
     assert resolved.project.allowed == ["one", "gen"]
     block = prompts.checks_block("t", "", resolved.project.allowed)
-    assert "- project: `one`" in block and "- project: `gen`" in block
+    assert block.endswith(f"{prompts.OPTIONAL_HEAD} `one`, `gen`")
+
+
+def test_optional_commands_are_not_listed_as_required() -> None:
+    block = prompts.checks_block("t", "l", ["tools/x.py"])
+    required = block.split(prompts.OPTIONAL_HEAD)[0]
+    assert "tools/x.py" not in required and prompts.CHECKS_HEAD in required
 
 
 def test_checks_start_with_the_generator(engine: Engine) -> None:
