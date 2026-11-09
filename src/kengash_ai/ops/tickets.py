@@ -120,6 +120,7 @@ def add_tickets(plan_id: str, text: str, *, project: str | None, by: str) -> Bat
             fresh.append(new_id(taken))
             taken.add(fresh[-1][0])
         ids = {item.key: pair[0] for item, pair in zip(items, fresh, strict=True) if item.key}
+        provided = {item.key: item.provides for item in items if item.key}
         now = utc_now()
         made: list[NewTicket] = []
         for item, (ticket_id, uuid) in zip(items, fresh, strict=True):
@@ -142,7 +143,7 @@ def add_tickets(plan_id: str, text: str, *, project: str | None, by: str) -> Bat
                 updated=now,
             )
             acceptance = "\n".join(f"- [ ] {line}" for line in item.acceptance)
-            sections = {"Scope": _scope(item, ids), "Acceptance": acceptance}
+            sections = {"Scope": _scope(item, ids, provided), "Acceptance": acceptance}
             documents.save_ticket(project_paths, Doc(ticket, sections))
             made.append(NewTicket(ticket.id, item.key, ticket.title, ticket.status))
         plan.tickets = [*plan.tickets, *(new.id for new in made)]
@@ -236,12 +237,19 @@ def _graph(items: Sequence[TicketInput]) -> dict[str, list[str]]:
     }
 
 
-def _scope(item: TicketInput, ids: Mapping[str, str]) -> str:
-    """The ticket's Scope and, for its implementer, what each dependency provides."""
-    if not item.depends_on:
-        return item.scope.strip()
-    lines = [f"- {ids.get(ref, ref)}: {item.needs[ref].strip()}" for ref in item.depends_on]
-    return "\n\n".join(filter(None, [item.scope.strip(), "Needs:\n" + "\n".join(lines)]))
+def _scope(item: TicketInput, ids: Mapping[str, str], provided: Mapping[str, Sequence[str]]) -> str:
+    """The ticket's Scope and its contract (SP20 spec §3.2): the exact interfaces it owes later
+    tickets, and for each dependency what it uses and what that ticket has promised."""
+    parts = [item.scope.strip()]
+    if item.provides:
+        parts.append("Provides, exactly as written:\n" + "\n".join(f"- {p}" for p in item.provides))
+    if item.depends_on:
+        lines: list[str] = []
+        for ref in item.depends_on:
+            lines.append(f"- {ids.get(ref, ref)}: {item.needs[ref].strip()}")
+            lines += [f"  - promised: {line}" for line in provided.get(ref, ())]
+        parts.append("Needs:\n" + "\n".join(lines))
+    return "\n\n".join(filter(None, parts))
 
 
 MAX_PARTS = 6
@@ -520,6 +528,7 @@ def _check_references(items: Sequence[TicketInput], existing: Mapping[str, Doc[T
     cycle = _cycle({item.key: item.depends_on for item in items if item.key})
     if cycle:
         raise UserError(f"dependency cycle: {' -> '.join(cycle)}")
+    relied_on = {ref for item in items for ref in item.depends_on}
     for number, item in enumerate(items, 1):
         for ref in item.depends_on:
             if not item.needs.get(ref, "").strip():
@@ -527,6 +536,11 @@ def _check_references(items: Sequence[TicketInput], existing: Mapping[str, Doc[T
                     f"ticket {number}: say in `needs` what it uses from {ref}, or drop the "
                     "dependency: tickets that only share an area run at once"
                 )
+        if item.key in relied_on and not item.provides:
+            raise UserError(
+                f"ticket {number}: other tickets depend on it, so list in `provides` each "
+                "interface, data format or file they use, with its exact signature or shape"
+            )
         stray = sorted(set(item.needs) - set(item.depends_on))
         if stray:
             raise UserError(f"ticket {number}: `needs` names {', '.join(stray)}, not a dependency")

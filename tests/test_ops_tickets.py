@@ -16,6 +16,7 @@ BATCH = """\
   importance: critical
   touches: [services/webhooks]
   tags: [payments]
+  provides: [Keyring.verify(sig) -> bool]
   scope: Keyring holds current and previous keys.
   acceptance: [Previous key verifies during the overlap window]
 - key: rotate
@@ -56,7 +57,7 @@ def test_add_queues_ready_and_blocked_tickets(
         6,
         ["services/webhooks"],
     )
-    assert first.sections["Scope"] == "Keyring holds current and previous keys."
+    assert first.sections["Scope"].startswith("Keyring holds current and previous keys.")
     assert first.sections["Acceptance"] == "- [ ] Previous key verifies during the overlap window"
     second = tickets.show_ticket(rotate.id, project=None).meta
     assert (second["depends_on"], second["loop_max"], second["plan"]) == ([keyring.id], 4, plan_id)

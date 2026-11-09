@@ -20,7 +20,7 @@ Read with your file tools; use the shell only for the `kengash` commands below, 
 2. Cut vertical slices: each end to end, verifiable alone, small enough for one fresh context window. Split a wide refactor into expand, migrate, contract. Read `references/width.md` for edges and paths.
 3. Give each slice an importance; read `references/importance.md` when assigning it.
 4. Show the user a numbered list, one line per slice: `<n>. <title> · <importance> · blocked by <n…|none> · touches <paths>`. A quick plan waits for changes or a yes; an approved plan goes straight on.
-5. Add the slices; `key` names a slice for `depends_on`, `touches` lists repo path prefixes, `needs` says what this slice uses from each dependency. Run it with `--check` and the same list first and change the list once as `references/width.md` says:
+5. Add the slices; `key` names a slice, `touches` its repo paths, `needs` says what this slice uses from each dependency, `provides` the exact signatures others rely on. First run it with `--check`, then change the list once as `references/width.md` says:
 
    ```
    kengash ticket add --plan <id> <<'EOF'
@@ -30,8 +30,9 @@ Read with your file tools; use the shell only for the `kengash` commands below, 
      touches: [<path>]
      depends_on: []
      needs: {}
+     provides: []
      scope: |
-       <3-8 lines: what it delivers, what it changes, what it leaves to other slices>
+       <3-8 lines: what it delivers and what it leaves to other slices>
      acceptance: [<checkable criterion from the plan>]
    EOF
    ```

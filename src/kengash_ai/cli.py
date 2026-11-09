@@ -35,6 +35,7 @@ from kengash_ai.ops import (
     relay,
     reviews,
     skills,
+    stats,
     status,
     tickets,
     ui_server,
@@ -610,6 +611,7 @@ def ticket_add(
     if batch.shape is not None:
         line += f"\n{_shape_line(batch.shape)}"
     _emit(batch, as_json, line)
+    relay.advance_quietly()  # a loop that is on starts what was just added (SP20)
 
 
 def _shape_line(shape: scheduler.Shape) -> str:
@@ -683,6 +685,7 @@ def ticket_set(
     with _errors():
         result = tickets.set_fields(ticket_id, pairs, project=project, by=by)
     _emit(result, as_json, f"ticket {result.id} updated")
+    relay.advance_quietly()  # a change can free a ticket a loop is waiting for (SP20)
 
 
 @ticket_app.command("move")
@@ -699,6 +702,7 @@ def ticket_move(
     """Move a ticket; queued tickets then turn ready or blocked to match their dependencies."""
     with _errors():
         moved = tickets.move_ticket(ticket_id, target, why, project=project, by=by)
+    relay.advance_quietly()  # a move can free the tickets behind it (SP20)
     if as_json:
         _emit_json(moved)
         return
@@ -748,6 +752,31 @@ def show_next(project: Every = None, as_json: AsJson = False) -> None:
     lines += [_stuck_line(item) for item in found.stuck]
     for line in _capped(lines, "kengash next --json"):
         typer.echo(line)
+
+
+@app.command("stats")
+def show_stats(
+    project: Every = None,
+    days: Annotated[int, typer.Option("--days", min=1, help="How many days back.")] = 7,
+    as_json: AsJson = False,
+) -> None:
+    """What runs cost and what they bought: parallelism, first-pass rate, tokens, gates."""
+    with _errors():
+        found = stats.report(project, days)
+    if as_json:
+        _emit_json(found)
+        return
+    busy = ", ".join(f"{n} workers {m} min" for n, m in found.minutes.items()) or "none"
+    typer.echo(f"parallel: mean {found.mean_workers:.2f} workers when busy ({busy})")
+    per = f", {found.tokens // found.merged:,} tokens per merged ticket" if found.merged else ""
+    typer.echo(f"tickets: {found.merged} merged, {found.first_pass} on the first loop{per}")
+    for row in found.models:
+        typer.echo(
+            f"implementer {row.cli}: {row.runs} runs, {row.tokens:,} tokens, "
+            f"next review passed {row.passed} of {row.reviewed}"
+        )
+    gates = ", ".join(f"{n} {cause}" for cause, n in found.gates.items()) or "none"
+    typer.echo(f"gates: {gates}")
 
 
 def _stuck_line(item: queue.Stuck) -> str:

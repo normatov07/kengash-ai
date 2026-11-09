@@ -84,6 +84,7 @@ Each registered repo gets one directory symlink, `<repo>/.kengash -> ~/.kengash/
 | 17 | Throughput | built, awaiting a live run: spec `docs/superpowers/specs/2026-11-08-sp17-throughput-design.md`; a stuck CLI call is stopped and resumed with a correction (`adapters.watchdog`, `steering`), a finishing worker starts what is runnable (`ops.relay`), path claims allow generated files and small overlaps (`scheduler.clash`), large tickets split (`parts`), new editing sessions get the plan's files read at that moment (`ops.context`), review findings are checked (`review.block_on`), and each agent has a model per importance |
 | 18 | Capture and width | built: spec `docs/superpowers/specs/2026-11-09-sp18-capture-width-design.md`; the memory harvest job and its triggers, `ticket add --check`, `needs` on every dependency, claims that follow the edits, stuck tickets named |
 | 19 | Landing | built: spec `docs/superpowers/specs/2026-11-09-sp19-landing-design.md`; merge conflicts settled inside the ticket, `project.generate_cmd`, `project.commands`, rebase before review |
+| 20 | Balance | built: spec `docs/superpowers/specs/2026-11-09-sp20-balance-design.md`; the relay covers live loops, contracts between tickets, escalation on failure, `kengash stats` |
 
 ## Agent context files
 

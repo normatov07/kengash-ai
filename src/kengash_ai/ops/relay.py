@@ -43,9 +43,11 @@ def advance(paths: StorePaths) -> list[str]:
     intent = runtime.load_relay(paths)
     if intent.scopes and utc_now() - intent.touched > MAX_IDLE:
         _keep(paths, [])
-        return []
+        intent.scopes = []
+    # a loop claimed before the relay existed, or whose conductor has gone quiet, still counts
+    leased = [lease.project or ALL for lease in leases.live(paths)]
     started: list[str] = []
-    for scope in list(intent.scopes):
+    for scope in dict.fromkeys([*intent.scopes, *leased]):
         project = None if scope == ALL else scope
         try:
             found = queue.compute(paths, project)

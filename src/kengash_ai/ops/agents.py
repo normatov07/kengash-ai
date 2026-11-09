@@ -28,14 +28,21 @@ def pick(
     *,
     skip: Collection[str] = (),
     importance: str | None = None,
+    loop: int = 1,
 ) -> Pick:
     """The first usable CLI of the role's chain that is not in `skip` (a provider, or one
     provider/model); NeedsSetup if none. The chain is the CLI for the ticket's `importance`,
-    the agent's CLI, then its fallbacks."""
+    the agent's CLI, then its fallbacks; from loop 2 on, `escalate` comes first (SP20)."""
     agent = resolved.agents[role]
     first_problem: str | None = None
-    chain = list(dict.fromkeys([agent.cli_for(importance), agent.cli, *agent.fallback]))
-    for index, cli in enumerate(chain):
+    climb = (
+        [agent.escalate[min(loop - 2, len(agent.escalate) - 1)]]
+        if loop > 1 and agent.escalate
+        else []
+    )
+    normal = [agent.cli_for(importance), agent.cli, *agent.fallback]
+    chain = list(dict.fromkeys([*climb, *normal]))
+    for cli in chain:
         provider, model = split_cli(cli)
         if provider in skip or cli in skip:
             continue
@@ -43,7 +50,7 @@ def pick(
             return Pick(role, provider, None, False)
         found = problem(provider, status) or _no_model(provider, model, status)
         if found is None:
-            return Pick(role, provider, model, index > 0)
+            return Pick(role, provider, model, cli not in (*climb, normal[0]))
         first_problem = first_problem or found
     raise NeedsSetup(f"{role} cannot run: {first_problem or 'no other provider to fall back to'}")
 

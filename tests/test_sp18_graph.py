@@ -19,6 +19,7 @@ BATCH = """\
   title: Core
   importance: standard
   touches: [lib/core/a.dart]
+  provides: [Core.run() -> None]
 - key: left
   title: Left
   importance: standard

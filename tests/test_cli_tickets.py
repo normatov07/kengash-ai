@@ -13,6 +13,7 @@ BATCH = """\
 - key: keyring
   title: Keyring with overlap window
   importance: critical
+  provides: [Keyring.verify(sig) -> bool]
 - key: rotate
   title: Rotation command
   importance: standard

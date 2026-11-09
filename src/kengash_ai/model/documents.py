@@ -153,6 +153,7 @@ class TicketInput(BaseModel):
     touches: list[str] = Field(default_factory=list)
     depends_on: list[str] = Field(default_factory=list)
     needs: dict[str, str] = Field(default_factory=dict)  # dependency → what it provides (SP18)
+    provides: list[str] = Field(default_factory=list)  # exact interfaces others rely on (SP20)
     tags: list[str] = Field(default_factory=list)
     scope: str = ""
     acceptance: list[str] = Field(default_factory=list)

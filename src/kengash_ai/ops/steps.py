@@ -339,7 +339,11 @@ def _step(job: _Job, ready: _Ready) -> JobEnd | None:
         return _fail(job, f"step {ready.step} has no role")
     try:
         pick = agents.pick(
-            ready.resolved, role, job.detect, importance=ready.doc.meta.importance.value
+            ready.resolved,
+            role,
+            job.detect,
+            importance=ready.doc.meta.importance.value,
+            loop=ready.doc.meta.loop,
         )
     except NeedsSetup as exc:
         return _fail(job, str(exc))
@@ -587,8 +591,15 @@ def _fallback(job: _Job, ready: _Ready, pick: agents.Pick, tried: set[str]) -> a
     if pick.provider == "shell" or not ready.resolved.fallback_on_error:
         return None  # a check has nothing to fall back to, and no slot to wait for
     try:
-        importance = ready.doc.meta.importance.value
-        return agents.pick(ready.resolved, pick.role, job.detect, skip=tried, importance=importance)
+        meta = ready.doc.meta
+        return agents.pick(
+            ready.resolved,
+            pick.role,
+            job.detect,
+            skip=tried,
+            importance=meta.importance.value,
+            loop=meta.loop,
+        )
     except NeedsSetup:
         return None
 

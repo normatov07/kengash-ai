@@ -217,6 +217,7 @@ BATCH = """
   title: Add keyring
   importance: simple
   touches: [keys]
+  provides: [keyring.load() -> Keyring]
   scope: The keyring.
   acceptance: [it loads]
 - key: second
