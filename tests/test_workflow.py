@@ -167,7 +167,7 @@ def test_approvals_grant_loops_tokens_or_pass_the_approval_step() -> None:
     assert approve(settings(), capped, "loop_cap", loops=5).progress.loop_max == 9
     spent = progress(tokens=260_000)
     assert (
-        approve(settings(), spent, "token_cap").progress.tokens_max == 1_260_000
+        approve(settings(), spent, "token_cap").progress.tokens_max == 3_260_000
     )  # spent 260,000 + the 1,000,000 default grant (SP12)
     assert approve(settings(), spent, "token_cap", tokens=1000).progress.tokens_max == 261_000
     passed = approve(settings(), progress("approve", hitl=True), "approve_step")

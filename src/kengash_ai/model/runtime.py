@@ -122,6 +122,8 @@ class TicketState(_Runtime):
     waiting_on: str = ""  # the ticket whose paths this one waits for (SP16 spec §3.8)
     split: bool = False  # a ticket splits once (SP17 spec §3.6)
     seen: dict[str, str] = Field(default_factory=dict)  # role → commit it last saw (SP17)
+    conflicts: list[str] = Field(default_factory=list)  # files holding markers (SP19 spec §3.1)
+    conflict_turns: int = 0  # send-backs for a conflict so far
 
 
 class RelayIntent(_Runtime):

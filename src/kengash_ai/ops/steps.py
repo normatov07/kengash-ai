@@ -311,6 +311,16 @@ def _catch_up(job: _Job) -> None:
         gitops.catch_up(job.worktree, job.base)
 
 
+def _freshen(job: _Job) -> None:
+    """Rebase a branch whose base moved, so review sees current code (SP19 spec §3.4). A
+    conflict changes nothing here: the merge settles it."""
+    with locked(job.paths.locks / f"repo-{job.slug}.lock"), contextlib.suppress(gitops.GitError):
+        if gitops.contains(job.worktree, job.base, "HEAD") or gitops.changed_files(job.worktree):
+            return
+        if not gitops.rebase(job.worktree, job.base):
+            _journal(job, "ticket.rebased", base=job.base)
+
+
 def _holder(paths: StorePaths, slug: str, resolved: Settings, ticket: Ticket) -> str | None:
     """Another ticket of the project that holds paths overlapping this one's, if any."""
     for other in records.project_tickets(paths, slug).values():
@@ -337,6 +347,8 @@ def _step(job: _Job, ready: _Ready) -> JobEnd | None:
         _take_slot(job, ready, pick)
     if ready.resolved.kind_of(ready.step) == "edit":
         _catch_up(job)
+    elif ready.resolved.kind_of(ready.step) == "review" and ready.step != "review_plan":
+        _freshen(job)
     ran = _call(job, ready, pick)
     if isinstance(ran, JobEnd):
         return ran
@@ -657,7 +669,11 @@ def _request(
         skill = prompts.role_skill(job.paths, job.slug, resolved.agents[pick.role].skill)
         if resolved.kind_of(step) == "edit":
             prompt = _with_files(job, ready, ticket, prompt, skill or "")
-    if resolved.kind_of(step) == "edit" and gitops.changed_files(job.worktree):
+    if (
+        resolved.kind_of(step) == "edit"
+        and not ready.state.conflicts  # those changes are the replay its Findings describe
+        and gitops.changed_files(job.worktree)
+    ):
         prompt = f"{prompts.RETRY_NOTE}\n\n{prompt}"  # a failed attempt left its changes
     options = ProviderOptions() if pick.provider == "shell" else resolved.provider(pick.provider)
     steering = resolved.steering
@@ -675,6 +691,7 @@ def _request(
         skill=skill,
         test_cmd=resolved.project.test_cmd,
         lint_cmd=resolved.project.lint_cmd,
+        commands=resolved.project.allowed,
         allow_api_key=options.allow_api_key,
         user_config=options.user_config,
         bypass=resolved.agents[pick.role].bypass_permissions,
@@ -851,7 +868,7 @@ def _feedback(resolved: Settings, step: str, sent: SentBack | None) -> prompts.F
     """The checks, and why the step runs again, for its prompt (SP15 spec §3.4)."""
     project = resolved.project
     return prompts.Feedback(
-        checks=prompts.checks_block(project.test_cmd, project.lint_cmd),
+        checks=prompts.checks_block(project.test_cmd, project.lint_cmd, project.allowed),
         sent_back=prompts.sent_back_line(sent, check=resolved.kind_of(sent.step) == "check")
         if sent is not None
         else "",
@@ -878,6 +895,12 @@ def _commit(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
     for attempt in (1, 2):
         _fold(job)
         try:
+            marked = gitops.with_markers(job.worktree, ready.state.conflicts)
+            if marked:  # conflict markers never reach a commit (SP19 spec §3.1)
+                raise gitops.CommitFailed(
+                    "conflict markers left",
+                    f"these files still hold conflict markers: {', '.join(marked)}",
+                )
             ran.commit = gitops.commit_all(job.worktree, subject, trailers)
             break
         except gitops.CommitFailed as exc:
@@ -888,7 +911,8 @@ def _commit(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
                 last = lines[-1] if lines else str(exc)
                 kept = calls.work_kept(job.worktree, _changed(job, ready))
                 return _fail(job, f"commit failed: {last}{kept}", ran.usage)
-            problem = "the commit hook failed:\n" + "\n".join(lines[-20:])
+            what = "the commit was refused" if ready.state.conflicts else "the commit hook failed"
+            problem = f"{what}:\n" + "\n".join(lines[-20:])
             ran.hook_repaired = True
             request = _repair(job, ran.request, ran.result, problem)
             provider = adapters.get(ran.pick.provider, runtime=job.paths.runtime)
@@ -925,6 +949,8 @@ def _finish(job: _Job, ready: _Ready, ran: _Ran) -> JobEnd | None:
             return JobEnd(ticket.status, "changed while the step ran")
         state = runtime.load_ticket_state(paths, job.ticket_id)
         state.sent_back = None  # this step's prompt carried it
+        if resolved.kind_of(step) == "edit":
+            state.conflicts = []  # `_commit` refused any file that still held a marker
         output = result.output
         fingerprints: tuple[str, ...] = ()
         blocked = ""

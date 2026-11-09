@@ -180,11 +180,15 @@ def fit(text: str) -> str:
     return " ".join(words[: memory.MAX_WORDS - 1]) + " …"
 
 
-def checks_block(test_cmd: str, lint_cmd: str) -> str:
-    """The `## Checks` body naming the commands that are set; empty when neither is."""
+def checks_block(test_cmd: str, lint_cmd: str, others: Sequence[str] = ()) -> str:
+    """The `## Checks` body naming the commands that are set; empty when none is."""
     rows = [
         f"- {name}: `{command.strip()}`"
-        for name, command in (("tests", test_cmd), ("lint", lint_cmd))
+        for name, command in (
+            ("tests", test_cmd),
+            ("lint", lint_cmd),
+            *(("project", other) for other in others),
+        )
         if command.strip()
     ]
     return "\n".join([CHECKS_HEAD, *rows]) if rows else ""

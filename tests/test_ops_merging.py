@@ -54,14 +54,14 @@ def test_a_conflict_sends_the_ticket_back(engine: Engine, run_git: Callable[...,
     doc.meta.status, doc.meta.step = "in_process/awaiting_merge", None
     documents.save_ticket(engine.paths.project(engine.slug), doc)
     with pytest.raises(
-        UserError, match=r"conflict in README.md; 7b55e0c1 sent back to implement \(loop 2\)"
+        UserError, match=r"conflict in README.md; 7b55e0c1 sent back to implement \(loop 1\)"
     ):
         merging.merge_ticket("7b55e0c1", project=None, by="user")
     after = engine.ticket()
     assert (after.meta.status, after.meta.step, after.meta.loop) == (
         "in_queue/ready",
         "implement",
-        2,
+        1,  # a conflict is no rework, so it costs no loop (SP19)
     )
     assert "README.md:0 · rebase onto main conflicts" in after.sections["Findings"]
 

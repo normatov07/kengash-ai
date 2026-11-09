@@ -90,6 +90,13 @@ class _Section(BaseModel):
 class ProjectCommands(_Section):
     test_cmd: str = ""
     lint_cmd: str = ""
+    generate_cmd: str = ""  # rebuilds generated files; runs before kengash's checks (SP19)
+    commands: list[str] = Field(default_factory=list)  # more commands workers may run (SP19)
+
+    @property
+    def allowed(self) -> list[str]:
+        """Commands workers may run besides the test and lint commands."""
+        return [cmd for cmd in (*self.commands, self.generate_cmd) if cmd.strip()]
 
 
 class LoopMax(_Section):
@@ -130,7 +137,7 @@ class Sessions(_Section):
 
 
 class Tokens(_Section):
-    per_ticket_max: int = Field(1_000_000, ge=1)  # SP12: was 250,000
+    per_ticket_max: int = Field(3_000_000, ge=1)  # SP19: was 1,000,000; every gate was approved
 
 
 class SkillCaps(_Section):
@@ -289,6 +296,7 @@ class StatusNames(_Section):
 
 class Merge(_Section):
     mode: Literal["ask", "auto", "branch"] = "auto"  # auto: merges are rechecked (SP16)
+    conflict_turns: int = Field(2, ge=0, le=5)  # conflict resolutions that cost no loop (SP19)
 
 
 class Settings(_Section):

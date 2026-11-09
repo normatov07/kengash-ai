@@ -32,6 +32,7 @@ Run one step as one call to a provider CLI (SP3 spec §8): build the command lin
 
 ## Changes
 
+- 2026-11-09: Claude and Antigravity may run `StepRequest.commands` (SP19 spec §3.3).
 - 2026-11-08: `Watchdog` counts the test command wrapped in double quotes or beside other commands on one line (SP17 minors).
 - 2026-11-08: a stopped call sets `total_usage` to the prior total plus what its stream showed, so the next resume does not count it twice; `Usage.plus` replaces the driver's own (SP17 review).
 - 2026-11-08: `watchdog` and the `stuck` error: a call polling a background command, rerunning the whole suite (also piped or redirected) or past its soft deadline is stopped so the step loop can steer it; an observer that raises is ignored, so the pump keeps draining the CLI (SP17).

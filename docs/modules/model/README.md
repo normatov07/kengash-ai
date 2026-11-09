@@ -6,6 +6,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Interface
 
+- `ProjectCommands.generate_cmd`, `.commands`, `.allowed`; `Merge.conflict_turns`; `TicketState.conflicts`, `.conflict_turns`; `StepRequest.commands` (SP19).
 - `HarvestOutput`/`HarvestFact`, output kind `harvest`; `HarvestEntry`, `HarvestCursors`; `TicketInput.needs`; `memory.harvest` (SP18).
 - `Plan`, `Ticket`, `Review`, `SessionRef`, `PlanMode`, `PlanStatus`: frontmatter schemas (system spec §4.4). Unknown keys are rejected and assignments are validated. `Ticket.step` is the step running or next, `Ticket.tokens_max` the token budget (empty: `tokens.per_ticket_max`), `Review.session` the plan reviewer's session.
 - `Doc[M]`: a frontmatter model plus ordered Markdown sections; `PLAN_SECTIONS` and `TICKET_SECTIONS` name them.
@@ -29,6 +30,7 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Changes
 
+- 2026-11-09: `Tokens.per_ticket_max` defaults to 3,000,000; landing settings (SP19).
 - 2026-11-09: harvest models, `needs`, test roots in `paths.shared` (SP18).
 - 2026-11-08: `Agent` refuses `by_importance` on a shell agent (SP17 minors).
 - 2026-11-08: `Usage.plus`; `RelayIntent.touched`; `TicketState.split`; `Agent` given a `cli` at a narrower scope loses the inherited `by_importance` (SP17 review).

@@ -4,6 +4,7 @@ Runs plain `git` in the user's repo, so the user's identity, signing and hooks a
 """
 
 import subprocess
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,6 +21,10 @@ class CommitFailed(GitError):
     def __init__(self, message: str, output: str) -> None:
         super().__init__(message)
         self.output = output
+
+
+CONFLICT_REF = "refs/kengash/conflict/"
+CONFLICT_MARKER = b"<<<<<<< "
 
 
 @dataclass(frozen=True)
@@ -115,6 +120,47 @@ def rebase(cwd: Path, base: str) -> list[str]:
     if not conflicted:
         raise GitError(_failure("rebase", result))
     return conflicted
+
+
+def replay_onto(worktree: Path, base: str, ticket: str) -> list[str]:
+    """Replay the whole branch as one uncommitted change on `base` and return the conflicted
+    paths, which hold conflict markers (SP19 spec §3.1). No rebase or merge stays in progress,
+    so editing files is all that is left to do. The old tip stays under `CONFLICT_REF`."""
+    tip = head(worktree)
+    fork = _git(worktree, "merge-base", base, "HEAD").strip()
+    _git(worktree, "update-ref", f"{CONFLICT_REF}{ticket}", tip)
+    message = f"kengash replay {ticket}"
+    squashed = _git(worktree, "commit-tree", "HEAD^{tree}", "-p", fork, "-m", message).strip()
+    _git(worktree, "reset", "--hard", "--quiet", base)
+    result = _run(worktree, "cherry-pick", "--no-commit", squashed)
+    conflicted = sorted(_git(worktree, "diff", "--name-only", "--diff-filter=U").splitlines())
+    if result.returncode != 0 and not conflicted:
+        _git(worktree, "reset", "--hard", "--quiet", tip)
+        raise GitError(_failure("cherry-pick", result))
+    return conflicted
+
+
+def with_markers(worktree: Path, files: Sequence[str]) -> list[str]:
+    """The `files` that still hold a conflict marker line."""
+    marked: list[str] = []
+    for name in files:
+        path = worktree / name
+        if path.is_file() and any(
+            line.startswith(CONFLICT_MARKER) for line in path.read_bytes().splitlines()
+        ):
+            marked.append(name)
+    return marked
+
+
+def take_ours(worktree: Path, files: Sequence[str]) -> None:
+    """Settle conflicted `files` with the base's version, during a replay."""
+    _git(worktree, "checkout", "--ours", "--", *files)
+    _git(worktree, "add", "--", *files)
+
+
+def drop_conflict_ref(repo: Path, ticket: str) -> None:
+    """Forget a replayed branch's old tip; nothing happens when it has none."""
+    _run(repo, "update-ref", "-d", f"{CONFLICT_REF}{ticket}")
 
 
 def catch_up(worktree: Path, base: str) -> bool:

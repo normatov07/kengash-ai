@@ -30,6 +30,7 @@ Everything under `~/.kengash`: paths, atomic writes, frontmatter documents, ids,
 
 ## Changes
 
+- 2026-11-09: the seeded SETTINGS.md: `project.generate_cmd`, `project.commands`, `merge.conflict_turns`, `tokens.per_ticket_max: 3000000` (SP19).
 - 2026-11-09: harvest spool and cursors under runtime/ (SP18).
 - 2026-11-08: the seeded SETTINGS.md names `steering`, `paths`, `context.max_kib`, `checks.parallel`, `plan.max_files`, `review.block_on`, `loop_relay`, and runs the code reviewer on Sonnet with Opus for `critical`; `StorePaths.relay`, `runtime.load_relay` and `save_relay` (`runtime/relay.json`) (SP17).
 - 2026-11-07: the seeded SETTINGS.md sets `merge.mode: auto` (SP16).

@@ -72,9 +72,30 @@ def request(resolved: Settings, worktree: Path, log: Path) -> StepRequest:
         profile="read_only",
         timeout_s=calls.step_timeout(resolved),
         log=log,
-        test_cmd=resolved.project.test_cmd,
+        test_cmd=_with_generator(resolved),
         lint_cmd=resolved.project.lint_cmd,
     )
+
+
+def _with_generator(resolved: Settings) -> str:
+    """The test command, started by the generator so generated files are current (SP19)."""
+    generate, test = resolved.project.generate_cmd.strip(), resolved.project.test_cmd.strip()
+    return " && ".join(command for command in (generate, test) if command)
+
+
+def generate_request(resolved: Settings, worktree: Path, log: Path) -> StepRequest:
+    """The shell request that runs `generate_cmd` alone."""
+    request = StepRequest(
+        role="test-runner",
+        cwd=worktree,
+        prompt="",
+        output="review",
+        profile="read_only",
+        timeout_s=calls.step_timeout(resolved),
+        log=log,
+        test_cmd=resolved.project.generate_cmd,
+    )
+    return request
 
 
 def outcome(result: StepResult) -> tuple[str, str]:

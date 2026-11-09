@@ -203,6 +203,7 @@ def test_a_plan_review_round(scratch: Path, store_paths: StorePaths) -> None:
     plan_id = made.stdout.split()[1]
     sections = (
         "## Goal\ncalc.py gains add(a, b), returning a + b.\n"
+        "## Lasting decisions\nnone\n"
         "## Scope\nOne function in calc.py.\n"
         "## Design\n`def add(a: int, b: int) -> int: return a + b`, beside sub().\n"
         "## Acceptance\n- [ ] calc.add(2, 3) == 5\n"

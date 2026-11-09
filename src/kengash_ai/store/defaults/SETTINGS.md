@@ -4,6 +4,8 @@ version: 1
 # project
 project.test_cmd: ""          # e.g. "uv run pytest -q"; used by run_tests steps and reviewers
 project.lint_cmd: ""
+project.generate_cmd: ""          # rebuilds generated files, e.g. "python3 tools/gen.py"; runs before checks
+project.commands: []              # more commands workers may run, exact prefixes
 
 # loops
 loop_max.simple: 3
@@ -28,7 +30,7 @@ plan.max_files: 12            # a plan over this many files splits the ticket in
 sessions.reuse: true          # resume each ticket×role session across loops
 sessions.max: 8
 sessions.per_provider: {claude: 3, codex: 3, antigravity: 2}
-tokens.per_ticket_max: 1000000
+tokens.per_ticket_max: 3000000
 step_timeout_min: 30          # a step running longer is killed and retried once
 fallback_on_error: true
 
@@ -91,4 +93,5 @@ status.names: {plan: under_planning, review_plan: under_plan_review, implement: 
                docs: under_docs, approve: needs_approval}
 
 # merge: ask | auto | branch
+merge.conflict_turns: 2       # conflict resolutions that cost no loop
 merge.mode: auto

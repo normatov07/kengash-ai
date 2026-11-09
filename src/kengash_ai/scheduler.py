@@ -218,6 +218,11 @@ def shared_paths(a: Sequence[str], b: Sequence[str], policy: PathPolicy) -> list
     return list(dict.fromkeys(found))
 
 
+def generated(path: str, policy: PathPolicy) -> bool:
+    """`path` matches a `paths.shared` pattern: kengash can regenerate it (SP19 spec §3.2)."""
+    return _shared(path, policy)
+
+
 def is_broad(path: str, policy: PathPolicy) -> bool:
     """A whole top-level folder, which keeps most other tickets waiting."""
     return len(_segments(path)) <= 1 and _is_directory(path) and not _shared(path, policy)

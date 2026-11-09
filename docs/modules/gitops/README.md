@@ -6,6 +6,7 @@ The git commands kengash runs in the user's repo (SP3 spec §9): ticket worktree
 
 ## Interface
 
+- `replay_onto(worktree, base, ticket)`: after a failed rebase, the branch as one uncommitted change on `base`, conflict markers in the clashing files, nothing in progress; the old tip stays under `CONFLICT_REF` (SP19 spec §3.1). `with_markers`, `take_ours`, `drop_conflict_ref`, `branch_files`.
 - `hot_files(repo, ref, commits=, at_least=)` → `(file, tickets)`: files many tickets changed, counted by the Kengash-Ticket trailer (SP18 spec §3.6).
 - `ensure_worktree(repo, path, branch, base)` → `Worktree(path, branch, created)`: prunes stale worktree records, reuses `path` when it is already the worktree of `branch`, re-attaches an existing `branch`, else creates both from `base`. A foreign folder at `path` is a `GitError`.
 - `commit_all(cwd, subject, trailers)` → new sha, or None when nothing changed: `git add -A`, then one commit whose message is the subject's first line and the trailers as `Key: value` lines.
@@ -27,6 +28,7 @@ The git commands kengash runs in the user's repo (SP3 spec §9): ticket worktree
 
 ## Changes
 
+- 2026-11-09: conflict replay helpers (SP19).
 - 2026-11-09: `hot_files` (SP18).
 - 2026-11-08: `changed_between(cwd, old, new)`: paths that differ between two commits, [] when either is gone (SP17).
 - 2026-11-07: `contains(repo, ancestor, ref)`: `ancestor` is reachable from `ref` (SP16).

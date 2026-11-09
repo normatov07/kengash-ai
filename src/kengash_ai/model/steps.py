@@ -243,6 +243,7 @@ class StepRequest(_Step):
     skill: str | None = None
     test_cmd: str = ""
     lint_cmd: str = ""
+    commands: list[str] = Field(default_factory=list)  # more commands a worker may run (SP19)
     allow_api_key: bool = False
     user_config: bool = False
     bypass: bool = False

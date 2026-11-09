@@ -273,7 +273,7 @@ def test_loop_start_refuses_other_values() -> None:
 
 
 def test_default_token_cap() -> None:
-    assert Settings().tokens.per_ticket_max == 1_000_000
+    assert Settings().tokens.per_ticket_max == 3_000_000
 
 
 def test_checks_turns_default_and_bounds() -> None:

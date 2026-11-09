@@ -138,7 +138,7 @@ def test_seed_doc_writer_fallback(store_paths: StorePaths) -> None:
     ensure_store(store_paths)
     resolved = settings.load(store_paths)
     assert resolved.agents["doc-writer"].fallback == ["claude/sonnet"]
-    assert resolved.tokens.per_ticket_max == 1_000_000
+    assert resolved.tokens.per_ticket_max == 3_000_000
 
 
 def test_watch_defaults_and_a_bad_value(store_paths: StorePaths) -> None:

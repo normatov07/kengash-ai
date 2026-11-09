@@ -181,8 +181,8 @@ class Antigravity(CliProvider):
 
 
 def runnable(req: StepRequest) -> list[str]:
-    """The project's test and lint commands an agy rule can allow: set, with no operator."""
-    commands = (req.test_cmd.strip(), req.lint_cmd.strip())
+    """The project's commands an agy rule can allow: set, with no operator."""
+    commands = (req.test_cmd.strip(), req.lint_cmd.strip(), *map(str.strip, req.commands))
     return [c for c in commands if c and not any(op in c for op in OPERATORS)]
 
 

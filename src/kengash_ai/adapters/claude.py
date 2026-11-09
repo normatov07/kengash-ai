@@ -168,7 +168,8 @@ class Claude(CliProvider):
 def _profile(req: StepRequest) -> list[str]:
     if req.profile == "read_only":
         return ["--permission-mode", "dontAsk", "--allowedTools", *READ_TOOLS]
-    commands = [f"Bash({cmd}:*)" for cmd in (req.test_cmd, req.lint_cmd) if cmd.strip()]
+    named = (req.test_cmd, req.lint_cmd, *req.commands)
+    commands = [f"Bash({cmd}:*)" for cmd in named if cmd.strip()]
     return [
         "--permission-mode",
         "acceptEdits",

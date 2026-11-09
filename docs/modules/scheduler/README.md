@@ -6,6 +6,7 @@ Pick which ready tickets may start now (SP3 spec §7): no `touches` overlap insi
 
 ## Interface
 
+- `generated(path, policy)`: the path matches `paths.shared` (SP19 spec §3.2).
 - `shape(depends)` → `Shape(tickets, levels, widest, chokepoints)`, `behind(depends)` (transitive dependents), `shared_paths`, `is_broad`, `needs_claim` (SP18 spec §3.6, §3.7).
 - `clash(a, b, policy)` with `PathPolicy(shared, max_overlap)` (SP17 spec §3.5), what `select` uses: an empty list and a directory overlap clash, `shared` patterns never do, and exact files may overlap up to `max_overlap`.
 - `fits(provider, project, used, machine, projects)`: one more session stays within the machine's and the project's limits.
@@ -20,6 +21,7 @@ Pick which ready tickets may start now (SP3 spec §7): no `touches` overlap insi
 
 ## Changes
 
+- 2026-11-09: `generated` (SP19).
 - 2026-11-09: graph shape and claim helpers (SP18).
 - 2026-11-08: `overlaps` removed: `clash` is what decides a claim, and nothing else used it (SP17 minors).
 - 2026-11-08: `clash`, `PathPolicy` and `Limits.paths`: `select` decides claims with them; `overlaps` is unchanged (SP17).
