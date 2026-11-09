@@ -67,6 +67,7 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-09: `stats` counts a step waiting for a subscription limit as waiting, not working; `step.quota_wait` and `step.quota_resume` events (SP20).
 - 2026-11-09: the relay acts for live loop leases too; `ticket add` needs `provides` on a ticket others depend on; `stats`; escalation (SP20).
 - 2026-11-09: conflicts a worker can resolve; generator before checks; rebase before review (SP19).
 - 2026-11-09: memory harvest, ticket graph report, stuck tickets, claims that grow after an editing step (SP18).

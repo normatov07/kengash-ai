@@ -46,7 +46,7 @@ Anti-goal: saving tokens by weakening review. Review is under 2% of the spend an
 A session resumes when the provider is the same; another provider starts a new session from the Handoff and Findings.
 
 ### 3.4 `kengash stats`
-From the journal, over `--days` (7): workers running when busy and minutes at each count; tickets merged and share on the first loop; tokens per merged ticket; each implementing model's runs, tokens and how often the next review passed; gates by cause. This replaces guessing about the balance.
+From the journal, over `--days` (7): workers running when busy and minutes at each count; tickets merged and share on the first loop; tokens per merged ticket; each implementing model's runs, tokens and how often the next review passed; gates by cause. A step waiting for a subscription limit counts as waiting, not working. This replaces guessing about the balance.
 
 ## 4. Testing
 Unit tests for each part with the fake CLIs; `ticket` skill evals on both agents; a live run of three independent tickets, measured with `kengash stats`.

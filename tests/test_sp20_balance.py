@@ -203,6 +203,20 @@ def test_stats_counts_parallelism_yield_tokens_and_gates(
     assert found.gates == {"loop cap": 1, "conflict": 1}
 
 
+def test_stats_does_not_count_a_quota_wait_as_work(
+    monkeypatch: pytest.MonkeyPatch, store_paths: StorePaths
+) -> None:
+    events = [
+        event("step.start", "a", "10:00", step="plan"),
+        event("step.quota_wait", "a", "10:02", step="plan"),
+        event("step.quota_resume", "a", "13:02", step="plan"),
+        event("step.end", "a", "13:05", step="plan", role="planner", verdict="pass"),
+    ]
+    monkeypatch.setattr(journal, "read", lambda paths, since: iter(events))
+    found = stats.compute(store_paths, "app", 7)
+    assert found.minutes == {1: 5} and found.quota_minutes == 180
+
+
 def test_cli_stats_prints_on_an_empty_store(
     store_paths: StorePaths, inside_registered_repo: Path
 ) -> None:

@@ -777,6 +777,8 @@ def show_stats(
         )
     gates = ", ".join(f"{n} {cause}" for cause, n in found.gates.items()) or "none"
     typer.echo(f"gates: {gates}")
+    if found.quota_minutes:
+        typer.echo(f"waited {found.quota_minutes} min for subscription limits")
 
 
 def _stuck_line(item: queue.Stuck) -> str:

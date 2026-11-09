@@ -381,6 +381,7 @@ def _take_slot(job: _Job, ready: _Ready, pick: agents.Pick) -> None:
         sleep(SLOT_POLL_S)
     step_status = lifecycle.step_status(ready.resolved, ready.step)
     _update(job, ready.step, lambda doc, state: _status(doc, step_status))
+    _journal(job, "step.quota_resume", step=ready.step)
 
 
 def _call(job: _Job, ready: _Ready, pick: agents.Pick) -> _Ran | JobEnd:
@@ -607,6 +608,7 @@ def _fallback(job: _Job, ready: _Ready, pick: agents.Pick, tried: set[str]) -> a
 def _wait_quota(job: _Job, ready: _Ready, result: StepResult) -> None:
     """Show `waiting_quota` and sleep until the reset time (15 minutes when unknown)."""
     _update(job, ready.step, lambda doc, state: _status(doc, "in_process/waiting_quota"))
+    _journal(job, "step.quota_wait", step=ready.step)  # `stats` counts this as no work (SP20)
     if result.retry_after is not None:
         remaining = max((result.retry_after - utc_now()).total_seconds(), 0.0)
     else:

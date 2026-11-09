@@ -32,6 +32,7 @@ class Stats:
     tokens: int = 0
     models: list[ModelRow] = field(default_factory=list)
     gates: dict[str, int] = field(default_factory=dict)  # cause → how many
+    quota_minutes: int = 0  # steps waiting for a subscription limit, added up
 
     @property
     def mean_workers(self) -> float:
@@ -49,7 +50,8 @@ def compute(paths: StorePaths, project: str | None, days: int) -> Stats:
     """The last `days` days of one project, or of every project."""
     since = date.today() - timedelta(days=days - 1)
     events = [e for e in journal.read(paths, since=since) if project in (None, e.project)]
-    found = Stats(days, minutes=_minutes(events))
+    minutes, quota = _minutes(events)
+    found = Stats(days, minutes=minutes, quota_minutes=quota)
     rows: dict[str, ModelRow] = {}
     last: dict[str, ModelRow] = {}  # ticket → the model that last implemented it
     gates: Counter[str] = Counter()
@@ -95,16 +97,26 @@ def _cause(reason: str) -> str:
     return reason.split(":")[0].split(" in ")[0].strip() or "other"
 
 
-def _minutes(events: list[Event]) -> dict[int, int]:
-    """Minutes spent with each number of steps running."""
+def _minutes(events: list[Event]) -> tuple[dict[int, int], int]:
+    """Minutes spent with each number of steps working, and minutes waiting for a limit. A
+    step waiting for a subscription limit does no work, so it does not count as running."""
     opened: dict[tuple[str | None, object], datetime] = {}
+    waiting: dict[tuple[str | None, object], datetime] = {}
     edges: list[tuple[datetime, int]] = []
+    waited = 0.0
     for event in events:
         key = (event.ticket, (event.model_extra or {}).get("step"))
         if event.type == "step.start":
             opened[key] = event.ts
         elif event.type == "step.end" and key in opened:
             edges += [(opened.pop(key), 1), (event.ts, -1)]
+        elif event.type == "step.quota_wait" and key in opened:
+            edges += [(opened.pop(key), 1), (event.ts, -1)]
+            waiting[key] = event.ts
+        elif event.type == "step.quota_resume" and key in waiting:
+            began = waiting.pop(key)
+            waited += (event.ts - began).total_seconds()
+            opened[key] = event.ts
     seconds: Counter[int] = Counter()
     running = 0
     previous: datetime | None = None
@@ -113,4 +125,6 @@ def _minutes(events: list[Event]) -> dict[int, int]:
             seconds[running] += int((moment - previous).total_seconds())
         running += change
         previous = moment
-    return {count: round(total / 60) for count, total in sorted(seconds.items())}
+    return {count: round(total / 60) for count, total in sorted(seconds.items())}, round(
+        waited / 60
+    )
