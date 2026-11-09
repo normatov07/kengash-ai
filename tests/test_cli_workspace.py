@@ -131,6 +131,7 @@ def test_every_command_speaks_json(store_paths: StorePaths, inside_repo: Path) -
         "process": ["# PROCESS.md", "## Process notes"],
         "gates": [],
         "record": memory.RECORD_HINT,
+        "recent": [],
     }
 
 

@@ -224,6 +224,7 @@ BATCH = """
   importance: simple
   touches: [keys/rotate]
   depends_on: [first]
+  needs: {first: its code}
   scope: Rotation.
   acceptance: [it rotates]
 """

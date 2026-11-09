@@ -16,7 +16,7 @@ import pytest
 
 from kengash_ai import gitops, settings
 from kengash_ai.model import Doc, Plan, Ticket, TicketState
-from kengash_ai.ops import projects, skills
+from kengash_ai.ops import harvest, projects, skills, steps
 from kengash_ai.store import StorePaths, documents, runtime
 from kengash_ai.store.seed import ensure_store
 
@@ -54,6 +54,7 @@ def _hermetic_store(
     monkeypatch.setenv("KENGASH_WATCH", "off")  # no test opens a tab or notifies (SP13)
     home = tmp_path_factory.mktemp("home")
     monkeypatch.setattr(skills, "home_folder", lambda: home)
+    monkeypatch.setattr(harvest, "_start", lambda paths: None)  # no test starts a real job
 
 
 @pytest.fixture
@@ -211,6 +212,7 @@ class FakeClis:
 @pytest.fixture(autouse=True)
 def fake_clis(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FakeClis:
     """Put the fakes first on PATH so no test ever runs a real provider CLI."""
+    monkeypatch.setattr(steps, "CRASH_WAIT_S", 0)  # a crash's retry waits for nothing here
     fake_bin = tmp_path / "fake-bin"
     fake_bin.mkdir()
     for cli in ("claude", "codex", "agy"):

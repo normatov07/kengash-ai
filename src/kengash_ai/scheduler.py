@@ -3,10 +3,13 @@
 Pure: callers pass tickets, running work and limits in, and get a selection back.
 """
 
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from fnmatch import fnmatch
 from itertools import zip_longest
+from math import ceil
 from typing import NamedTuple
 
 from kengash_ai.model import Importance
@@ -48,11 +51,21 @@ class Held(NamedTuple):
 
 
 @dataclass(frozen=True)
+class PathPolicy:
+    """What two editing tickets may share (SP17 spec §3.5): files matching `shared` are never
+    claimed, and up to `max_overlap` exact files may overlap. The default is strict."""
+
+    shared: tuple[str, ...] = ()
+    max_overlap: int = 0
+
+
+@dataclass(frozen=True)
 class Limits:
-    """`sessions.max` and `sessions.per_provider` of one settings scope."""
+    """`sessions.max` and `sessions.per_provider` of one settings scope, and its path policy."""
 
     total: int
     per_provider: Mapping[str, int]
+    paths: PathPolicy = PathPolicy()
 
 
 @dataclass
@@ -61,12 +74,22 @@ class Selection:
     held_back: dict[str, str] = field(default_factory=dict)
 
 
-def overlaps(a: Sequence[str], b: Sequence[str]) -> bool:
-    """Path prefixes overlap when one contains the other, segment by segment; an empty
-    list stands for the whole repo."""
+def clash(a: Sequence[str], b: Sequence[str], policy: PathPolicy) -> bool:
+    """True when tickets touching `a` and `b` may not edit at once: an empty list is the whole
+    repo, a directory clashes with whatever it holds, and exact files may overlap up to
+    `policy.max_overlap`; generated files (`policy.shared`) do not count."""
     if not a or not b:
         return True
-    return any(_within(x, y) or _within(y, x) for x in a for y in b)
+    shared_files = 0
+    for x, y in ((x, y) for x in a for y in b):
+        if not (_within(x, y) or _within(y, x)):
+            continue
+        if _shared(x, policy) or _shared(y, policy):
+            continue
+        if _is_directory(x) or _is_directory(y):
+            return True
+        shared_files += 1
+    return shared_files > policy.max_overlap
 
 
 def select(
@@ -84,21 +107,25 @@ def select(
     taken = list(busy)
     used = list(held)
     for candidate in _in_turns(candidates, last_claims):
-        clash = (
+        holder = (
             next(
                 (
                     other.id
                     for other in taken
                     if other.project == candidate.project
-                    and overlaps(other.touches, candidate.touches)
+                    and clash(
+                        other.touches,
+                        candidate.touches,
+                        projects.get(candidate.project, machine).paths,
+                    )
                 ),
                 None,
             )
             if candidate.editing
             else None
         )
-        if clash is not None:
-            selection.held_back[candidate.id] = f"touches overlap {clash}"
+        if holder is not None:
+            selection.held_back[candidate.id] = f"touches overlap {holder}"
             continue
         provider = candidate.provider
         if provider is not None:
@@ -110,6 +137,100 @@ def select(
         if candidate.editing:
             taken.append(Busy(candidate.id, candidate.project, candidate.touches))
     return selection
+
+
+@dataclass(frozen=True)
+class Shape:
+    """A ticket graph (SP18 spec §3.6): how many, in how many levels, how many at once at the
+    widest; `chokepoints` holds (ticket, tickets behind it), most first."""
+
+    tickets: int
+    levels: int
+    widest: int
+    chokepoints: tuple[tuple[str, int], ...] = ()
+
+
+def behind(depends: Mapping[str, Sequence[str]]) -> dict[str, set[str]]:
+    """Each ticket's transitive dependents; an edge to a ticket not listed is ignored."""
+    dependents: dict[str, list[str]] = {ticket: [] for ticket in depends}
+    for ticket, needs in depends.items():
+        for need in needs:
+            if need in dependents:
+                dependents[need].append(ticket)
+    found: dict[str, set[str]] = {}
+    for ticket in depends:
+        seen: set[str] = set()
+        stack = list(dependents[ticket])
+        while stack:
+            current = stack.pop()
+            if current not in seen and current != ticket:
+                seen.add(current)
+                stack.extend(dependents[current])
+        found[ticket] = seen
+    return found
+
+
+def shape(depends: Mapping[str, Sequence[str]]) -> Shape:
+    """The graph's levels and chokepoints: a ticket past the first level holding at least
+    max(3, a quarter of the graph) behind it. A first-level ticket is the shared foundation
+    the width guidance asks for, so it never counts."""
+    level = _levels(depends)
+    if not level:
+        return Shape(0, 0, 0)
+    per_level = Counter(level.values())
+    bar = max(3, ceil(len(depends) / 4))
+    held = behind(depends)
+    points = sorted(
+        ((t, len(held[t])) for t in depends if level[t] > 0 and len(held[t]) >= bar),
+        key=lambda point: (-point[1], point[0]),
+    )
+    return Shape(len(depends), len(per_level), max(per_level.values()), tuple(points))
+
+
+def _levels(depends: Mapping[str, Sequence[str]]) -> dict[str, int]:
+    """Each ticket's longest chain of tickets before it; a cycle counts as no chain."""
+    found: dict[str, int] = {}
+    visiting: set[str] = set()
+
+    def level(ticket: str) -> int:
+        if ticket in found:
+            return found[ticket]
+        if ticket in visiting:
+            return 0
+        visiting.add(ticket)
+        needs = [need for need in depends[ticket] if need in depends]
+        value = max((1 + level(need) for need in needs), default=0)
+        visiting.discard(ticket)
+        found[ticket] = value
+        return value
+
+    return {ticket: level(ticket) for ticket in depends}
+
+
+def shared_paths(a: Sequence[str], b: Sequence[str], policy: PathPolicy) -> list[str]:
+    """The claimed paths that make `a` and `b` overlap, generated files left out."""
+    found = [
+        x
+        for x in a
+        for y in b
+        if (_within(x, y) or _within(y, x)) and not (_shared(x, policy) or _shared(y, policy))
+    ]
+    return list(dict.fromkeys(found))
+
+
+def generated(path: str, policy: PathPolicy) -> bool:
+    """`path` matches a `paths.shared` pattern: kengash can regenerate it (SP19 spec §3.2)."""
+    return _shared(path, policy)
+
+
+def is_broad(path: str, policy: PathPolicy) -> bool:
+    """A whole top-level folder, which keeps most other tickets waiting."""
+    return len(_segments(path)) <= 1 and _is_directory(path) and not _shared(path, policy)
+
+
+def needs_claim(path: str, touches: Sequence[str], policy: PathPolicy) -> bool:
+    """`path` is outside every claim in `touches` and is not a generated file."""
+    return not _shared(path, policy) and not any(_within(path, claim) for claim in touches)
 
 
 def chain_weights(depends: Mapping[str, Sequence[str]]) -> dict[str, int]:
@@ -168,6 +289,16 @@ def _in_turns(
     order = sorted(queues, key=lambda slug: (last_claims.get(slug, NEVER), slug))
     turns = zip_longest(*(queues[slug] for slug in order))
     return [candidate for turn in turns for candidate in turn if candidate is not None]
+
+
+def _shared(path: str, policy: PathPolicy) -> bool:
+    return any(fnmatch(path.strip(), pattern) for pattern in policy.shared)
+
+
+def _is_directory(path: str) -> bool:
+    """A trailing slash, or a last segment with no extension."""
+    parts = _segments(path)
+    return path.strip().endswith("/") or not parts or "." not in parts[-1]
 
 
 def _segments(path: str) -> list[str]:

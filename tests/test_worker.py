@@ -10,7 +10,7 @@ import pytest
 from conftest import Engine, FakeClis
 
 from kengash_ai.model import PlanMode, PlanStatus, WorkerRecord
-from kengash_ai.ops import controls, lifecycle, plans, records, tickets
+from kengash_ai.ops import controls, harvest, lifecycle, plans, records, tickets
 from kengash_ai.store import StorePaths, documents, runtime
 
 
@@ -79,7 +79,9 @@ def test_the_worker_runs_a_plan_review(
         cwd=registered_repo,
         by="user",
     )
-    plans.save_plan(made.id, "## Goal\nKeys rotate.\n", project=None, by="user")
+    plans.save_plan(
+        made.id, "## Goal\nKeys rotate.\n## Lasting decisions\nnone\n", project=None, by="user"
+    )
     _, path = records.locate_plan(store_paths, made.id, None)
     doc = records.load_plan(path)
     doc.meta.status, doc.meta.review.reviewer = PlanStatus.in_review, "claude"
@@ -91,3 +93,26 @@ def test_the_worker_runs_a_plan_review(
     assert done.returncode == 0, done.stdout + done.stderr
     assert done.stdout == f"{made.id}: round 1 pass\n"
     assert records.load_plan(path).meta.review.round == 1
+
+
+def test_the_worker_drains_the_harvest_spool(
+    registered_repo: Path, store_paths: StorePaths, fake_clis: FakeClis
+) -> None:
+    said = "the capture animations matter most in this game"
+    assert harvest.submit(store_paths, "chat abc", "payments-api", said)
+    fact = {
+        "kind": "decision",
+        "fact": "Capture animations come first",
+        "why": "they matter most",
+        "rejected": "",
+        "quote": "capture animations matter most",
+        "replaces": 0,
+    }
+    fake_clis.queue("claude", stdout=fake_clis.claude_output({"facts": [fact]}))
+    worker = [sys.executable, "-m", "kengash_ai.worker", "harvest"]
+    done = subprocess.run(worker, capture_output=True, text=True)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert done.stdout == "harvest: 1 lines from 1 texts\n"
+    text = (store_paths.memory / "DECISIONS.md").read_text(encoding="utf-8")
+    assert "[payments-api] (user) Capture animations come first." in text
+    assert runtime.harvest_entries(store_paths) == []

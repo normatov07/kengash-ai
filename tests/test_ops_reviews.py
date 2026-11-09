@@ -24,7 +24,7 @@ from kengash_ai.ops.agents import Pick
 from kengash_ai.store import StorePaths, documents, runtime
 
 SECTIONS = (
-    "## Goal\nWebhook keys rotate without downtime.\n"
+    "## Goal\nWebhook keys rotate without downtime.\n## Lasting decisions\nnone\n"
     "## Scope\nA keyring of signing keys.\n"
     "## Design\nTwo active keys; the newest signs.\n"
     "## Acceptance\n- [ ] an old key verifies for 48h\n"

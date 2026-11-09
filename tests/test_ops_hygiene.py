@@ -73,7 +73,7 @@ def test_doctor_reports_and_fixes_old_defaults_keeping_comments(store_paths: Sto
         assert f"defaults still has the old default {key}; run: kengash doctor --fix" in messages
     projects.doctor(fix=True)
     text = defaults.read_text(encoding="utf-8")
-    assert "tokens.per_ticket_max: 1000000" in text and "# my ceiling" in text
+    assert "tokens.per_ticket_max: 3000000" in text and "# my ceiling" in text
     assert "fallback_on_rate_limit" not in text and "fallback_on_error: true" in text
     assert settings.load(store_paths).agents["doc-writer"].fallback == ["claude/sonnet"]
     assert not any("old default" in p.message for p in projects.doctor().problems)

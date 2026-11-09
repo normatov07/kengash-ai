@@ -1,10 +1,12 @@
 """MEMORY.md and DECISIONS.md: one-line facts, capped, redacted and journaled (spec §4.5);
 compaction results are checked and applied here (SP3 spec decision 31)."""
 
+import os
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
+from pathlib import Path
 from typing import Any
 
 from kengash_ai import journal, settings
@@ -37,11 +39,17 @@ ARCHIVE_HEADER = (
     "Never loaded automatically.\n\n"
 )
 MAX_WORDS = 30
+WHY_WORDS = 18  # a decision's why and rejected, so its line stays short (SP18 spec §3.4)
+REJECTED_WORDS = 12
+USER = "(user) "  # a decision the user made, not one a worker proposed
+HARVESTED = "harvest"  # the `by` of lines the harvest job wrote (SP18 spec §3.1)
 # the `## Memory` block of a new worker session (SP16 spec §3.1): characters per part
-DIGEST_CAPS = {"PROCESS.md": 3_000, "DECISIONS.md": 2_500, "MEMORY.md": 1_500}
+DIGEST_CAPS = {"PROCESS.md": 3_000, "DECISIONS.md": 4_000, "MEMORY.md": 1_500}
 _BULLET = re.compile(r"^[-*+]\s+")
 _LABEL = re.compile(r"\s*\b(why|rejected):\s*", re.IGNORECASE)
 _TAG = re.compile(r"^- \d{4}-\d{2}-\d{2} \[([^\]]+)\] ")
+# a repo-relative file a memory line names: a folder, then a name with an extension
+_PATH = re.compile(r"(?<![\w./:-])((?:[\w.-]+/)+[\w-][\w.-]*\.\w+)")
 
 
 @dataclass
@@ -68,17 +76,20 @@ def add(
     rejected: str | None = None,
     project: str | None = None,
     by: str = "unknown",
+    user: bool = False,
 ) -> AddResult:
-    """Record one fact in MEMORY.md (under `section`) or one decision in DECISIONS.md."""
+    """Record one fact in MEMORY.md (under `section`) or one decision in DECISIONS.md; `user`
+    marks a decision that came from the user's own words (SP18 spec §3.1)."""
     if not paths.memory.is_dir():
         raise NeedsSetup("no store yet; run: kengash init")
     fact, reason = _one_line(text), _one_line(why)
     if decision:
         name, cap = "DECISIONS.md", DECISIONS_CAP
-        entry = f"- {date.today().isoformat()} [{project or 'global'}] {fact.rstrip('.')}."
-        entry += f" why: {reason.rstrip('.')}."
+        mark = USER if user else ""
+        entry = f"- {date.today().isoformat()} [{project or 'global'}] {mark}{fact.rstrip('.')}."
+        entry += f" why: {_tight(reason, WHY_WORDS).rstrip('.')}."
         if rejected:
-            entry += f" rejected: {_one_line(rejected).rstrip('.')}."
+            entry += f" rejected: {_tight(_one_line(rejected), REJECTED_WORDS).rstrip('.')}."
     else:
         if section not in SECTIONS:
             raise UserError(f"unknown section {section!r}; use one of: {', '.join(SECTIONS)}")
@@ -131,7 +142,7 @@ def compaction_problem(current: list[str], result: list[str], cap: int) -> str |
     kept = {line.strip() for line in result}
     if not any(kept):
         return "the result is empty"
-    pins = [line for line in current if _pinned(line) and line.strip() not in kept]
+    pins = [line for line in current if is_pinned(line) and line.strip() not in kept]
     if pins:
         return f"the result drops {len(pins)} pinned line(s): {pins[0].strip()}"
     headings = [line for line in current if line.startswith("## ") and line.strip() not in kept]
@@ -231,6 +242,75 @@ def add_process(paths: StorePaths, text: str, *, why: str = "", project: str, by
     return AddResult("PROCESS.md", entry, len(lines), PROCESS_CAP, added=True)
 
 
+def forget(paths: StorePaths, text: str, project: str | None, *, by: str) -> str:
+    """Remove the one line holding `text` from MEMORY.md, DECISIONS.md or the project's
+    PROCESS.md, and return it (SP18 spec §3.4). No match, or several, is refused."""
+    wanted = " ".join(text.lower().split())
+    if not wanted:
+        raise UserError("say which line to forget")
+    with locked(paths.locks / "memory.lock"):
+        found = [
+            (path, line)
+            for path in _memory_files(paths, project)
+            if path.exists()
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.startswith("- ") and wanted in " ".join(line.lower().split())
+        ]
+        if not found:
+            raise UserError(f"no memory line holds {text!r}")
+        if len(found) > 1:
+            shown = "; ".join(line[:70] for _, line in found[:3])
+            raise UserError(f"{len(found)} lines hold {text!r}, be more exact: {shown}")
+        path, line = found[0]
+        _remove(path, line)
+    event = {"type": "memory.forgotten", "project": project, "file": path.name, "line": line}
+    journal.append(paths, Event.model_validate({**event, "by": by}))
+    storegit.commit_store(paths, f"kengash: memory forget {path.name}")
+    return line
+
+
+def supersede(paths: StorePaths, line: str, *, by: str) -> bool:
+    """Move `line` from DECISIONS.md to the archive because a newer decision overrules it; False
+    when it is gone or pinned."""
+    if is_pinned(line):
+        return False
+    path = paths.memory / "DECISIONS.md"
+    with locked(paths.locks / "memory.lock"):
+        if not path.exists() or line not in path.read_text(encoding="utf-8").splitlines():
+            return False
+        _remove(path, line)
+        _archive(paths, [line])
+    event = {"type": "memory.superseded", "file": path.name, "line": line, "by": by}
+    journal.append(paths, Event.model_validate(event))
+    storegit.commit_store(paths, "kengash: memory supersede DECISIONS.md")
+    return True
+
+
+def _memory_files(paths: StorePaths, project: str | None) -> list[Path]:
+    files = [paths.memory / "MEMORY.md", paths.memory / "DECISIONS.md"]
+    return [*files, paths.project(project).process] if project else files
+
+
+def _remove(path: Path, line: str) -> None:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    lines.remove(line)
+    atomic_write(path, "\n".join(lines) + "\n")
+
+
+def harvested(
+    paths: StorePaths, project: str | None, *, days: int = 7, limit: int = 5
+) -> list[str]:
+    """The newest lines the harvest wrote in the past `days`, for the conductor to mention."""
+    lines: list[str] = []
+    for event in journal.read(paths, since=date.today() - timedelta(days=days)):
+        extra = event.model_extra or {}
+        if event.type != "memory.write" or extra.get("by") != HARVESTED:
+            continue
+        if project is None or event.project in (project, None):
+            lines.append(str(extra.get("line", "")))
+    return lines[-limit:]
+
+
 def decision_text(decision: str, why: str, rejected: str = "") -> str:
     """`- <decision>. why: <why>. rejected: <rejected>.`, the parts that are set."""
     text = f"- {decision.rstrip('.')}."
@@ -260,24 +340,43 @@ def key(line: str) -> str:
     date, why and rejected do not count)."""
     found = _TAG.match(line)
     if found:
-        text = f"[{found.group(1)}] {line[found.end() :].split(' why: ', 1)[0]}"
+        rest = line[found.end() :].removeprefix(USER)
+        text = f"[{found.group(1)}] {rest.split(' why: ', 1)[0]}"
     else:
         text = line.removeprefix("- ")
     return " ".join(text.lower().split()).rstrip(".!;:, ")
 
 
-def digest(paths: StorePaths, project: str | None) -> str:
+def digest(
+    paths: StorePaths,
+    project: str | None,
+    root: Path | None = None,
+    touches: Sequence[str] = (),
+) -> str:
     """What every new worker session is told to follow (SP16 spec §3.1): the head of the
-    project's process notes, the newest of its and the global decisions, and the newest of
-    the user's memory, each within its cap; redacted, and "" when there is nothing."""
+    project's process notes, its and the global decisions that matter most to `touches` (SP18
+    spec §3.4), and the newest of the user's memory, each within its cap; redacted, and ""
+    when there is nothing. With the code's `root`, a line naming a file that is gone says so
+    (SP17 spec §3.8)."""
+    process, decisions = _process_lines(paths, project), decision_lines(paths, project)
+    if root is not None:
+        process, decisions = _tag_stale(process, root), _tag_stale(decisions, root)
     parts = [
-        _part("Process (PROCESS.md)", _process_lines(paths, project), "PROCESS.md", newest=False),
-        _part(
-            "Decisions (DECISIONS.md, newest last)", _decision_lines(paths, project), "DECISIONS.md"
-        ),
-        _part("Preferences (MEMORY.md)", _memory_lines(paths), "MEMORY.md"),
+        _part("Process (PROCESS.md)", process, "PROCESS.md", newest=False),
+        _ranked_part("Decisions (DECISIONS.md, newest last)", decisions, touches),
+        _part("Preferences (MEMORY.md)", memory_lines(paths), "MEMORY.md"),
     ]
     return redact("\n\n".join(part for part in parts if part))
+
+
+def _tag_stale(lines: list[str], root: Path) -> list[str]:
+    """Mark each line naming a repo file that no longer exists. Shown, not hidden, and age
+    plays no part: an old line whose file is still there has lost nothing."""
+    tagged: list[str] = []
+    for line in lines:
+        gone = [name for name in _PATH.findall(line) if not os.path.exists(root / name)]
+        tagged.append(f"{line} [stale? path gone: {', '.join(gone)}]" if gone else line)
+    return tagged
 
 
 def _part(title: str, lines: list[str], name: str, *, newest: bool = True) -> str:
@@ -299,6 +398,42 @@ def _part(title: str, lines: list[str], name: str, *, newest: bool = True) -> st
     return "\n".join([f"{title}:", *body])
 
 
+def _ranked_part(title: str, lines: list[str], touches: Sequence[str]) -> str:
+    """The decisions that fit their cap, most binding first, shown in file order and without
+    the date and tag a worker has no use for (SP18 spec §3.4)."""
+    if not lines:
+        return ""
+    order = sorted(range(len(lines)), key=lambda i: (_rank(lines[i], touches), -i))
+    kept: set[int] = set()
+    size = 0
+    for index in order:
+        cost = len(_bare(lines[index])) + 1
+        if size + cost <= DIGEST_CAPS["DECISIONS.md"]:
+            kept.add(index)
+            size += cost
+    dropped = len(lines) - len(kept)
+    note = [f"… {dropped} less relevant lines in DECISIONS.md"] if dropped else []
+    return "\n".join([f"{title}:", *note, *(_bare(lines[i]) for i in sorted(kept))])
+
+
+def _rank(line: str, touches: Sequence[str]) -> int:
+    """0: the user's or pinned; 1: names a path this ticket touches; 2: the rest."""
+    if USER in line or is_pinned(line):
+        return 0
+    return 1 if any(_names(line, path) for path in touches) else 2
+
+
+def _names(line: str, path: str) -> bool:
+    """`line` names this claim; a bare top-level folder like `lib` is too common a word."""
+    claim = path.strip().rstrip("/")
+    return ("/" in claim or "." in claim) and claim in line
+
+
+def _bare(line: str) -> str:
+    found = _TAG.match(line)
+    return f"- {line[found.end() :]}" if found else line
+
+
 def _process_lines(paths: StorePaths, project: str | None) -> list[str]:
     """PROCESS.md from its first `## ` heading, blank lines dropped; [] when only headings."""
     path = paths.project(project).process if project else None
@@ -310,7 +445,7 @@ def _process_lines(paths: StorePaths, project: str | None) -> list[str]:
     return body if any(not line.startswith("#") for line in body) else []
 
 
-def _decision_lines(paths: StorePaths, project: str | None) -> list[str]:
+def decision_lines(paths: StorePaths, project: str | None) -> list[str]:
     """DECISIONS.md entries tagged with `project` or `global`, oldest first."""
     path = paths.memory / "DECISIONS.md"
     if not path.exists():
@@ -323,7 +458,7 @@ def _decision_lines(paths: StorePaths, project: str | None) -> list[str]:
     ]
 
 
-def _memory_lines(paths: StorePaths) -> list[str]:
+def memory_lines(paths: StorePaths) -> list[str]:
     """MEMORY.md entries as `- [<section>] <text>`, in file order."""
     path = paths.memory / "MEMORY.md"
     if not path.exists():
@@ -358,7 +493,7 @@ def _archive(paths: StorePaths, entries: list[str]) -> None:
     atomic_write(path, text + "".join(f"{entry}\n" for entry in entries))
 
 
-def _pinned(line: str) -> bool:
+def is_pinned(line: str) -> bool:
     return line.startswith("- ") and "(pin)" in line
 
 
@@ -371,6 +506,14 @@ def _one_line(text: str) -> str:
     if len(value.split()) > MAX_WORDS:
         raise UserError(f"keep memory lines under {MAX_WORDS} words (aim for 20)")
     return value
+
+
+def _tight(text: str, words: int) -> str:
+    """`text` within `words`: its first sentence when that fits, else its first words."""
+    if len(text.split()) <= words:
+        return text
+    first = re.split(r"(?<=[.!?])\s", text, maxsplit=1)[0]
+    return first if len(first.split()) <= words else " ".join(text.split()[:words])
 
 
 def _insert(lines: list[str], section: str, entry: str) -> list[str]:

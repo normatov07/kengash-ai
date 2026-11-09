@@ -54,14 +54,14 @@ def test_a_conflict_sends_the_ticket_back(engine: Engine, run_git: Callable[...,
     doc.meta.status, doc.meta.step = "in_process/awaiting_merge", None
     documents.save_ticket(engine.paths.project(engine.slug), doc)
     with pytest.raises(
-        UserError, match=r"conflict in README.md; 7b55e0c1 sent back to implement \(loop 2\)"
+        UserError, match=r"conflict in README.md; 7b55e0c1 sent back to implement \(loop 1\)"
     ):
         merging.merge_ticket("7b55e0c1", project=None, by="user")
     after = engine.ticket()
     assert (after.meta.status, after.meta.step, after.meta.loop) == (
         "in_queue/ready",
         "implement",
-        2,
+        1,  # a conflict is no rework, so it costs no loop (SP19)
     )
     assert "README.md:0 · rebase onto main conflicts" in after.sections["Findings"]
 
@@ -230,3 +230,16 @@ def test_merge_records_a_long_stored_decision_shortened(
     assert merging.merge_ticket("7b55e0c1", project=None, by="user").decisions == 1
     text = (engine.paths.memory / "DECISIONS.md").read_text(encoding="utf-8")
     assert "[payments-api] Retries back off. why: herd." in text
+
+
+def test_a_merge_recheck_does_not_wait_for_a_check_place(
+    engine: Engine, run_git: Callable[..., str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def no_place(*_: object) -> None:
+        raise AssertionError("waiting here would hold the merge lock for the whole wait")
+
+    _tested(engine, "test -f retry.py && test -f other.py")
+    ready_to_merge(engine, run_git)
+    _main_moves(engine)
+    monkeypatch.setattr(checks, "turn", no_place)
+    assert merging.merge_ticket("7b55e0c1", project=None, by="user").commits == 1

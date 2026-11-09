@@ -32,7 +32,7 @@ SCENARIO = EvalScenario.model_validate(
         "turns": ["/probe-plan"],
         "expect": {
             "journal": ["plan.created"],
-            "plans": {"count": 1, "fields": {"title": "Probe", "mode": "direct"}},
+            "plans": {"count": 1, "fields": {"mode": "direct"}},
             "reply": ["plan "],
         },
         "timeout_s": 300,

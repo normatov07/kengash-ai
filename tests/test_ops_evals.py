@@ -162,7 +162,10 @@ def test_setup_saves_ids_for_later_steps(work: Path, source: Path, fake_clis: Fa
             "stdin": "Seed.",
             "save": "plan",
         },
-        {"args": ["plan", "save", "{plan}"], "stdin": "## Goal\nShip it.\n"},
+        {
+            "args": ["plan", "save", "{plan}"],
+            "stdin": "## Goal\nShip it.\n## Lasting decisions\nnone\n",
+        },
     ]
     fake_clis.queue("claude", stdout=claude_reply())
     case = scenario(
@@ -334,3 +337,10 @@ def test_claude_runs_get_no_agy_rule(work: Path, source: Path, fake_clis: FakeCl
     fake_clis.queue("claude", stdout=claude_reply(), shell=PLAN_NEW)
     assert run(work, source, scenario()).passed
     assert not (work / "repo" / "AGENTS.md").exists()
+
+
+def test_a_reply_may_say_it_either_way(work: Path, source: Path, fake_clis: FakeClis) -> None:
+    fake_clis.queue("claude", stdout=claude_reply(), shell=PLAN_NEW)
+    expect = {"journal": ["plan.created"], "reply": ["Nope | Planned"]}
+    result = run(work, source, scenario(expect=expect))
+    assert result.passed, result.failure

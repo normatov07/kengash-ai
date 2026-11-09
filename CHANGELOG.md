@@ -4,6 +4,42 @@ All notable changes to this project are written here. The format follows [Keep a
 
 ## [Unreleased]
 
+### Added
+
+- Automatic memory: a one-shot job on the cheap model records what you settle, at `plan approve`, `plan reject --why`, `approve --note`, and when a Claude Code session compacts or ends (`kengash skills install --global` adds those two hooks to `~/.claude/settings.json`). A fact must quote your own words or it is dropped, and only registered projects are read. `memory.harvest` is `all`, `plans` or `off`; `kengash memory forget "<words>"` removes a line; `kengash memory harvest --plan <id>` reads a plan approved earlier.
+- `kengash ticket add --check` reports a ticket list's levels, chokepoints, files that force tickets to run one at a time, top-level folders claimed, and files many past tickets changed. It creates nothing.
+- Merge conflicts are settled inside the ticket. A failed rebase is replayed as one change on the base with conflict markers in the clashing files, and the implementer only edits files; markers can never be committed. Up to `merge.conflict_turns` (default 2) cost no loop.
+- `project.generate_cmd` rebuilds generated files before kengash's checks, and a conflict only in generated files lands with no worker. `project.commands` lists more commands workers may run.
+- `kengash next` and `kengash watch` say when a ticket at a gate or parked holds three or more others back.
+- Steering: a CLI call that polls a background command, reruns the whole test suite or passes its soft deadline is stopped and resumed with a correction, up to `steering.turns` times, then goes to the fallback chain. The work stays in the worktree.
+- The relay: while a loop is on, a finishing worker, a merge, an approval or a resume starts what is now runnable, so no conductor has to be awake. No process stays behind. It stops after 24 hours without starting anything, `kengash loop status` shows what it covers, and `loop_relay: false` turns it off for a project.
+- A plan over `plan.max_files` (default 12) can split its ticket into parts. A split that loses an acceptance line is refused and the ticket continues whole.
+- New editing sessions get the plan's files inline, read at that moment (`context.max_kib`); a resumed session is told which files changed since it last spoke; a memory line naming a file that is gone is tagged, not hidden.
+- A model per ticket importance on every agent (Agents page, or `kengash agent edit --model-for critical=claude/opus`), and "Other models" for the plan reviewer and the memory compactor.
+- `checks.parallel` limits kengash's own test runs on this machine (default: half the CPU cores).
+
+### Changed
+
+- `tokens.per_ticket_max` defaults to 3,000,000; `kengash doctor --fix` updates the old 1,000,000.
+- A branch whose base moved is rebased before review when that applies cleanly.
+- Every `depends_on` in `ticket add` needs a `needs` line saying what it uses from that ticket.
+- `plan save` of a full plan needs a `## Lasting decisions` section; `none` is allowed.
+- Workers get your decisions first, then those naming the ticket's paths, and more of them fit.
+- A claim on a whole test folder no longer makes tickets wait; files an editing step changes outside its claim join the claim.
+
+### Fixed
+
+- A cheap conductor sometimes tried the Skill tool at the plan-to-ticket handoff, was refused and stopped; the skills now say it is a shell command.
+- A compaction whose result drops a pinned line gets one repair turn before kengash refuses it.
+
+### Changed
+
+- Two editing tickets may share up to `paths.max_overlap` exact files (default 2), and generated files (`paths.shared`) never count. A real conflict surfaces at the rebase; `paths.max_overlap: 0` restores the old behaviour.
+- A review fails only on `review.block_on` (default high and medium). A finding naming no real file or line is demoted to low.
+- New stores run the code reviewer on Sonnet, with Opus for `critical` tickets. Existing settings are never overwritten.
+- A hard timeout resumes the session with a correction instead of repeating the prompt; a crash retries once after 20 seconds, then uses the fallback chain.
+- A timed-out or stopped call reports its session and the tokens its stream shows, so the token cap sees that spend. Claude's stream holds only each message's opening output count, so a stopped Claude call's output tokens are a floor (input and cache are exact), and Codex reports usage only when a turn ends, so a stopped Codex call counts none.
+
 ## [0.6.0] - 2026-11-07
 
 ### Added

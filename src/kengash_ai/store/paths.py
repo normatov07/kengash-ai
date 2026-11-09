@@ -88,6 +88,18 @@ class StorePaths:
         return self.runtime / "slots.json"
 
     @property
+    def harvest(self) -> Path:
+        return self.runtime / "harvest"
+
+    @property
+    def harvest_cursors(self) -> Path:
+        return self.runtime / "harvest_cursors.json"
+
+    @property
+    def relay(self) -> Path:
+        return self.runtime / "relay.json"
+
+    @property
     def claims(self) -> Path:
         return self.runtime / "claims.json"
 

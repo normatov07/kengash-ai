@@ -21,7 +21,18 @@ from kengash_ai.model import (
     WorkerRecord,
     utc_now,
 )
-from kengash_ai.ops import agents, jobs, lifecycle, merging, prompts, records, slots, steps, watch
+from kengash_ai.ops import (
+    agents,
+    harvest,
+    jobs,
+    lifecycle,
+    merging,
+    prompts,
+    records,
+    slots,
+    steps,
+    watch,
+)
 from kengash_ai.store import documents, runtime, storegit
 from kengash_ai.store.locks import locked
 from kengash_ai.store.paths import StorePaths
@@ -195,6 +206,8 @@ def approve_ticket(
         if restart:
             _start_worker(paths, slug, ticket, steps=None)
         records.record(paths, f"kengash: approve {ticket_id}", approved, *events)
+    if note is not None and answer is not None:
+        harvest.submit(paths, f"ticket {ticket_id} answer", slug, f"USER: {answer}", answer)
     if isinstance(decision, workflow.Merge):
         return Approved(ticket_id, slug, merging.merge_if_clean(paths, slug, ticket_id, by=by))
     shown = watch.open_ticket(paths, slug, ticket_id) if restart else ""
@@ -277,7 +290,9 @@ def _clash(
     for other in records.project_tickets(paths, slug).values():
         meta = other.meta
         holder = meta.id != ticket.id and lifecycle.holds_paths(resolved, meta)
-        if holder and scheduler.overlaps(meta.touches, ticket.touches):
+        if holder and scheduler.clash(
+            meta.touches, ticket.touches, lifecycle.path_policy(resolved)
+        ):
             return meta.id
     return None
 
@@ -327,7 +342,9 @@ def _claim(
         provider = "user"
         if role is not None:
             try:
-                provider = agents.pick(resolved, role, detect).provider
+                provider = agents.pick(
+                    resolved, role, detect, importance=ticket.importance.value
+                ).provider
             except NeedsSetup as exc:
                 return _Skip(str(exc), setup=True)
         if provider not in NO_SLOT:

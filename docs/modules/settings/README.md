@@ -15,12 +15,14 @@ Resolve SETTINGS.md into a validated `Settings` model so agents never parse the 
 ## Invariants
 
 - Dotted keys nest (`loop_max.simple: 3`); the same key set twice is an error.
-- Mappings deep-merge, so a project can override one field of one agent; each `workflows.<name>` is replaced whole, so steps and `on_fail` never mix across files.
+- Mappings deep-merge, so a project can override one field of one agent; each `workflows.<name>` is replaced whole, so steps and `on_fail` never mix across files, and so is an agent's `by_importance`, so a project can clear what the defaults set.
 - Unknown keys fail with the closest known key as a hint.
 - Reading never writes. Writes (`set_values`) keep comments, every line they do not change and the file's line ending (CRLF stays CRLF); `ops.configure` locks, journals and commits them.
 
 ## Changes
 
+- 2026-11-08: `merge`: an agent given a `cli` without `by_importance` drops the inherited mapping (SP17 review).
+- 2026-11-08: `WHOLE`: `by_importance` is replaced whole by a narrower scope (SP17).
 - 2026-11-06 (SP12 minors): `set_values` setting a renamed key's new name renames the old key on its own line (`yamledit.rename_key`), keeping its place and comment.
 - 2026-11-06: `scope_layer(paths, slug)`: one scope's own file as written, renamed keys under their old names (SP12 M3).
 - 2026-11-06: `RENAMED` (`fallback_on_rate_limit` → `fallback_on_error`): each layer reads the old key under the new name and refuses both in one file; `set_values` setting the new key drops the old one from that file (SP12 M1).

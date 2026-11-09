@@ -19,7 +19,7 @@ from kengash_ai.model import (
     UserError,
     utc_now,
 )
-from kengash_ai.ops import records
+from kengash_ai.ops import harvest, records
 from kengash_ai.ops.workspace import resolve_slug
 from kengash_ai.store import documents
 from kengash_ai.store.frontmatter import read_sections
@@ -92,6 +92,15 @@ def save_plan(plan_id: str, markdown: str, *, project: str | None, by: str) -> P
         if plan.status is PlanStatus.ticketed:
             raise UserError(f"plan {plan.id} already has tickets; start a new plan")
         doc.sections.update(sections)
+        if (
+            plan.mode is not PlanMode.quick
+            and "Goal" in sections
+            and not doc.sections.get("Lasting decisions", "").strip()
+        ):
+            raise UserError(
+                "add a ## Lasting decisions section: one line per choice later work must "
+                "follow, or the word none"
+            )
         plan.status = PlanStatus.draft
         plan.review.verdict = None
         plan.review.skipped = False
@@ -152,6 +161,7 @@ def approve_plan(plan_id: str, *, skip_review: bool, project: str | None, by: st
     records.record(paths, f"kengash: plan approve {plan.id}", approved)
     result = PlanResult(plan.id, slug, plan.status.value, review_skipped=unreviewed)
     _record_lasting(paths, slug, plan.id, doc.sections.get("Lasting decisions", ""), result, by)
+    harvest.submit(paths, f"plan {plan.id}", slug, harvest.plan_words(doc.sections))
     return result
 
 
@@ -175,6 +185,7 @@ def _record_lasting(
                 rejected=rejected or None,
                 project=slug,
                 by=by,
+                user=True,  # the user approved this plan, so these are theirs
             )
         except UserError as exc:
             result.warnings.append(f"not recorded: {decision[:60]}: {exc}")
@@ -200,4 +211,7 @@ def reject_plan(plan_id: str, why: str, *, project: str | None, by: str) -> Plan
         documents.save_plan(paths.project(slug), doc)
     rejected = Event(type="plan.rejected", project=slug, plan=plan.id, why=reason, by=by)
     records.record(paths, f"kengash: plan reject {plan.id}", rejected)
+    harvest.submit(
+        paths, f"plan {plan.id} rejected", slug, f"USER rejected a plan: {reason}", reason
+    )
     return PlanResult(plan.id, slug, plan.status.value)

@@ -13,6 +13,8 @@ setup:
     stdin: |
       ## Goal
       calc.py gains add(a, b) and mul(a, b), each tested.
+      ## Lasting decisions
+      none
       ## Scope
       add and mul in calc.py; tests in test_calc.py.
       ## Design

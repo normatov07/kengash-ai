@@ -5,6 +5,7 @@ import json
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 from conftest import Engine
@@ -12,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from kengash_ai import journal
 from kengash_ai.model import Doc, Event, ProviderStatus, Ticket
-from kengash_ai.ops import agents, jobs, views
+from kengash_ai.ops import agents, controls, jobs, merging, relay, views
 from kengash_ai.store import StorePaths, documents
 from kengash_ai.ui import app as ui_app
 
@@ -409,3 +410,61 @@ def test_live_streams_history_then_done(client: TestClient, busy_ticket: Engine)
     assert chunks[0].startswith("event: activity\ndata: ")
     assert '"text": "read /work/pubspec.yaml"' in body
     assert chunks[-1] == "event: done\ndata: {}"
+
+
+def test_a_merge_from_the_ui_starts_what_it_freed(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    order: list[str] = []
+
+    def merged(*_: object, **__: object) -> dict[str, str]:
+        order.append("merged")
+        return {"status": "done/merged"}
+
+    def advanced() -> list[str]:
+        order.append("relayed")
+        return []
+
+    monkeypatch.setattr(merging, "merge_ticket", merged)
+    monkeypatch.setattr(relay, "advance_quietly", advanced)
+    answer = signed_in(client).post(
+        "/api/tickets/aaaa1111/merge", headers={"X-Kengash": "1"}, json={}
+    )
+    assert answer.status_code == 200
+    assert order == ["merged", "relayed"]
+
+
+def _noting(order: list[str], name: str, value: object = None) -> Callable[..., Any]:
+    def note(*_: object, **__: object) -> Any:
+        order.append(name)
+        return value
+
+    return note
+
+
+def test_an_approval_from_the_ui_can_start_the_next_tickets(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    order: list[str] = []
+    monkeypatch.setattr(
+        controls,
+        "approve_ticket",
+        _noting(order, "approved", {"status": "done/merged"}),
+    )
+    monkeypatch.setattr(relay, "advance_quietly", _noting(order, "relayed", []))
+    answer = signed_in(client).post(
+        "/api/tickets/aaaa1111/approve", headers={"X-Kengash": "1"}, json={}
+    )
+    assert answer.status_code == 200
+    assert order == ["approved", "relayed"]
+
+
+def test_a_resume_from_the_ui_can_start_the_next_tickets(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    order: list[str] = []
+    monkeypatch.setattr(controls, "resume", _noting(order, "resumed", controls.Resumed([])))
+    monkeypatch.setattr(relay, "advance_quietly", _noting(order, "relayed", []))
+    answer = signed_in(client).post("/api/resume", headers={"X-Kengash": "1"})
+    assert answer.status_code == 200
+    assert order == ["resumed", "relayed"]

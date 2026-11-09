@@ -143,13 +143,4 @@ def failure(
 
 
 def plus(a: Usage, b: Usage) -> Usage:
-    cost = (
-        None if a.cost_usd is None and b.cost_usd is None else (a.cost_usd or 0) + (b.cost_usd or 0)
-    )
-    return Usage(
-        input=a.input + b.input,
-        output=a.output + b.output,
-        cache_read=a.cache_read + b.cache_read,
-        cache_write=a.cache_write + b.cache_write,
-        cost_usd=cost,
-    )
+    return a.plus(b)

@@ -312,8 +312,8 @@ def test_fix_prompt_carries_the_headline_and_output() -> None:
     )
     assert f"## Check output\n{output}" in text
     assert text.endswith(
-        "Fix the cause, then rerun that command if your tools allow. "
-        "Reply again with JSON that matches the schema."
+        "Fix the cause, then rerun only the test file that failed if your tools allow; kengash "
+        "reruns everything after your reply. Reply again with JSON that matches the schema."
     )
 
 

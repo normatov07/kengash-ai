@@ -6,6 +6,7 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 
 
 ## Interface
 
+- `memory harvest [--hook|--plan ID]`, `memory forget TEXT`, `ticket add --check` (SP18).
 - `kengash --version` prints `kengash-ai <version>` and exits 0. Skills use this line to confirm the right binary is on PATH; `doctor` also accepts an older install's `super-harness <version>`.
 - `kengash --help` lists commands and options.
 - `run ID... [--steps N]` (`started <id> <step>→<provider>` / `skipped <id>: <reason>`; exit 1 when none started, 4 when a provider needs setup), `approve ID [--loops N] [--tokens N] [--note TEXT]` (`--note` answers a BLOCKED line), `park ID --why W`, `stop ID`, `pause` and `resume` (`--project`), `ticket changes ID [--diff]` (`<path> +a -r  loop n <step> <provider>/<model>`), `ticket attach ID [--role R]` (the resume command), `wait [--timeout 300]` (`<id> <status> loop n/max: <detail>`, `plan <id> round r/max: <verdict>, <summary>` for plan reviews, `<id> queued loop n/max: <title>` for a ticket that became ready, `idle`, exit 3 on timeout after one `progress.line` per running ticket, exit 6 under another conductor's loop); `ps [-p] [--line]` (progress lines or `nothing running`; `--line`: `kg: N running · <id> <step>→<provider> <elapsed> <action>` for a status bar), `logs ID [-f]` (`HH:MM:SS <activity>` per worker action; `-f` follows until the ticket stops), `merge ID` (`merged <id>: N commits into <base>`; exit 1 when the main tree is dirty or off base, or on a conflict), each with `--json` (SP3 spec §10).
@@ -30,6 +31,9 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 
 
 ## Changes
 
+- 2026-11-09: harvest and forget commands; `next` prints what is stuck; `ticket add` prints the graph (SP18).
+- 2026-11-08: `approve` and `resume` run the relay; `loop status` adds `relay on: <scopes>` (SP17 review).
+- 2026-11-08: `kengash agent edit --model-for IMPORTANCE=PROVIDER[/MODEL]` (`IMPORTANCE=` clears it), `agent show` lists them; `kengash merge` then runs the relay; `loop claim` and `loop release` record the relay intent (SP17).
 - 2026-11-07: `kengash resume` prints `skipped <id>: <reason>` for each ticket it could not restart (SP16 review).
 - 2026-11-07: `kengash merge` adds `DECISIONS.md +N lines` when the ticket's decisions were recorded (SP16).
 - 2026-11-07: `kengash plan approve` adds `DECISIONS.md +N lines` and any `warning:` lines (SP16).

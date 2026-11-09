@@ -6,6 +6,8 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Interface
 
+- `ProjectCommands.generate_cmd`, `.commands`, `.allowed`; `Merge.conflict_turns`; `TicketState.conflicts`, `.conflict_turns`; `StepRequest.commands` (SP19).
+- `HarvestOutput`/`HarvestFact`, output kind `harvest`; `HarvestEntry`, `HarvestCursors`; `TicketInput.needs`; `memory.harvest` (SP18).
 - `Plan`, `Ticket`, `Review`, `SessionRef`, `PlanMode`, `PlanStatus`: frontmatter schemas (system spec §4.4). Unknown keys are rejected and assignments are validated. `Ticket.step` is the step running or next, `Ticket.tokens_max` the token budget (empty: `tokens.per_ticket_max`), `Review.session` the plan reviewer's session.
 - `Doc[M]`: a frontmatter model plus ordered Markdown sections; `PLAN_SECTIONS` and `TICKET_SECTIONS` name them.
 - `Registry`, `ProjectEntry`: `registry.yaml`.
@@ -28,6 +30,11 @@ Pydantic schemas and error types that every other unit shares. No I/O and no imp
 
 ## Changes
 
+- 2026-11-09: `Tokens.per_ticket_max` defaults to 3,000,000; landing settings (SP19).
+- 2026-11-09: harvest models, `needs`, test roots in `paths.shared` (SP18).
+- 2026-11-08: `Agent` refuses `by_importance` on a shell agent (SP17 minors).
+- 2026-11-08: `Usage.plus`; `RelayIntent.touched`; `TicketState.split`; `Agent` given a `cli` at a narrower scope loses the inherited `by_importance` (SP17 review).
+- 2026-11-08: `Settings.steering|paths|context|loop_relay`, `Checks.parallel`, `PlanReview.max_files`, `ReviewPolicy.block_on`, `Agent.by_importance` and `cli_for(importance)`; `ErrorKind` gains `stuck`; `StepRequest.soft_s|poll_max|full_runs_max`; `Part`, `PlanOutput.parts`; `TicketState.seen`; `RelayIntent`; `ProviderStatus.live_models` (SP17).
 - 2026-11-08: runtime files ignore fields they do not know (`extra="ignore"`), so a UI server or worker started before an upgrade still reads what the new version writes; `UiRecord.version` names the kengash-ai that started the server.
 - 2026-11-07: `Decision`, `WorkOutput.decisions`, `PlanOutput` and output kind `plan`; `TICKET_SECTIONS` gains `Decisions` after `Findings`, `PLAN_SECTIONS` gains `Lasting decisions` after `Decisions`; in_process sub-status `waiting_paths` and `TicketState.waiting_on`; `merge.mode` defaults to `auto` (SP16).
 - 2026-11-07: `TICKET_SECTIONS` gains `Check output` before `Log`; `Settings.checks.turns` (default 2, 0–5); `SentBack`, `Checked`, `TicketState.sent_back`, `TicketState.checked`, approval `blocked` (SP15).

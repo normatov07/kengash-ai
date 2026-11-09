@@ -7,8 +7,8 @@ from typing import Any, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, computed_field, model_validator
 
 Profile = Literal["read_only", "edit_worktree"]
-OutputKind = Literal["work", "plan", "review", "compact"]
-ErrorKind = Literal["auth", "rate_limit", "network", "timeout", "empty", "schema", "crash"]
+OutputKind = Literal["work", "plan", "review", "compact", "harvest"]
+ErrorKind = Literal["auth", "rate_limit", "network", "timeout", "empty", "schema", "crash", "stuck"]
 
 
 class _Step(BaseModel):
@@ -28,6 +28,17 @@ class Usage(_Step):
     def tokens(self) -> int:
         """What a step adds to the ticket's `tokens` (decision 10)."""
         return self.input + self.output
+
+    def plus(self, other: "Usage") -> "Usage":
+        """Both counts added; a cost only when either side has one."""
+        unknown = self.cost_usd is None and other.cost_usd is None
+        return Usage(
+            input=self.input + other.input,
+            output=self.output + other.output,
+            cache_read=self.cache_read + other.cache_read,
+            cache_write=self.cache_write + other.cache_write,
+            cost_usd=None if unknown else (self.cost_usd or 0) + (other.cost_usd or 0),
+        )
 
     def minus(self, prior: "Usage | None") -> "Usage":
         """These running totals less an earlier turn's, floored at 0; cost is dropped."""
@@ -63,10 +74,23 @@ class WorkOutput(_Step):
     decisions: list[Decision] = Field(default_factory=list)
 
 
+class Part(_Step):
+    """One slice of a ticket too large for one (SP17 spec §3.6); `after` holds the indexes of
+    earlier parts it needs."""
+
+    title: str
+    scope: str
+    acceptance: list[str]
+    files: list[str]
+    after: list[int] = Field(default_factory=list)
+
+
 class PlanOutput(WorkOutput):
-    """A read step's reply: the plan, plus the files it will change (SP16 spec §3.12)."""
+    """A read step's reply: the plan, the files it will change (SP16 spec §3.12), and the
+    parts of a ticket that has to be split (SP17 spec §3.6)."""
 
     files: list[str] = Field(default_factory=list)
+    parts: list[Part] = Field(default_factory=list)
 
 
 class ReviewOutput(_Step):
@@ -85,13 +109,30 @@ class CompactOutput(_Step):
     text: str
 
 
-type StepOutput = WorkOutput | PlanOutput | ReviewOutput | CompactOutput
+class HarvestFact(_Step):
+    """One thing the user settled (SP18 spec §3.1); `quote` holds their own words for it,
+    `replaces` the number of a listed decision it overrules (0: none)."""
 
-_MODELS: dict[OutputKind, type[WorkOutput | ReviewOutput | CompactOutput]] = {
+    kind: Literal["decision", "preference", "working_style", "goal", "turned_down", "process"]
+    fact: str
+    why: str
+    rejected: str = ""
+    quote: str
+    replaces: int = Field(0, ge=0)
+
+
+class HarvestOutput(_Step):
+    facts: list[HarvestFact] = Field(default_factory=list)
+
+
+type StepOutput = WorkOutput | PlanOutput | ReviewOutput | CompactOutput | HarvestOutput
+
+_MODELS: dict[OutputKind, type[WorkOutput | ReviewOutput | CompactOutput | HarvestOutput]] = {
     "work": WorkOutput,
     "plan": PlanOutput,
     "review": ReviewOutput,
     "compact": CompactOutput,
+    "harvest": HarvestOutput,
 }
 
 
@@ -128,6 +169,18 @@ OUTPUT_SCHEMAS: dict[OutputKind, dict[str, Any]] = {
             "summary": _TEXT,
             "handoff": _TEXT,
             "files": {"type": "array", "items": _TEXT},
+            "parts": {
+                "type": "array",
+                "items": _strict(
+                    {
+                        "title": _TEXT,
+                        "scope": _TEXT,
+                        "acceptance": {"type": "array", "items": _TEXT},
+                        "files": {"type": "array", "items": _TEXT},
+                        "after": {"type": "array", "items": {"type": "integer"}},
+                    }
+                ),
+            },
             "decisions": _DECISIONS,
         }
     ),
@@ -139,6 +192,33 @@ OUTPUT_SCHEMAS: dict[OutputKind, dict[str, Any]] = {
         }
     ),
     "compact": _strict({"text": _TEXT}),
+    "harvest": _strict(
+        {
+            "facts": {
+                "type": "array",
+                "items": _strict(
+                    {
+                        "kind": {
+                            "type": "string",
+                            "enum": [
+                                "decision",
+                                "preference",
+                                "working_style",
+                                "goal",
+                                "turned_down",
+                                "process",
+                            ],
+                        },
+                        "fact": _TEXT,
+                        "why": _TEXT,
+                        "rejected": _TEXT,
+                        "quote": _TEXT,
+                        "replaces": {"type": "integer"},
+                    }
+                ),
+            }
+        }
+    ),
 }
 
 
@@ -163,10 +243,14 @@ class StepRequest(_Step):
     skill: str | None = None
     test_cmd: str = ""
     lint_cmd: str = ""
+    commands: list[str] = Field(default_factory=list)  # more commands a worker may run (SP19)
     allow_api_key: bool = False
     user_config: bool = False
     bypass: bool = False
     prior_usage: Usage | None = None
+    soft_s: int | None = None  # stop the call this far in and steer it; None: never (SP17)
+    poll_max: int = 0  # polls of a background command with no edit between them
+    full_runs_max: int = 0  # runs of the whole test command in this call
 
     @model_validator(mode="after")
     def _resume_has_session(self) -> Self:
@@ -179,7 +263,7 @@ class StepResult(_Step):
     """What one CLI call returned; `error` is None on success."""
 
     session_id: str | None = None
-    output: WorkOutput | ReviewOutput | CompactOutput | None = None
+    output: WorkOutput | ReviewOutput | CompactOutput | HarvestOutput | None = None
     text: str = ""
     usage: Usage = Field(default_factory=Usage)
     total_usage: Usage | None = None
@@ -206,6 +290,7 @@ class ProviderStatus(_Step):
     auth_method: str | None = None
     hint: str = ""
     models: list[str] = []  # what `--model` takes, when the CLI says (SP10 §5.2)
+    live_models: bool = False  # `models` is the CLI's own list, not a set of aliases (SP17)
 
     @property
     def usable(self) -> bool:

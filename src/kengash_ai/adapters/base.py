@@ -7,13 +7,14 @@ import shutil
 import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from pydantic import ValidationError
 
 from kengash_ai.adapters import stream
 from kengash_ai.adapters.env import worker_env
 from kengash_ai.adapters.process import ProcessResult, run_process
+from kengash_ai.adapters.watchdog import Signal, Watchdog
 from kengash_ai.model import (
     OUTPUT_SCHEMAS,
     ErrorKind,
@@ -22,6 +23,7 @@ from kengash_ai.model import (
     StepOutput,
     StepRequest,
     StepResult,
+    Usage,
     parse_output,
 )
 
@@ -43,6 +45,7 @@ _NETWORK = re.compile(
     r"|fetch failed|socket hang up"
     # agy (Go net/http): a stream cut mid-request (2026-11-08)
     r"|connection loss|connection lost|connection timed out"
+    r"|stream idle timeout|context deadline exceeded"
 )
 _VERSION = re.compile(r"\d+\.\d+(?:\.\d+)?")
 
@@ -162,13 +165,58 @@ class CliProvider(ABC):
         env = worker_env(os.environ, self.name, req.role, allow_api_key=req.allow_api_key)
         try:
             proc = run_process(
-                self.command(req), cwd=req.cwd, env=env, timeout_s=req.timeout_s, log=req.log
+                self.command(req),
+                cwd=req.cwd,
+                env=env,
+                timeout_s=req.timeout_s,
+                log=req.log,
+                observe=self._watchdog(req),
             )
         except OSError as exc:
             return StepResult(session_id=req.session_id, error="crash", detail=str(exc))
-        if proc.timed_out:
-            return timed_out(req, proc)
+        if proc.timed_out or proc.stopped:
+            return self._interrupted(req, proc)
         return self.parse(req, proc).model_copy(update={"duration_s": proc.duration_s})
+
+    LIVE_MODELS = False  # `models()` is the CLI's own list, not a set of aliases (SP17)
+
+    def signal(self, event: dict[str, Any]) -> Signal | None:
+        """What this stream event says the agent did, for the watchdog (SP17 spec §3.1)."""
+        return None
+
+    def usage_so_far(self, stdout: str) -> Usage:
+        """Tokens a call that never finished has used, from its stream events."""
+        return Usage()
+
+    def _watchdog(self, req: StepRequest) -> Watchdog | None:
+        if req.soft_s is None:
+            return None
+        return Watchdog(
+            self.signal,
+            soft_s=req.soft_s,
+            poll_max=req.poll_max,
+            full_runs_max=req.full_runs_max,
+            test_cmd=req.test_cmd,
+        )
+
+    def _interrupted(self, req: StepRequest, proc: ProcessResult) -> StepResult:
+        """A call ended by the timeout or the watchdog: a valid output still wins, and it
+        reports the session and tokens the stream shows, so a resume and the token cap work
+        (SP17 spec §3.3)."""
+        parsed = self.parse(req, proc)
+        if parsed.error is None and parsed.output is not None:
+            return parsed.model_copy(update={"duration_s": proc.duration_s})
+        interrupted = timed_out(req, proc)
+        if proc.stopped:
+            interrupted = interrupted.model_copy(update={"error": "stuck", "detail": proc.stopped})
+        usage = parsed.usage if parsed.usage.tokens else self.usage_so_far(proc.stdout)
+        return interrupted.model_copy(
+            update={
+                "session_id": parsed.session_id or req.session_id,
+                "usage": usage,
+                "total_usage": parsed.total_usage or (req.prior_usage or Usage()).plus(usage),
+            }
+        )
 
     def detect(self) -> ProviderStatus:
         if shutil.which(self.binary) is None:
@@ -184,4 +232,5 @@ class CliProvider(ABC):
             auth_method=method,
             hint="" if signed_in else self.signin_hint,
             models=self.models() if signed_in else [],
+            live_models=self.LIVE_MODELS,
         )

@@ -9,7 +9,7 @@ import contextlib
 from dataclasses import dataclass
 from pathlib import Path
 
-from kengash_ai import adapters, gitops, journal, memory, settings, workflow
+from kengash_ai import adapters, gitops, journal, memory, scheduler, settings, workflow
 from kengash_ai.model import (
     Checked,
     Doc,
@@ -54,31 +54,94 @@ def merge_ticket(ticket_id: str, *, project: str | None, by: str) -> Merged:
     resolved = settings.load(paths, slug)
     queue_wait = calls.step_timeout(resolved) + 60  # another merge may be running checks
     with locked(paths.locks / f"merge-{slug}.lock", timeout=queue_wait):
-        _rebase(paths, slug, ticket_id, entry.base, resolved, by)
+        conflicts = _rebase(paths, slug, ticket_id, entry.base)
+        if conflicts:
+            _settle(paths, slug, ticket_id, entry.base, resolved, by, conflicts)
         _recheck(paths, slug, ticket_id, entry.base, resolved, by)
         return _land(paths, slug, ticket_id, entry.path, entry.base, by)
 
 
-def _rebase(
-    paths: StorePaths, slug: str, ticket_id: str, base: str, resolved: Settings, by: str
-) -> None:
-    """Rebase the ticket's branch onto `base` under the locks."""
+def _rebase(paths: StorePaths, slug: str, ticket_id: str, base: str) -> list[str]:
+    """Rebase the ticket's branch onto `base` under the locks; on a conflict, replay it as one
+    change on `base` and return the files that hold conflict markers (SP19 spec §3.1)."""
     with locked(paths.locks / f"{slug}.lock"):
-        doc = _mergeable(paths, slug, ticket_id)
+        _mergeable(paths, slug, ticket_id)
         worktree = paths.worktree(slug, ticket_id)
         if not worktree.exists():
-            return
+            return []
         with locked(paths.locks / f"repo-{slug}.lock"):
-            conflicts = gitops.rebase(worktree, base)
-            if conflicts:
-                files = ", ".join(conflicts)
-                back = _Back(
-                    head=f"conflict in {files}",
-                    finding=f"- high · {files}:0 · rebase onto {base} conflicts · "
-                    "resolve the conflict in implement",
-                    reason=f"rebase onto {base} conflicts in {files}",
-                )
-                raise UserError(_send_back(paths, slug, resolved, doc, back, by))
+            if not gitops.rebase(worktree, base):
+                return []
+            return gitops.replay_onto(worktree, base, ticket_id)
+
+
+def _settle(
+    paths: StorePaths,
+    slug: str,
+    ticket_id: str,
+    base: str,
+    resolved: Settings,
+    by: str,
+    conflicts: list[str],
+) -> None:
+    """Regenerate conflicted generated files; when that settles everything, commit and let the
+    merge go on, otherwise send the ticket back with the markers in place (SP19 spec §3.2).
+    The generator runs without the project lock, as checks do."""
+    worktree = paths.worktree(slug, ticket_id)
+    policy = lifecycle.path_policy(resolved)
+    generated = (
+        [name for name in conflicts if scheduler.generated(name, policy)]
+        if resolved.project.generate_cmd.strip()
+        else []
+    )
+    problem = ""
+    if generated:
+        with locked(paths.locks / f"repo-{slug}.lock"):
+            gitops.take_ours(worktree, generated)
+        log = paths.logs / f"{ticket_id}-generate.out"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        request = checks.generate_request(resolved, worktree, log)
+        verdict, summary = checks.outcome(adapters.get("shell", runtime=paths.runtime).run(request))
+        problem = "" if verdict == "pass" else summary
+    left = [name for name in conflicts if name not in generated]
+    with locked(paths.locks / f"{slug}.lock"):
+        doc = _mergeable(paths, slug, ticket_id)
+        if left:
+            files = ", ".join(left)
+            back = _Back(
+                head=f"conflict in {files}",
+                finding=f"- high · {files}:0 · rebase onto {base} conflicts; these files hold "
+                "conflict markers · edit each file to keep both changes and remove every "
+                "marker; kengash commits",
+                reason=f"rebase onto {base} conflicts in {files}",
+                conflicts=tuple(left),
+            )
+            raise UserError(_send_back(paths, slug, resolved, doc, back, by))
+        if problem:
+            back = _Back(
+                head=f"regenerating failed after rebase onto {base}",
+                finding=f"- high · project.generate_cmd:0 · {problem} · make the generator pass",
+                reason=f"regenerating failed after rebase onto {base}: {problem}",
+                replayed=True,
+            )
+            raise UserError(_send_back(paths, slug, resolved, doc, back, by))
+        try:
+            with locked(paths.locks / f"repo-{slug}.lock"):
+                _commit_settled(worktree, doc.meta, base)
+        except gitops.CommitFailed as exc:  # the worktree holds the replay: a worker can finish
+            back = _Back(
+                head=f"commit failed after rebase onto {base}",
+                finding=f"- high · merge:0 · {exc} · make the commit hook pass",
+                reason=f"commit failed after rebase onto {base}: {exc}",
+                replayed=True,
+            )
+            raise UserError(_send_back(paths, slug, resolved, doc, back, by)) from exc
+
+
+def _commit_settled(worktree: Path, ticket: Ticket, base: str) -> None:
+    """Commit what the merge settled by itself, as the ticket's work."""
+    trailers = {f"{gitops.TRAILER}Ticket": str(ticket.uuid), f"{gitops.TRAILER}Step": "merge"}
+    gitops.commit_all(worktree, f"kg({ticket.id}): settle conflicts with {base}", trailers)
 
 
 def _recheck(
@@ -100,6 +163,7 @@ def _recheck(
     log = paths.logs / f"{ticket_id}-merge.out"
     log.parent.mkdir(parents=True, exist_ok=True)
     request = checks.request(resolved, worktree, log)
+    # no check place: this runs under the merge lock, and waiting for one would stall the queue
     result = adapters.get("shell", runtime=paths.runtime).run(request)
     verdict, summary = checks.outcome(result)
     event = {"type": "checks.end", "project": slug, "ticket": ticket_id, "step": "merge"}
@@ -111,6 +175,10 @@ def _recheck(
     )
     if verdict == "pass":
         with locked(paths.locks / f"{slug}.lock"):
+            if resolved.project.generate_cmd.strip():  # the generator may have changed files
+                with locked(paths.locks / f"repo-{slug}.lock"):
+                    _commit_settled(worktree, _load(paths, slug, ticket_id).meta, base)
+                head = gitops.head(worktree)
             state = runtime.load_ticket_state(paths, ticket_id)
             state.checked = Checked(commit=head, step="merge", summary=summary)
             runtime.save_ticket_state(paths, ticket_id, state)
@@ -140,6 +208,7 @@ def _land(paths: StorePaths, slug: str, ticket_id: str, repo: Path, base: str, b
                 raise UserError(f"{base} moved; run kengash merge {ticket_id} again")
             commits = gitops.merge_ff(repo, branch, base)
             gitops.remove_worktree(repo, worktree, branch)
+            gitops.drop_conflict_ref(repo, ticket_id)
         before = ticket.status
         ticket.status = "done/merged"
         ticket.step = None
@@ -223,6 +292,8 @@ class _Back:
     finding: str
     reason: str
     check_output: str = ""
+    conflicts: tuple[str, ...] = ()  # files left with conflict markers (SP19 spec §3.1)
+    replayed: bool = False  # the worktree holds a replay though no marker is left
 
 
 def _send_back(
@@ -237,9 +308,15 @@ def _send_back(
     ticket.step = "implement" if "implement" in steps else steps[0]
     state = runtime.load_ticket_state(paths, ticket.id)
     state.sent_back = SentBack(step="merge", summary=back.reason)
+    state.conflicts = list(back.conflicts)
+    # a conflict is no rework, so a loop would be the wrong price (SP19 spec §3.1)
+    free = (back.replayed or bool(back.conflicts)) and (
+        state.conflict_turns < resolved.merge.conflict_turns
+    )
+    state.conflict_turns += int(free)
     before = ticket.status
-    if ticket.loop < ticket.loop_max:
-        ticket.loop += 1
+    if free or ticket.loop < ticket.loop_max:
+        ticket.loop += int(not free)
         ticket.status = "in_queue/ready"
         message = f"{back.head}; {ticket.id} sent back to implement (loop {ticket.loop})"
         event = Event.model_validate(

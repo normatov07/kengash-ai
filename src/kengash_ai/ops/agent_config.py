@@ -92,6 +92,7 @@ class AgentPatch:
     does: str | None = None
     skill: str | None = None
     instructions: str | None = None
+    by_importance: dict[str, str] | None = None  # the whole mapping (SP17 spec §3.10)
 
 
 @dataclass
@@ -119,6 +120,7 @@ class AgentDetail:
     instructions: str
     used_in: list[UsedIn] = field(default_factory=list)
     tokens: int = 0
+    by_importance: dict[str, str] = field(default_factory=dict)
 
 
 def new_agent(
@@ -134,6 +136,7 @@ def new_agent(
     fallback: Sequence[str] = (),
     skill: str | None = None,
     instructions: str | None = None,
+    by_importance: dict[str, str] | None = None,
     project: str | None,
     by: str,
 ) -> AgentChange:
@@ -168,6 +171,8 @@ def new_agent(
         agent: dict[str, Any] = {"on": True, "cli": cli, "skill": skill or role}
         if fallback:
             agent["fallback"] = list(fallback)
+        if by_importance:
+            agent["by_importance"] = dict(by_importance)
         changes: dict[str, Any] = {
             f"agents.{role}": agent,
             f"steps.{name}": {"role": role, "kind": kind, "does": does},
@@ -205,7 +210,8 @@ def edit_agent(role: str, patch: AgentPatch, *, project: str | None, by: str) ->
         if patch.skill is not None:
             _known_skill(paths, project, patch.skill)
         changes: dict[str, Any] = {}
-        for key in ("cli", "fallback", "on", "blocking", "bypass_permissions", "skill"):
+        names = ("cli", "fallback", "on", "blocking", "bypass_permissions", "skill")
+        for key in (*names, "by_importance"):
             value = getattr(patch, key)
             if value is not None:
                 changes[f"agents.{role}.{key}"] = value
@@ -249,6 +255,7 @@ def copy_agent(source: str, new: str, *, project: str | None, by: str) -> AgentC
         cli=detail.cli,
         fallback=detail.fallback,
         instructions=detail.instructions,
+        by_importance=detail.by_importance,
         project=project,
         by=by,
     )
@@ -288,6 +295,7 @@ def describe(paths: StorePaths, resolved: Settings, project: str | None, role: s
         own,
         instructions,
         used_in,
+        by_importance=dict(agent.by_importance),
     )
 
 

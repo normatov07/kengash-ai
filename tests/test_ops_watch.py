@@ -169,7 +169,7 @@ def test_the_board_shows_workers_slots_tokens_gates_and_the_feed(busy_ticket: En
     assert board.slots["antigravity"] == (1, 2) and board.slots["claude"] == (0, 3)
     assert board.total == (1, 8) and board.tokens_today == {"antigravity": 440_000}
     (worker,) = board.workers
-    assert (worker.id, worker.tokens, worker.tokens_max) == (engine.ticket_id, 498_000, 1_000_000)
+    assert (worker.id, worker.tokens, worker.tokens_max) == (engine.ticket_id, 498_000, 3_000_000)
     assert [(g.id, g.status, g.action) for g in board.gates] == [
         ("0b1c2d3e", "needs_approval", "kengash approve 0b1c2d3e"),
         ("1c2d3e4f", "awaiting_merge", "kengash merge 1c2d3e4f"),
@@ -184,7 +184,7 @@ def test_the_board_shows_workers_slots_tokens_gates_and_the_feed(busy_ticket: En
     assert lines[1].startswith("slots: antigravity 1/2 · claude 0/3 · codex 0/3 · total 1/8")
     assert any(
         line.startswith(f"  {engine.ticket_id} payments-api implement→antigravity/flash")
-        and "498k/1000k tokens" in line
+        and "498k/3000k tokens" in line
         for line in lines
     )
     gate = "  0b1c2d3e needs_approval: token cap: 1,010,000 of 1,000,000 used"

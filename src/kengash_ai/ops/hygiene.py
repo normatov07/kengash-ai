@@ -14,8 +14,8 @@ from kengash_ai.store.registry import load_registry
 
 BY = "kengash"
 CHECKED = ("standard", "critical")  # the workflows a detected project gets `run_tests` in
-NEW_TOKEN_CAP = 1_000_000
-OLD_TOKEN_CAP = 250_000
+NEW_TOKEN_CAP = 3_000_000
+OLD_TOKEN_CAPS = (250_000, 1_000_000)
 FALLBACK = ["claude/sonnet"]
 
 
@@ -131,7 +131,7 @@ def old_defaults(paths: StorePaths, slug: str | None) -> list[str]:
     """Keys in one scope's own file that still hold an old package default."""
     own = settings.scope_layer(paths, slug)
     found: list[str] = []
-    if (own.get("tokens") or {}).get("per_ticket_max") == OLD_TOKEN_CAP:
+    if (own.get("tokens") or {}).get("per_ticket_max") in OLD_TOKEN_CAPS:
         found.append("tokens.per_ticket_max")
     if "fallback_on_rate_limit" in own:
         found.append("fallback_on_rate_limit")

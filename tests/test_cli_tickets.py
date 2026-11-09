@@ -17,6 +17,7 @@ BATCH = """\
   title: Rotation command
   importance: standard
   depends_on: [keyring]
+  needs: {keyring: the keyring}
 """
 
 
@@ -30,7 +31,10 @@ def approved_plan() -> str:
 def test_ticket_flow(inside_registered_repo: Path) -> None:
     added = runner.invoke(app, ["ticket", "add", "--plan", approved_plan()], input=BATCH)
     keyring, rotate = added.stdout.split(": ", 1)[1].split(" (")[0].split(", ")
-    assert added.stdout == f"2 tickets: {keyring}, {rotate} (1 ready, 1 blocked)\n"
+    assert added.stdout == (
+        f"2 tickets: {keyring}, {rotate} (1 ready, 1 blocked)\n"
+        "graph: 2 tickets, 2 levels, up to 1 at once\n"
+    )
     listed = runner.invoke(app, ["ticket", "list"]).stdout.splitlines()
     assert f"{keyring} in_queue/ready critical payments-api: Keyring with overlap window" in listed
     assert runner.invoke(app, ["ticket", "find", "ROTATION"]).stdout.startswith(f"{rotate} ")

@@ -342,8 +342,8 @@ def check(
         record = runtime.load_ui(paths)
         if record is None or not lifecycle.pid_alive(record.pid):
             return "the UI server is not running"
-    for text in expect.reply:
-        if fill(text, values) not in reply:
+    for text in expect.reply:  # `a | b`: either wording will do
+        if not any(word.strip() in reply for word in fill(text, values).split(" | ")):
             return f'the reply lacks "{text}"'
     return None
 

@@ -10,9 +10,12 @@ from pydantic import BaseModel, ValidationError
 from kengash_ai.model import (
     Claims,
     ConductorPing,
+    HarvestCursors,
+    HarvestEntry,
     JournalCursor,
     KengashError,
     LoopLease,
+    RelayIntent,
     SlotTable,
     TicketState,
     Trust,
@@ -46,6 +49,41 @@ def load_slots(paths: StorePaths) -> SlotTable:
 
 def save_slots(paths: StorePaths, table: SlotTable) -> None:
     _save(paths.slots, table)
+
+
+def load_relay(paths: StorePaths) -> RelayIntent:
+    return _load(paths.relay, RelayIntent)
+
+
+def save_relay(paths: StorePaths, intent: RelayIntent) -> None:
+    _save(paths.relay, intent)
+
+
+def harvest_entries(paths: StorePaths) -> list[tuple[str, HarvestEntry]]:
+    """Text waiting for the harvest job, oldest first; an unreadable file is left out."""
+    found: list[tuple[str, HarvestEntry]] = []
+    for path in sorted(paths.harvest.glob("*.json")) if paths.harvest.is_dir() else []:
+        try:
+            found.append((path.stem, HarvestEntry.model_validate_json(path.read_bytes())))
+        except (OSError, ValidationError):
+            continue
+    return found
+
+
+def save_harvest(paths: StorePaths, name: str, entry: HarvestEntry) -> None:
+    _save(paths.harvest / f"{name}.json", entry)
+
+
+def drop_harvest(paths: StorePaths, name: str) -> None:
+    (paths.harvest / f"{name}.json").unlink(missing_ok=True)
+
+
+def load_harvest_cursors(paths: StorePaths) -> HarvestCursors:
+    return _load(paths.harvest_cursors, HarvestCursors)
+
+
+def save_harvest_cursors(paths: StorePaths, cursors: HarvestCursors) -> None:
+    _save(paths.harvest_cursors, cursors)
 
 
 def load_claims(paths: StorePaths) -> Claims:

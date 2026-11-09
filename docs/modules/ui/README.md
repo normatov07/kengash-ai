@@ -30,6 +30,8 @@ The local web UI (SP5 spec; system spec §9): a FastAPI app on `127.0.0.1` that 
 
 ## Changes
 
+- 2026-11-08: approving and resuming run the relay, as a merge does (SP17 review).
+- 2026-11-08: the Agents page has a model per importance on each agent and "Other models" (plan reviewer, memory compactor) in its limits panel; `AgentPatchBody.by_importance`; a merge from the UI runs the relay (SP17).
 - 2026-11-07: the ticket Timeline shows check runs as `checks` rows; Overview's gate card for a `blocked` ticket quotes what it needs, with Done, go on and Park ticket (SP15).
 - 2026-11-06 (SP12 minors): the Live header's elapsed time counts on (`format.tick` re-times `[data-since]` every second while the stream is open) and shows `(between calls)` when no CLI runs; the pulse is hidden from screen readers, which read a `.sr-only` "a worker is running" instead.
 - 2026-11-06 (final review): the Live tab keeps its rows (`liveAppend`, `liveRows`) and its stream across re-renders, starts the rows over when the stream (re)opens, and does not reopen a finished ticket's stream.

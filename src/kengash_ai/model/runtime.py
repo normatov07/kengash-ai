@@ -16,6 +16,29 @@ class _Runtime(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class HarvestEntry(_Runtime):
+    """runtime/harvest/<name>.json: text waiting for the harvest job (SP18 spec §3.1);
+    `quotable` is the part that is the user's own words."""
+
+    source: str
+    project: str
+    text: str
+    quotable: str
+    attempts: int = 0
+    created: datetime = Field(default_factory=utc_now)
+
+
+class HarvestCursor(_Runtime):
+    offset: int = 0
+    seen: datetime = Field(default_factory=utc_now)
+
+
+class HarvestCursors(_Runtime):
+    """runtime/harvest_cursors.json: how far each Claude Code session has been read."""
+
+    sessions: dict[str, HarvestCursor] = Field(default_factory=dict)
+
+
 class SlotEntry(_Runtime):
     """A provider session one step holds, or waits for."""
 
@@ -52,7 +75,7 @@ class WorkerRecord(_Runtime):
     id: str
     project: str
     pid: int
-    job: Literal["ticket", "plan-review", "compact"] = "ticket"
+    job: Literal["ticket", "plan-review", "compact", "harvest"] = "ticket"
     step: str | None = None
     started: datetime = Field(default_factory=utc_now)
     heartbeat: datetime = Field(default_factory=utc_now)
@@ -97,6 +120,18 @@ class TicketState(_Runtime):
     sent_back: SentBack | None = None
     checked: Checked | None = None
     waiting_on: str = ""  # the ticket whose paths this one waits for (SP16 spec §3.8)
+    split: bool = False  # a ticket splits once (SP17 spec §3.6)
+    seen: dict[str, str] = Field(default_factory=dict)  # role → commit it last saw (SP17)
+    conflicts: list[str] = Field(default_factory=list)  # files holding markers (SP19 spec §3.1)
+    conflict_turns: int = 0  # send-backs for a conflict so far
+
+
+class RelayIntent(_Runtime):
+    """runtime/relay.json: what a loop was asked to cover (`all` or project slugs), so a
+    finishing worker starts the next ticket with no conductor awake (SP17 spec §3.4)."""
+
+    scopes: list[str] = Field(default_factory=list)
+    touched: datetime = Field(default_factory=utc_now)  # a claim, or the last ticket it started
 
 
 class ConductorPing(_Runtime):

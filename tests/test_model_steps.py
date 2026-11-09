@@ -11,6 +11,7 @@ from kengash_ai.model import (
     CompactOutput,
     Decision,
     Finding,
+    HarvestOutput,
     PlanOutput,
     ProviderStatus,
     ReviewOutput,
@@ -42,6 +43,7 @@ def test_output_schemas_are_strict_and_match_the_models() -> None:
         "plan": PlanOutput,
         "review": ReviewOutput,
         "compact": CompactOutput,
+        "harvest": HarvestOutput,
     }
     assert set(OUTPUT_SCHEMAS) == set(models)
     for kind, schema in OUTPUT_SCHEMAS.items():

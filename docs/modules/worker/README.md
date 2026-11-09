@@ -6,6 +6,7 @@ Run one detached job (SP3 spec §3, decision 1): `kengash run` starts `python -m
 
 ## Interface
 
+- `harvest`: drain the memory harvest spool (`ops.harvest.run_harvest`, worker id `harvest`).
 - `ticket <id>`: run the ticket's steps until a gate, the end, a pause or park request, or `--steps N` steps; print `<id>: <status>: <reason>`; exit 0.
 - `plan-review <id>`: one review round of an `in_review` plan (`ops.reviews.run_review`); print `<id>: round <r> <verdict>` or `<id>: review ended: <reason>`; exit 0. An unexpected error journals `worker.exited` (`ops.reviews.fail_review`) and exits 1.
 - `compact`: compact MEMORY.md (`ops.compaction.run_compaction`, worker id `compact`); print the line counts or why the result was kept out; exit 0.
@@ -22,6 +23,9 @@ Run one detached job (SP3 spec §3, decision 1): `kengash run` starts `python -m
 
 ## Changes
 
+- 2026-11-09: `harvest` job (SP18).
+- 2026-11-08: a ticket job that ends on an error also runs the relay (SP17 review).
+- 2026-11-08: a ticket job runs `relay.advance_quietly` when it ends, and when a split adds tickets (SP17).
 - 2026-10-26: the package is `kengash_ai` (the app is Kengash AI, distributed as `kengash-ai`; SP7 spec decision 16).
 - 2026-10-23: `plan-review` and `compact` jobs (SP3 M4).
 - 2026-10-23: heartbeat and record cleanup moved to `ops.jobs` (SP3 M4).

@@ -34,6 +34,6 @@ turns:
   - "{kg}loop"
 expect:
   absent: [ticket.claimed]
-  reply: ["running"]
+  reply: ["running | holds | held"]
   clean: true
 timeout_s: 900

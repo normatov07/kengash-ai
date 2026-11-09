@@ -90,6 +90,13 @@ class _Section(BaseModel):
 class ProjectCommands(_Section):
     test_cmd: str = ""
     lint_cmd: str = ""
+    generate_cmd: str = ""  # rebuilds generated files; runs before kengash's checks (SP19)
+    commands: list[str] = Field(default_factory=list)  # more commands workers may run (SP19)
+
+    @property
+    def allowed(self) -> list[str]:
+        """Commands workers may run besides the test and lint commands."""
+        return [cmd for cmd in (*self.commands, self.generate_cmd) if cmd.strip()]
 
 
 class LoopMax(_Section):
@@ -105,6 +112,7 @@ class Grill(_Section):
 class PlanReview(_Section):
     review_max: int = Field(2, ge=0)
     reviewer: str = "different-provider"  # or provider[/model]
+    max_files: int = Field(12, ge=0)  # a larger plan is split into parts; 0 is off (SP17)
 
     @field_validator("reviewer")
     @classmethod
@@ -129,7 +137,7 @@ class Sessions(_Section):
 
 
 class Tokens(_Section):
-    per_ticket_max: int = Field(1_000_000, ge=1)  # SP12: was 250,000
+    per_ticket_max: int = Field(3_000_000, ge=1)  # SP19: was 1,000,000; every gate was approved
 
 
 class SkillCaps(_Section):
@@ -139,11 +147,39 @@ class SkillCaps(_Section):
 
 class Checks(_Section):
     turns: int = Field(2, ge=0, le=5)  # fix turns after an editing step's checks fail (SP15)
+    parallel: int = Field(0, ge=0)  # kengash's own test runs at once; 0: half the cores (SP17)
+
+
+class Steering(_Section):
+    """When kengash stops a turn and resumes it with a correction (SP17 spec §3.1)."""
+
+    soft_min: int = Field(20, ge=1)  # minutes one call may take before it is steered
+    wrap_min: int = Field(10, ge=1)  # the same for a call that follows a correction
+    turns: int = Field(2, ge=0, le=5)  # corrections before the fallback chain takes over
+    poll_max: int = Field(8, ge=0)  # polls of a background command with no edit; 0 is off
+    full_runs_max: int = Field(2, ge=0)  # whole-suite runs allowed in one call; 0 is off
+
+
+def _default_shared() -> list[str]:
+    # a claim on a whole test root says nothing about which test files change (SP18 spec §3.7)
+    return ["*.g.dart", "*.freezed.dart", "*.generated.*", "test/", "tests/", "test", "tests"]
+
+
+class PathClaims(_Section):
+    """What keeps two tickets from editing at once (SP17 spec §3.5)."""
+
+    shared: list[str] = Field(default_factory=_default_shared)  # never claimed: generated files
+    max_overlap: int = Field(2, ge=0)  # exact files two editing tickets may share
+
+
+class ContextPolicy(_Section):
+    max_kib: int = Field(64, ge=0, le=100)  # the plan's files inlined for an implementer (SP17)
 
 
 class MemoryCaps(_Section):
     compact_at_lines: int = Field(200, ge=10)
     compactor: str = "claude/haiku"
+    harvest: Literal["all", "plans", "off"] = "all"  # what reaches the harvest job (SP18)
 
     @field_validator("compactor")
     @classmethod
@@ -165,6 +201,8 @@ class Watch(_Section):
 
 class ReviewPolicy(_Section):
     diff_only: bool = True
+    # a review fails only on these severities (SP17 spec §3.9)
+    block_on: list[Literal["high", "medium", "low"]] = Field(default=["high", "medium"])
 
 
 class Agent(_Section):
@@ -174,6 +212,26 @@ class Agent(_Section):
     blocking: bool = False
     fallback: list[str] = Field(default_factory=list)
     bypass_permissions: bool = False
+    by_importance: dict[str, str] = Field(default_factory=dict)  # tried before `cli` (SP17)
+
+    @model_validator(mode="after")
+    def _shell_has_no_models(self) -> Self:
+        if self.by_importance and split_cli(self.cli)[0] == SHELL:
+            raise ValueError(f"by_importance: a {SHELL} agent runs no model")
+        return self
+
+    def cli_for(self, importance: str | None) -> str:
+        """What runs a ticket of `importance` first: its own CLI, else the agent's."""
+        return self.by_importance.get(importance or "", self.cli)
+
+    @field_validator("by_importance")
+    @classmethod
+    def _importance_models(cls, value: dict[str, str]) -> dict[str, str]:
+        for importance, cli in value.items():
+            if importance not in IMPORTANCES:
+                raise ValueError(f"by_importance: unknown importance {importance}")
+            _known(cli)
+        return value
 
     @field_validator("cli")
     @classmethod
@@ -238,6 +296,7 @@ class StatusNames(_Section):
 
 class Merge(_Section):
     mode: Literal["ask", "auto", "branch"] = "auto"  # auto: merges are rechecked (SP16)
+    conflict_turns: int = Field(2, ge=0, le=5)  # conflict resolutions that cost no loop (SP19)
 
 
 class Settings(_Section):
@@ -255,6 +314,10 @@ class Settings(_Section):
     sessions: Sessions = Field(default_factory=Sessions)
     tokens: Tokens = Field(default_factory=Tokens)
     step_timeout_min: int = Field(30, ge=1)
+    steering: Steering = Field(default_factory=Steering)
+    paths: PathClaims = Field(default_factory=PathClaims)
+    context: ContextPolicy = Field(default_factory=ContextPolicy)
+    loop_relay: bool = True  # a finishing worker starts what is runnable (SP17 spec §3.4)
     fallback_on_error: bool = True  # rate limits and network errors use the fallback (SP12)
     skill: SkillCaps = Field(default_factory=SkillCaps)
     memory: MemoryCaps = Field(default_factory=MemoryCaps)

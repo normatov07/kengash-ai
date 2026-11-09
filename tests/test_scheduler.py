@@ -6,9 +6,10 @@ from kengash_ai.scheduler import (
     Candidate,
     Held,
     Limits,
+    PathPolicy,
     chain_weights,
+    clash,
     fits,
-    overlaps,
     select,
 )
 
@@ -32,12 +33,12 @@ def candidate(
 
 
 def test_paths_overlap_by_whole_segments() -> None:
-    assert not overlaps(["services/web"], ["services/webhooks"])
-    assert overlaps(["services"], ["services/web/app.py"])
-    assert overlaps(["./a/b/"], ["a/b/c"])
-    assert overlaps([], ["docs"])
-    assert overlaps(["."], ["docs"])
-    assert not overlaps(["a", "b"], ["c"])
+    assert not clash(["services/web"], ["services/webhooks"], PathPolicy())
+    assert clash(["services"], ["services/web/app.py"], PathPolicy())
+    assert clash(["./a/b/"], ["a/b/c"], PathPolicy())
+    assert clash([], ["docs"], PathPolicy())
+    assert clash(["."], ["docs"], PathPolicy())
+    assert not clash(["a", "b"], ["c"], PathPolicy())
 
 
 def test_running_and_chosen_tickets_keep_their_paths() -> None:

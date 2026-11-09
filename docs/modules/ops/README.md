@@ -6,6 +6,8 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Interface
 
+- `merging`: a rebase conflict is replayed and settled (`_settle`): generated files regenerate, anything else goes back to implement at no loop cost; `checks.generate_request`; `hygiene` treats 250,000 and 1,000,000 as old token caps; `steps._freshen` rebases a moved base before review (SP19).
+- `harvest` (SP18 spec §3): `submit` queues text and starts the job, never raising; `run_harvest` drains the spool; `from_hook` reads a Claude Code hook; `read_chat`; `queue_plan`. `tickets.check_batch`; `queue.stuck`; `skills.install_hooks`.
 - `projects.init_project(path)` → `InitResult`: registers the repo containing `path`, seeds its store folder, links `<repo>/.kengash`, adds the exclude entry. Idempotent.
 - `projects.relink(slug, new_path)` → `InitResult`: re-points a moved project.
 - `projects.doctor(fix, scan)` → `DoctorReport`: one `Problem` per repo, folder link, memory link (`projects/<slug>/memory -> ../../memory`; a real folder there is reported, never replaced), exclude or document issue, then repo trust, ignored store copies of built-in skills (one warning per roles folder), old kengash skill names in each repo and the home folder (a warning), and provider checks; `fix` repairs links and exclude entries only. `Problem.warning` marks findings that never fail `doctor`.
@@ -46,6 +48,8 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 - `tickets.move_ticket` → `Moved(id, project, before, after, ready, blocked, stopped)`: a move out of `in_process` (to `in_queue` or `done`) first stops the ticket's live worker (`jobs.end`, under the project lock) and frees its slots; `tickets.set_fields` → `Updated(id, project, fields, status)` for the `SETTABLE` fields.
 - `status.board(project=None)` → `Board([ProjectStatus(project, folders, statuses, gates)])`: every registered project unless one is named.
 - `queue.next_tickets(project=None)` → `Queue(runnable, held_back, blocked, running, gates, paused)`: `runnable` holds `NextTicket(id, project, importance, step, provider, title)` in start order (`provider` is `shell` or `user` when the step needs no session); `held_back` maps each waiting ready ticket to its reason. `queue.compute(paths, project)` gives the same without the worker check and the ping, so it runs under the lease lock (SP11). `loops` (SP11): `claim(project, take_over=)` → `Claimed(scope, new)`, `release(force=)` → `Released(scope)` (None when no lease; without `force` a `UserError` while `compute` lists runnable tickets), `status(project)` → `LoopStatus(leases, loop_start)`, `views(paths, me)` → `LeaseView(pid, agent, project, scope, started, seen, mine, line)`. `queue.progress_of(settings, ticket)` → `workflow.Progress`.
+- `relay` (SP17 spec §3.4): `note_claim(paths, project)`, `note_release(paths, project)`, `advance(paths)` → the ids started, `advance_quietly(paths=None)` (for a worker that is ending or a merge: never raises).
+- `context.file_pack(worktree, files, commit=, shared=, budget=)` (SP17 spec §3.8): the `## Files` body of a new editing session, read from the worktree at that moment; generated, binary, huge, unreadable and outside paths stay out and are named, a path with no file is named as new or mistaken.
 - Errors are `model` errors and carry their exit code.
 
 - `activity` (SP12 spec §4.4): `Activity(ts, kind, text)` with kind step, read, edit, run, reply, error or status; `parse(text, stamps, root=)` reads a claude, agy or codex stream (tools mapped to read/edit/run, the structured output's summary as `reply: …`, an error keeping its end); `ticket(paths, slug, id, root=)` merges the ticket's journal steps and statuses with every `<id>-<n>.out` log (its last 64 KiB, timed by `<log>.ts`, else the file's mtime) in time order; `follow(…, poll_s=)` yields them, then each new one, until the ticket stops running, ending with its status; `running_status(status)`.
@@ -62,6 +66,19 @@ Use cases shared by the CLI and the UI. Each function takes plain arguments, wor
 
 ## Changes
 
+- 2026-11-09: conflicts a worker can resolve; generator before checks; rebase before review (SP19).
+- 2026-11-09: memory harvest, ticket graph report, stuck tickets, claims that grow after an editing step (SP18).
+- 2026-11-08: `compaction`: a result the check would refuse gets one repair turn (`prompts.compact_repair`), and the check still decides; a merge's recheck takes no check place; an eval's `reply` line may list `a | b` (SP17 live run).
+- 2026-11-08: the file pack checks a file's size before reading it; a path too long for the filesystem is absent, not an error; a part's files pass the same check as a planner's; a review's Log line counts its non-blocking findings; `new_prompt` no longer takes `files` (SP17 minors).
+- 2026-11-08: `agents.pick` honours `skip` for the shell and takes a provider or one provider/model, `Pick.cli`; a shell step has no fallback, where it once waited forever for a slot; a fallback opens a fresh session (SP17 review).
+- 2026-11-08: `relay`: an intent idle for `MAX_IDLE` (24 h) is forgotten, paused and blocked tickets keep it, a settings error no longer drops it, `covered` and `forget_unleased` (SP17 review).
+- 2026-11-08: a refused split says so in the Handoff (`prompts.split_refused`), a ticket splits once, and part acceptance lines keep one checkbox (SP17 review).
+- 2026-11-08: `steps._call`: a `stuck` call resumes with `prompts.steer_prompt` up to `steering.turns` times, a timeout with `prompts.timeout_prompt` once, a crash once after 20 s; then the fallback chain, with a fresh session (SP17 spec §3.1, §3.3).
+- 2026-11-08: `relay`: a finishing worker, `kengash merge` and the UI's merge start what is runnable, only after a loop was asked for and never in a paused project (SP17 spec §3.4).
+- 2026-11-08: path claims go through `scheduler.clash` with `lifecycle.path_policy`; `checks.turn(paths, resolved)` limits kengash's own test runs machine-wide (`checks.parallel`) (SP17 spec §3.5, §3.7).
+- 2026-11-08: `tickets.split_problem` and `tickets.split`: a plan's `parts` narrow the ticket to part 1 and queue the rest; a split on a later loop, or one losing an acceptance line, is refused and the ticket continues whole (SP17 spec §3.6).
+- 2026-11-08: new editing sessions get the file pack; resumed sessions get `prompts.changed_block` from `TicketState.seen`; every new session gets `prompts.DELEGATION`; `prompts.checked_findings` demotes a finding naming no real file or line; a review fails only on `review.block_on` (SP17 spec §3.8, §3.9).
+- 2026-11-08: `agents.pick(..., importance=)`: the chain is the importance's CLI, `cli`, then `fallback`, skipping a model the CLI's live list lacks; `AgentPatch.by_importance`; `AgentsView.compactor|plan_reviewer` (SP17 spec §3.10).
 - 2026-11-08: `ui_server.open_ui` replaces a running server whose `version` is not this kengash-ai (one started before an upgrade) instead of reusing it; `stop_ui` and that replacement share `_end`.
 - 2026-11-08: `prompts.fit` is public; the merge fits a stored decision line to memory's cap too, so a long line written before the fix is shortened, not dropped.
 - 2026-11-08: `prompts.decision_lines` fits each proposed decision, why and rejected within memory's 30-word cap (the first sentence, else the first words and `…`), so none is refused at merge; a 62-word chess-samurai proposal was dropped silently before.
