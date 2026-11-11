@@ -124,6 +124,7 @@ class TicketState(_Runtime):
     seen: dict[str, str] = Field(default_factory=dict)  # role → commit it last saw (SP17)
     conflicts: list[str] = Field(default_factory=list)  # files holding markers (SP19 spec §3.1)
     conflict_turns: int = 0  # send-backs for a conflict so far
+    auto_retries: int = 0  # times Auto mode restarted this ticket after a failure (SP21)
 
 
 class RelayIntent(_Runtime):

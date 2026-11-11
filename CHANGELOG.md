@@ -4,12 +4,19 @@ All notable changes to this project are written here. The format follows [Keep a
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-09
+
 ### Added
 
+- Auto mode (`loop_start: auto`) now asks one question: whether to raise a ticket's loop limit. It grants tokens by itself, turns a stall into that question, retries failed tickets twice and unfinished merges, and approves a plan that passes review. A `blocked:` ticket waits without asking, and no gate holds up a ticket that does not depend on it.
 - Automatic memory: a one-shot job on the cheap model records what you settle, at `plan approve`, `plan reject --why`, `approve --note`, and when a Claude Code session compacts or ends (`kengash skills install --global` adds those two hooks to `~/.claude/settings.json`). A fact must quote your own words or it is dropped, and only registered projects are read. `memory.harvest` is `all`, `plans` or `off`; `kengash memory forget "<words>"` removes a line; `kengash memory harvest --plan <id>` reads a plan approved earlier.
 - `kengash ticket add --check` reports a ticket list's levels, chokepoints, files that force tickets to run one at a time, top-level folders claimed, and files many past tickets changed. It creates nothing.
 - Merge conflicts are settled inside the ticket. A failed rebase is replayed as one change on the base with conflict markers in the clashing files, and the implementer only edits files; markers can never be committed. Up to `merge.conflict_turns` (default 2) cost no loop.
 - `project.generate_cmd` rebuilds generated files before kengash's checks, and a conflict only in generated files lands with no worker. `project.commands` lists more commands workers may run.
+- `kengash stats` shows what runs cost and bought: workers running at once, first-loop merges, tokens per merged ticket, each implementing model's review pass rate, and gates by cause.
+- `agents.<role>.escalate` runs a role on a stronger model after a failed attempt, from loop 2 on.
+- `ticket add` takes `provides`: the exact interfaces a ticket owes the tickets that depend on it. They go into both tickets' Scope, and the reviewer checks them.
+- A live loop now starts ready tickets by itself even when its conductor has gone quiet, and `ticket add`, `move` and `set` start what they free.
 - `kengash next` and `kengash watch` say when a ticket at a gate or parked holds three or more others back.
 - Steering: a CLI call that polls a background command, reruns the whole test suite or passes its soft deadline is stopped and resumed with a correction, up to `steering.turns` times, then goes to the fallback chain. The work stays in the worktree.
 - The relay: while a loop is on, a finishing worker, a merge, an approval or a resume starts what is now runnable, so no conductor has to be awake. No process stays behind. It stops after 24 hours without starting anything, `kengash loop status` shows what it covers, and `loop_relay: false` turns it off for a project.
@@ -185,6 +192,7 @@ The first release.
 
 - The UI checks Host, Origin, a per-run token and an `X-Harness` header on changes, and sends a strict Content Security Policy with framing, sniffing and referrer protections.
 
+[0.7.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.7.0
 [0.6.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.6.0
 [0.5.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.5.0
 [0.4.0]: https://github.com/normatov07/kengash-ai/releases/tag/v0.4.0

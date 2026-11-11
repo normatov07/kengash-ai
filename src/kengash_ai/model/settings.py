@@ -213,6 +213,7 @@ class Agent(_Section):
     fallback: list[str] = Field(default_factory=list)
     bypass_permissions: bool = False
     by_importance: dict[str, str] = Field(default_factory=dict)  # tried before `cli` (SP17)
+    escalate: list[str] = Field(default_factory=list)  # stronger CLIs from loop 2 on (SP20)
 
     @model_validator(mode="after")
     def _shell_has_no_models(self) -> Self:
@@ -232,6 +233,11 @@ class Agent(_Section):
                 raise ValueError(f"by_importance: unknown importance {importance}")
             _known(cli)
         return value
+
+    @field_validator("escalate")
+    @classmethod
+    def _escalate_models(cls, value: list[str]) -> list[str]:
+        return [_known(cli) for cli in value]
 
     @field_validator("cli")
     @classmethod

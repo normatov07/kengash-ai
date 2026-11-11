@@ -35,6 +35,10 @@ Leave out `[ui]` for the CLI alone. The latest code: `uv tool install 'kengash-a
 
 The skills install as the `kengash` plugin: in Claude Code and Antigravity you type `/kengash:plan`, `/kengash:grill`, `/kengash:ticket`, `/kengash:loop` and `/kengash:ui`; Codex has no plugin namespace, so it gets `$kengash-plan` and so on. Claude Code can also take the plugin from its marketplace: `/plugin marketplace add normatov07/kengash-ai`, then `/plugin install kengash@kengash-ai`.
 
+### Upgrading from 0.6.0
+
+`uv tool upgrade kengash-ai`, then `kengash skills install --agent … --global --yes` again. `--yes` replaces skills that differ, so it overwrites any hand edits to them. This adds the chat-capture hooks on Claude Code. `plan save` now needs a `## Lasting decisions` section, and `ticket add` needs `needs` on a dependency and `provides` on a ticket others depend on. Run `kengash doctor --fix` for the new token cap.
+
 ### Upgrading from 0.5.0
 
 `uv tool upgrade kengash-ai`, then `kengash skills install --agent … --global` again: the plan, grill, ticket, loop and memory skills now record lasting decisions and slice tickets for parallel work. Tickets now merge by themselves once green (`merge.mode: auto`), but a store seeded before 0.6.0 says `merge.mode: ask`: switch it in Settings or in SETTINGS.md (the store's defaults and each project's) when you want that, or keep `ask` to merge each ticket yourself. Workers now see your memory and each project's PROCESS.md, so what you record there reaches them. If the web UI was open during the upgrade, run `kengash ui stop` once, then `kengash ui open`.

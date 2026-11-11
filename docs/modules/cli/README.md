@@ -6,6 +6,7 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 
 
 ## Interface
 
+- `stats [-p PROJECT] [--days N]` (SP20 spec §3.4).
 - `memory harvest [--hook|--plan ID]`, `memory forget TEXT`, `ticket add --check` (SP18).
 - `kengash --version` prints `kengash-ai <version>` and exits 0. Skills use this line to confirm the right binary is on PATH; `doctor` also accepts an older install's `super-harness <version>`.
 - `kengash --help` lists commands and options.
@@ -31,6 +32,9 @@ Typer command surface for `kengash` (0.1.0's `harness` and `hrn` warned through 
 
 ## Changes
 
+- 2026-11-09: `context` prints `loop_start: auto` when the project is in Auto mode (SP21).
+- 2026-11-09: `stats` prints the minutes spent waiting for subscription limits (SP20).
+- 2026-11-09: `stats`; `ticket add`, `move` and `set` advance the relay (SP20).
 - 2026-11-09: harvest and forget commands; `next` prints what is stuck; `ticket add` prints the graph (SP18).
 - 2026-11-08: `approve` and `resume` run the relay; `loop status` adds `relay on: <scopes>` (SP17 review).
 - 2026-11-08: `kengash agent edit --model-for IMPORTANCE=PROVIDER[/MODEL]` (`IMPORTANCE=` clears it), `agent show` lists them; `kengash merge` then runs the relay; `loop claim` and `loop release` record the relay intent (SP17).

@@ -36,6 +36,7 @@ class Context:
     gates: list[OpenGate] = field(default_factory=list)
     record: str = RECORD  # when to record what (SP16 spec §3.5)
     recent: list[str] = field(default_factory=list)  # lines the harvest wrote (SP18 spec §3.4)
+    auto: bool = False  # the project's `loop_start` is auto (SP21 spec §3)
 
 
 def resolve_slug(project: str | None, cwd: Path, paths: StorePaths | None = None) -> str | None:
@@ -160,6 +161,7 @@ def context(project: str | None, cwd: Path) -> Context:
         process = paths.project(slug).process
         lines = process.read_text(encoding="utf-8").splitlines() if process.exists() else []
         digest.project = slug
+        digest.auto = settings.load(paths, slug).loop_start == "auto"
         digest.process = [line for line in lines if line.startswith("#")]
         digest.gates = open_gates(paths, slug)
     return digest

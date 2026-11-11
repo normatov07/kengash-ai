@@ -55,6 +55,7 @@ PLAN_REVIEW = (
 
 
 CHECKS_HEAD = "kengash runs these in the worktree after editing steps; each must exit 0:"
+OPTIONAL_HEAD = "You may also run these when this ticket needs them; none is required:"
 SUMMARY_CHARS = 300
 
 
@@ -181,17 +182,17 @@ def fit(text: str) -> str:
 
 
 def checks_block(test_cmd: str, lint_cmd: str, others: Sequence[str] = ()) -> str:
-    """The `## Checks` body naming the commands that are set; empty when none is."""
+    """The `## Checks` body: the commands that must pass, then `others`, which a worker may run
+    but need not (a ticket blocked on one that did not apply to it, 2026-11-09); empty when
+    none is set."""
     rows = [
         f"- {name}: `{command.strip()}`"
-        for name, command in (
-            ("tests", test_cmd),
-            ("lint", lint_cmd),
-            *(("project", other) for other in others),
-        )
+        for name, command in (("tests", test_cmd), ("lint", lint_cmd))
         if command.strip()
     ]
-    return "\n".join([CHECKS_HEAD, *rows]) if rows else ""
+    optional = ", ".join(f"`{other.strip()}`" for other in others if other.strip())
+    lines = [CHECKS_HEAD, *rows] if rows else []
+    return "\n".join([*lines, *([f"{OPTIONAL_HEAD} {optional}"] if optional else [])])
 
 
 def sent_back_line(sent: SentBack, *, check: bool) -> str:

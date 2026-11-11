@@ -1,5 +1,13 @@
 # Acting on a wait event
 
+## Auto mode
+
+When `kengash loop status` prints `loop_start: auto`, the one thing you ask is whether to raise a loop limit (`needs_approval` with a `loop cap` detail). Put every such ticket in one question, recommend a number, and on yes run `kengash approve <id> --loops N`. Other tickets keep running while the user decides, so never hold them back for it.
+
+Ask nothing else. kengash grants tokens, retries failed tickets and retries merges itself. Do not act on `failed`, `stalled` or `awaiting_merge`. A `blocked:` ticket waits for something only the user can supply: leave it, and list it in your final report with what it needs. A ticket with `gate: hitl` is still the user's to approve.
+
+## Otherwise
+
 | Status | What you do |
 |---|---|
 | `queued: N tickets ready` | run `kengash next`, then `kengash run` the ids it lists |
