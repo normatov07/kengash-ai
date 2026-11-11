@@ -3,9 +3,13 @@ name: release
 # A pushed tag vX.Y.Z publishes that version: build and check the artifacts, publish them to
 # PyPI through trusted publishing (attestations included), then a GitHub release.
 # One-time setup: docs/releasing.md.
+# Switched to manual runs while GitHub Actions is unavailable on this account (2026-11-11);
+# releases go out with `make publish` instead (docs/releasing.md). To switch back on, replace
+# `workflow_dispatch:` with:
+#   push:
+#     tags: ["v*"]
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: read

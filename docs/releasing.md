@@ -23,6 +23,15 @@ How a version of Kengash AI reaches PyPI and GitHub. The workflow is `.github/wo
 5. Approve the `pypi` environment when the workflow asks. The workflow checks the tag against `__version__`, builds, runs `scripts/check_dist.py`, publishes to PyPI, then creates the GitHub release with the artifacts and the version's CHANGELOG section.
 6. Check it: `uv tool install --force 'kengash-ai[ui]==X.Y.Z'` and `kengash --version`.
 
+## Releasing without GitHub Actions
+
+The `ci` and `release` workflows run only by hand (`workflow_dispatch`) while Actions is unavailable on the account; each file says how to switch it back on. Run the checks locally instead and publish from this machine:
+
+1. Merge to `main`, tag and push the tag as above; nothing runs on GitHub.
+2. Create a PyPI API token scoped to the project `kengash-ai` (pypi.org → Account settings → API tokens).
+3. On `main` at the tag, in your own terminal: `read -rs UV_PUBLISH_TOKEN && export UV_PUBLISH_TOKEN && make publish`. It runs `make check`, `make dist` and `make audit` first.
+4. Optionally add a GitHub release for the tag in the browser.
+
 ## If something goes wrong
 
 - **The tag does not match the version:** delete the tag (`git push --delete origin vX.Y.Z`), fix the version in a pull request, and tag again.

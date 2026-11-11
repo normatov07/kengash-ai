@@ -1,7 +1,7 @@
 DOCS_BASE ?= main
 MAKEFLAGS += --silent
 
-.PHONY: setup fmt lint type test live evals docs check dist audit
+.PHONY: setup fmt lint type test live evals docs check dist audit publish
 
 setup:
 	uv sync
@@ -42,6 +42,11 @@ dist:
 	rm -rf dist
 	uv build --quiet
 	uv run python scripts/check_dist.py dist
+
+# upload the checked artifacts to PyPI from this machine, while GitHub Actions is off;
+# uv reads the token from UV_PUBLISH_TOKEN (docs/releasing.md)
+publish: check dist audit
+	uv publish dist/*
 
 # known vulnerabilities in the locked dependencies
 audit:
